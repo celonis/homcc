@@ -199,6 +199,15 @@ class ArgumentMessage(Message):
         """Returns a dictionary with dependencies."""
         return self.dependencies
 
+    def __eq__(self, other):
+        if isinstance(other, ArgumentMessage):
+            return (
+                self.get_arguments() == other.get_arguments()
+                and self.get_cwd() == other.get_cwd()
+                and self.get_dependencies() == other.get_dependencies()
+            )
+        return False
+
     @staticmethod
     def from_dict(json_dict: dict) -> ArgumentMessage:
         return ArgumentMessage(
@@ -220,6 +229,11 @@ class DependencyRequestMessage(Message):
     def get_sha1sum(self) -> str:
         """Returns the SHA1SUM of the dependency."""
         return self.sha1sum
+
+    def __eq__(self, other):
+        if isinstance(other, DependencyRequestMessage):
+            return self.get_sha1sum() == other.get_sha1sum()
+        return False
 
     @staticmethod
     def from_dict(json_dict: dict) -> DependencyRequestMessage:
@@ -261,6 +275,15 @@ class DependencyReplyMessage(Message):
     def get_further_payload_size(self) -> int:
         """Overwritten so that the dependency's payload size can be retrieved."""
         return self.size
+
+    def __eq__(self, other):
+        if isinstance(other, DependencyReplyMessage):
+            return (
+                self.get_sha1sum() == other.get_sha1sum()
+                and self.get_content() == other.get_content()
+            )
+
+        return False
 
     @staticmethod
     def from_dict(json_dict: dict) -> DependencyReplyMessage:
@@ -317,6 +340,11 @@ class CompilationResultMessage(Message):
             total_size += object_file.size
 
         return total_size
+
+    def __eq__(self, other):
+        if isinstance(other, CompilationResultMessage):
+            return self.get_object_files() == other.get_object_files()
+        return False
 
     @staticmethod
     def from_dict(json_dict: dict) -> CompilationResultMessage:
