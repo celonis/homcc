@@ -1,5 +1,4 @@
 from asyncio import start_server
-from tracemalloc import start
 from homcc.server import *
 
 if __name__ == "__main__":
