@@ -61,11 +61,8 @@ class TestServer:
             _, port = server.server_address
             self.client_create(port)
 
-            bytes_to_send = bytearray()
             for message in self.messages:
-                bytes_to_send += message.to_bytes()
-
-            self.client_send(bytes_to_send)
+                self.client_send(message.to_bytes())
 
             while len(self.messages) > len(self.received_messages):
                 pass
