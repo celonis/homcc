@@ -238,8 +238,7 @@ class DependencyRequestMessage(Message):
 class DependencyReplyMessage(Message):
     """Message that contains exactly one previously requested file."""
 
-    def __init__(self, sha1sum: str, content: bytearray) -> None:
-        self.sha1sum = sha1sum
+    def __init__(self, content: bytearray) -> None:
         self.size = len(content)
         self.content = content
 
@@ -248,17 +247,12 @@ class DependencyReplyMessage(Message):
     def _get_json_dict(self) -> Dict:
         dict: Dict = super()._get_json_dict()
 
-        dict["sha1sum"] = self.sha1sum
         dict["size"] = self.size
 
         return dict
 
     def get_content(self) -> bytearray:
         return self.content
-
-    def get_sha1sum(self) -> str:
-        """Returns the SHA1SUM of the dependency."""
-        return self.sha1sum
 
     def get_size(self) -> int:
         """Returns the size of the dependency."""
@@ -279,8 +273,7 @@ class DependencyReplyMessage(Message):
     def __eq__(self, other):
         if isinstance(other, DependencyReplyMessage):
             return (
-                self.get_sha1sum() == other.get_sha1sum()
-                and self.get_size() == other.get_size()
+                self.get_size() == other.get_size()
                 and self.get_content() == other.get_content()
             )
 
@@ -288,7 +281,7 @@ class DependencyReplyMessage(Message):
 
     @staticmethod
     def from_dict(json_dict: dict) -> DependencyReplyMessage:
-        message = DependencyReplyMessage(json_dict["sha1sum"], bytearray())
+        message = DependencyReplyMessage(bytearray())
         # explicitly set the message size from the field in the JSON. Can not
         # directly add the payload to the message, because the payload isn't contained in the JSON.
         message.size = json_dict["size"]

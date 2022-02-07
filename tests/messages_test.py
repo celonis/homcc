@@ -41,9 +41,8 @@ class TestDependencyRequestMessage:
 
 class TestDependencyReplyMessage:
     def test_serialization(self):
-        sha1sum: str = "0a62827cfce18c7da06444d8e8c9eec876a7e65f"
         content: bytearray = bytearray(os.urandom(133337))
-        message = DependencyReplyMessage(sha1sum, content)
+        message = DependencyReplyMessage(content)
 
         message_bytes = message.to_bytes()
 
