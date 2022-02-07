@@ -6,20 +6,6 @@ from dataclasses import dataclass
 import json
 
 
-@dataclass
-class ObjectFile:
-    """Represents an object file (-> compilation result)."""
-
-    file_name: str
-    size: int
-    content: bytearray
-
-    def __init__(self, file_name: str, content: bytearray) -> None:
-        self.file_name = file_name
-        self.size = len(content)
-        self.content = content
-
-
 class MessageType(Enum):
     """Lists all different types of messages."""
 
@@ -78,7 +64,8 @@ class Message(ABC):
         return payload
 
     def _get_json_dict(self) -> Dict:
-        """Gets the JSON dict of this object."""
+        """Gets the JSON dict of this object. Should be overwritten by subclasses to
+        add their specific data to the dict."""
         return {Message.MESSAGE_TYPE_FIELD_NAME: str(self.message_type)}
 
     @staticmethod
@@ -133,14 +120,13 @@ class Message(ABC):
 
         The second element of the tuple is the message and may be None, if the byte buffer supplied did not
         contain all necessary data for parsing the message."""
-        len_bytes = len(bytes)
-        if len_bytes < Message.MINIMUM_SIZE_BYTES:
+        if len(bytes) < Message.MINIMUM_SIZE_BYTES:
             # we need at least the json_size field to further parse
-            return (Message.MINIMUM_SIZE_BYTES - len_bytes, None)
+            return (Message.MINIMUM_SIZE_BYTES - len(bytes), None)
 
         json_size: int = Message._parse_json_size_field(bytes)
 
-        size_difference: int = Message.MINIMUM_SIZE_BYTES + json_size - len_bytes
+        size_difference: int = Message.MINIMUM_SIZE_BYTES + json_size - len(bytes)
         if size_difference > 0:
             # we need more data to parse the message
             return (size_difference, None)
@@ -150,7 +136,7 @@ class Message(ABC):
 
         further_payload_size: int = message.get_further_payload_size()
         if further_payload_size == 0:
-            # no further payload contained in this mesage type, return the message
+            # no further payload contained in this message type, return the message
             return (size_difference, message)
         else:
             size_difference += further_payload_size
@@ -283,7 +269,7 @@ class DependencyReplyMessage(Message):
         return self.content
 
     def set_further_payload(self, further_payload: bytearray):
-        """Overwritten so that the dependencies' content can be set."""
+        """Overwritten so that the dependency's content can be set."""
         self.content = further_payload
 
     def get_further_payload_size(self) -> int:
@@ -294,6 +280,7 @@ class DependencyReplyMessage(Message):
         if isinstance(other, DependencyReplyMessage):
             return (
                 self.get_sha1sum() == other.get_sha1sum()
+                and self.get_size() == other.get_size()
                 and self.get_content() == other.get_content()
             )
 
@@ -308,10 +295,24 @@ class DependencyReplyMessage(Message):
         return message
 
 
+@dataclass
+class ObjectFile:
+    """Represents an object file (-> compilation result)."""
+
+    file_name: str
+    size: int
+    content: bytearray
+
+    def __init__(self, file_name: str, content: bytearray) -> None:
+        self.file_name = file_name
+        self.size = len(content)
+        self.content = content
+
+
 class CompilationResultMessage(Message):
     """Message that contains the compilation result (list of files).
-    A file contains the filename (relative to the working directory) and
-    the size of the file in bytes."""
+    A file contains the filename (relative to the working directory),
+    the size of the file in bytes and the actual file bytes."""
 
     def __init__(self, object_files: List[ObjectFile]) -> None:
         self.object_files = object_files

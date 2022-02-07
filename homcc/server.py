@@ -56,12 +56,9 @@ class TCPRequestHandler(socketserver.BaseRequestHandler):
                 f"Supplied buffer does not suffice to parse the message, need further #{bytes_needed} bytes!"
             )
 
-        # TODO: handle message
         if parsed_message is not None:
             print(f"Received message of type {parsed_message.message_type}!")
             self._handle_message(parsed_message)
-        # response = bytes("{}".format(data), "ascii")
-        # self.request.sendall(response)
 
         return bytes_needed
 
