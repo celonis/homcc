@@ -66,25 +66,32 @@ class TCPRequestHandler(socketserver.BaseRequestHandler):
         return bytes_needed
 
     def handle(self):
-        """Handles incoming requests."""
-        recv_bytes: bytearray = self.request.recv(self.BUFFER_SIZE).strip()
+        """Handles incoming requests. Returning from this functions means
+        that the connection is closed from the server side."""
+        while True:
+            recv_bytes: bytearray = self.request.recv(self.BUFFER_SIZE).strip()
 
-        bytes_needed: int = Message.MINIMUM_SIZE_BYTES
-        while bytes_needed != 0 or len(recv_bytes) > 0:
-            buffer_full = len(recv_bytes) == self.BUFFER_SIZE
-            bytes_needed = self._try_parse_message(recv_bytes)
+            if len(recv_bytes) == 0:
+                # socket was closed
+                print("Connection closed")
+                return
 
-            if bytes_needed < 0:
-                # Parsed a message, we still have messages in the buffer.
-                # Remove parsed bytes form the buffer.
-                recv_bytes = recv_bytes[len(recv_bytes) - abs(bytes_needed) :]
-            elif bytes_needed == 0:
-                # Buffer contained exactly that parsed message
-                recv_bytes = bytearray()
-            elif bytes_needed > 0 or buffer_full:
-                # Either the buffer has run full (then there is potentially more data waiting for us),
-                # or a message is only partly contained in the current buffer and we need more data
-                recv_bytes += self.request.recv(self.BUFFER_SIZE).strip()
+            bytes_needed: int = Message.MINIMUM_SIZE_BYTES
+            while bytes_needed and len(recv_bytes) > 0:
+                buffer_full = len(recv_bytes) == self.BUFFER_SIZE
+                bytes_needed = self._try_parse_message(recv_bytes)
+
+                if bytes_needed < 0:
+                    # Parsed a message, we still have messages in the buffer.
+                    # Remove parsed bytes form the buffer.
+                    recv_bytes = recv_bytes[len(recv_bytes) - abs(bytes_needed) :]
+                elif bytes_needed == 0:
+                    # Buffer contained exactly that parsed message
+                    recv_bytes = bytearray()
+                elif bytes_needed > 0 or buffer_full:
+                    # Either the buffer has run full (then there is potentially more data waiting for us),
+                    # or a message is only partly contained in the current buffer and we need more data
+                    recv_bytes += self.request.recv(self.BUFFER_SIZE).strip()
 
 
 class TCPServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
