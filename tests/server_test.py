@@ -1,3 +1,4 @@
+import socket
 from typing import List
 
 from homcc.messages import (
@@ -21,7 +22,7 @@ class TestServer:
         self.client_socket.connect(("localhost", port))
 
     def client_send(self, bytes):
-        self.client_socket.sendall(bytes)
+        self.client_socket.send(bytes)
 
     def client_stop(self):
         self.client_socket.close()
@@ -30,8 +31,8 @@ class TestServer:
         self.received_messages.append(message)
 
     def test_multiple_messages(self):
-        # monkey patch the server's handler, so that we can compare messages sent by the client
-        # with messages that the server deserialized
+        # monkey patch the server's handler, so that we can compare
+        # messages sent by the client with messages that the server deserialized
         TCPRequestHandler._handle_message = self.patched_handle_message
 
         server: TCPServer = start_server()
@@ -59,12 +60,15 @@ class TestServer:
 
             _, port = server.server_address
             self.client_create(port)
+
+            bytes_to_send = bytearray()
             # actually send the messages with the client
             for message in self.messages:
-                self.client_send(message.to_bytes())
+                bytes_to_send += message.to_bytes()
+
+            self.client_send(bytes_to_send)
 
             while len(self.messages) > len(self.received_messages):
-                # TODO: test is sometimes flaky (hangs in here or broken pipe. Investigate)
                 pass
 
             for received_message in self.received_messages:

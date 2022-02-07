@@ -1,4 +1,3 @@
-import socket
 import threading
 import socketserver
 from functools import singledispatchmethod
