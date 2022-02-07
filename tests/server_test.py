@@ -12,7 +12,7 @@ from homcc.messages import (
 from homcc.server import *
 
 
-class TestServer:
+class TestServerReceive:
     client_socket: socket.socket
     messages: List[Message] = []
     received_messages: List[Message] = []
@@ -30,7 +30,7 @@ class TestServer:
     def patched_handle_message(self, message: Message):
         self.received_messages.append(message)
 
-    def test_multiple_messages(self):
+    def test_receive_multiple_messages(self):
         # monkey patch the server's handler, so that we can compare
         # messages sent by the client with messages that the server deserialized
         TCPRequestHandler._handle_message = self.patched_handle_message
