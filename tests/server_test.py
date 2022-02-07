@@ -47,18 +47,14 @@ class TestServerReceive:
             self.messages.append(DependencyRequestMessage("asd123"))
 
             self.messages.append(
-                DependencyReplyMessage(
-                    "asd123otherHash", bytearray([0x1, 0x2, 0x3, 0x4, 0x5])
-                )
+                DependencyReplyMessage(bytearray([0x1, 0x2, 0x3, 0x4, 0x5]))
             )
 
             result1 = ObjectFile("foo.o", bytearray([0x1, 0x3, 0x2, 0x4, 0x5, 0x6]))
             result2 = ObjectFile("dir/other_foo.o", bytearray([0xA, 0xFF, 0xAA]))
             self.messages.append(CompilationResultMessage([result1, result2]))
 
-            self.messages.append(
-                DependencyReplyMessage("asd123otherHash", bytearray(13337))
-            )
+            self.messages.append(DependencyReplyMessage(bytearray(13337)))
 
             _, port = server.server_address
             self.client_create(port)
