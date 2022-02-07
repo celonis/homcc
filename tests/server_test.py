@@ -1,4 +1,5 @@
 import socket
+import pytest
 from typing import List
 
 from homcc.messages import (
@@ -30,6 +31,7 @@ class TestServerReceive:
     def patched_handle_message(self, message: Message):
         self.received_messages.append(message)
 
+    @pytest.mark.timeout(1)
     def test_receive_multiple_messages(self):
         # monkey patch the server's handler, so that we can compare
         # messages sent by the client with messages that the server deserialized
