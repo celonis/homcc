@@ -62,7 +62,6 @@ class TestServer:
             self.client_create(port)
 
             bytes_to_send = bytearray()
-            # actually send the messages with the client
             for message in self.messages:
                 bytes_to_send += message.to_bytes()
 
