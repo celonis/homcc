@@ -1,12 +1,16 @@
 """
-TODO: Client
+fundamental functions and classes for the homcc client
 """
-import asyncio
-import logging
 
-from homcc.messages import Message, List, Optional
+import asyncio
+import hashlib
+import logging
+import subprocess
+
+from homcc.messages import Dict, Message, List, Optional
 
 log = logging.getLogger(__name__)
+encoding: str = "utf-8"
 
 
 class TCPClient:
@@ -81,3 +85,40 @@ class TCPClient:
         """ returns all timed out messages """
         async with self.__messages_lock:
             return self.__timed_out_messages
+
+
+def get_dependencies(cmd: List[str]) -> List[str]:
+    """ get list of dependencies by calling the preprocessor """
+    # count and specify preprocessor targets, usually only one
+    target_count: int = 0
+
+    for i, arg in enumerate(cmd):
+        if arg == "-o":
+            target_count += 1
+            cmd[i] = "-MT"
+
+    # specify compiler
+    cmd.insert(0, "g++")
+
+    # add option to get dependencies without system headers
+    cmd.insert(1, "-MM")
+
+    # execute command, e.g.: "g++ -MM foo.cpp -MT bar.o"
+    result: subprocess.CompletedProcess = subprocess.run(cmd, check=True,
+                                                         stdout=subprocess.PIPE,
+                                                         stderr=subprocess.PIPE)
+    # ignore target file(s) and line break characters
+    dependency_list: List[str] = list(filter(lambda dependency: dependency != "\\",
+                                             result.stdout.decode(encoding)
+                                             .split()[target_count:]))
+    return dependency_list
+
+
+def calculate_dependency_hashes(cwd: str, dependency_list: List[str]) -> Dict[str, str]:
+    """ calculate dependency file hashes """
+
+    def hash_file(filepath: str) -> str:
+        with open(filepath, mode="rb") as file:
+            return hashlib.sha1(file.read()).hexdigest()
+
+    return {filename: hash_file(f"{cwd}/{filename}") for filename in dependency_list}
