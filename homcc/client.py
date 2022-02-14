@@ -28,19 +28,19 @@ class TCPClient:
 
     async def connect(self):
         """ connect to server """
-        log.info("Connecting to %s:%i...", self.host, self.port)
+        log.debug("Connecting to %s:%i", self.host, self.port)
         self.reader, self.writer = await asyncio.open_connection(host=self.host, port=self.port)
 
     async def send(self, message: Message, timeout: Optional[int]):
         """ send a homcc message to server with timeout limit """
-        log.debug("Sending %s to %s:%i:\n%s", message.message_type, self.host, self.port,
+        log.debug("Sending %s to %s:%i: %s", message.message_type, self.host, self.port,
                   message.get_json_str())
         try:
             self.writer.write(message.to_bytes())
             await asyncio.wait_for(self.writer.drain(), timeout=timeout)
 
         except asyncio.TimeoutError:
-            log.warning("Task timed out! Compiling locally instead:\n%s", message.get_json_str())
+            log.warning("Task timed out! Compiling locally instead: %s", message.get_json_str())
             async with self.__messages_lock:
                 self.__timed_out_messages.append(message)
         except asyncio.CancelledError:
@@ -77,7 +77,7 @@ class TCPClient:
 
     async def close(self):
         """ disconnect from server and close client socket """
-        log.info("Disconnecting from %s:%i", self.host, self.port)
+        log.debug("Disconnecting from %s:%i", self.host, self.port)
         self.writer.close()
         await self.writer.wait_closed()
 
@@ -87,8 +87,10 @@ class TCPClient:
             return self.__timed_out_messages
 
 
-def get_dependencies(cmd: List[str]) -> List[str]:
+def get_dependencies(args: List[str]) -> List[str]:
     """ get list of dependencies by calling the preprocessor """
+    cmd = args.copy()
+
     # count and specify preprocessor targets, usually only one
     target_count: int = 0
 
@@ -97,8 +99,8 @@ def get_dependencies(cmd: List[str]) -> List[str]:
             target_count += 1
             cmd[i] = "-MT"
 
-    # specify compiler
-    cmd.insert(0, "g++")
+    # overwrite with specified C/C++ compiler
+    cmd[0] = "g++"
 
     # add option to get dependencies without system headers
     cmd.insert(1, "-MM")
@@ -122,3 +124,13 @@ def calculate_dependency_hashes(cwd: str, dependency_list: List[str]) -> Dict[st
             return hashlib.sha1(file.read()).hexdigest()
 
     return {filename: hash_file(f"{cwd}/{filename}") for filename in dependency_list}
+
+
+def compile_locally(args: List[str]):
+    """ compile file locally """
+    cmd = args.copy()
+
+    # overwrite with specified C/C++ compiler
+    cmd[0] = "g++"
+
+    subprocess.run(cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
