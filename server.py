@@ -1,4 +1,4 @@
-from homcc.server import *
+from homcc.server.server import *
 
 if __name__ == "__main__":
     port: int = 3633
