@@ -8,6 +8,7 @@ from typing import Dict, List
 from homcc.messages import ObjectFile
 
 logger = logging.getLogger(__name__)
+_include_prefixes = ["-I", "-isysroot", "-isystem"]
 
 
 def create_instance_folder() -> str:
@@ -49,11 +50,10 @@ def map_arguments(
     to paths valid on the server."""
     mapped_arguments = [arguments[0]]
 
-    include_prefixes = ["-I"]
     for argument in arguments[1:]:
         if argument.startswith("-"):
-            for include_prefix in include_prefixes:
-                if argument.startswith(include_prefix):
+            for include_prefix in _include_prefixes:
+                if argument.startswith(include_prefix) and argument != include_prefix:
                     include_path = argument[len(include_prefix) :]
                     mapped_include_path = _map_path(
                         instance_path, mapped_cwd, include_path
@@ -94,10 +94,22 @@ def extract_source_files(arguments: List[str]) -> List[str]:
     """Given arguments, extracts files to be compiled and returns their paths."""
     source_file_paths: List[str] = []
 
+    open_include_arguments = False
     # only consider real arguments (not the compiler, hence arguments[1:])
     for argument in arguments[1:]:
-        if not argument.startswith("-"):
-            source_file_paths.append(argument)
+        if argument.startswith("-"):
+            for include_prefix in _include_prefixes:
+                if argument == include_prefix:
+                    open_include_arguments = True
+                    break
+
+            if open_include_arguments:
+                continue
+        else:
+            if not open_include_arguments:
+                source_file_paths.append(argument)
+
+        open_include_arguments = False
 
     return source_file_paths
 
