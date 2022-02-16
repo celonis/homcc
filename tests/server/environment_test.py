@@ -10,6 +10,10 @@ class TestServerEnvironment:
             "gcc",
             "-Irelative_path/relative.h",
             "-I/var/includes/absolute.h",
+            "-I",
+            "/var/includes/absolute.h",
+            "-isysroot/var/lib/sysroot.h",
+            "-isystem/var/lib/system.h",
             "main.cpp",
             "relative/relative.cpp",
             "/opt/src/absolute.cpp",
@@ -17,12 +21,16 @@ class TestServerEnvironment:
 
         mapped_arguments = map_arguments(instance_path, mapped_cwd, arguments)
 
-        assert mapped_arguments[0] == "gcc"
-        assert mapped_arguments[1] == f"-I{mapped_cwd}/relative_path/relative.h"
-        assert mapped_arguments[2] == f"-I{instance_path}/var/includes/absolute.h"
-        assert mapped_arguments[3] == f"{mapped_cwd}/main.cpp"
-        assert mapped_arguments[4] == f"{mapped_cwd}/relative/relative.cpp"
-        assert mapped_arguments[5] == f"{instance_path}/opt/src/absolute.cpp"
+        assert mapped_arguments.pop(0) == "gcc"
+        assert mapped_arguments.pop(0) == f"-I{mapped_cwd}/relative_path/relative.h"
+        assert mapped_arguments.pop(0) == f"-I{instance_path}/var/includes/absolute.h"
+        assert mapped_arguments.pop(0) == f"-I"
+        assert mapped_arguments.pop(0) == f"{instance_path}/var/includes/absolute.h"
+        assert mapped_arguments.pop(0) == f"-isysroot{instance_path}/var/lib/sysroot.h"
+        assert mapped_arguments.pop(0) == f"-isystem{instance_path}/var/lib/system.h"
+        assert mapped_arguments.pop(0) == f"{mapped_cwd}/main.cpp"
+        assert mapped_arguments.pop(0) == f"{mapped_cwd}/relative/relative.cpp"
+        assert mapped_arguments.pop(0) == f"{instance_path}/opt/src/absolute.cpp"
 
     def test_map_cwd(self):
         instance_path = "/client1/"
@@ -41,7 +49,8 @@ class TestServerEnvironment:
         arguments = [
             "gcc",
             "-Irelative_path/relative.h",
-            "-I/var/includes/absolute.h",
+            "-I",
+            "/var/includes/absolute.h",
         ] + source_file_arguments
 
         assert extract_source_files(arguments) == source_file_arguments

@@ -40,7 +40,7 @@ class TCPRequestHandler(socketserver.BaseRequestHandler):
         logger.info("Handling ArgumentMessage...")
 
         self.instance_path = create_instance_folder()
-        logger.debug(f"Created dir {self.instance_path}")
+        logger.info(f"Created dir for new client: {self.instance_path}")
 
         self.mapped_cwd = map_cwd(self.instance_path, message.get_cwd())
 
@@ -77,17 +77,14 @@ class TCPRequestHandler(socketserver.BaseRequestHandler):
 
         retrieved_dependency_hash = hashlib.sha1(dependency_content).hexdigest()
 
-        # assertion: verify that the hashes match
+        # verify that the hashes match
         if dependency_hash != retrieved_dependency_hash:
             logger.error(
-                "Assertion failed: Hashes of requested file and received file do not match!"
+                "Assertion failed: Hashes of requested file and received file do not match! This should not happen."
             )
-            # TODO: think about handling this
-            exit(1)
-
-        del self.needed_dependencies[dependency_path]
-
-        save_dependency(dependency_path, dependency_content)
+        else:
+            del self.needed_dependencies[dependency_path]
+            save_dependency(dependency_path, dependency_content)
 
         if not self._request_next_dependency():
             # no further dependencies needed, compile now
