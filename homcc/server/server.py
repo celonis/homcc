@@ -2,7 +2,7 @@ import threading
 import socketserver
 import hashlib
 import logging
-from typing import List, Dict
+from typing import List, Dict, Tuple
 from functools import singledispatchmethod
 
 from homcc.messages import (
@@ -177,14 +177,14 @@ class TCPServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
     pass
 
 
-def start_server(port: int = 0) -> TCPServer:
+def start_server(port: int = 0) -> Tuple[TCPServer, threading.Thread]:
     server: TCPServer = TCPServer(("localhost", port), TCPRequestHandler)
 
     server_thread = threading.Thread(target=server.serve_forever)
     server_thread.daemon = True
     server_thread.start()
 
-    return server
+    return server, server_thread
 
 
 def stop_server(server: TCPServer):
