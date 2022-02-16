@@ -10,7 +10,7 @@ from homcc.messages import (
     Message,
     ObjectFile,
 )
-from homcc.server import *
+from homcc.server.server import *
 
 
 class TestServerReceive:
