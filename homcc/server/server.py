@@ -44,7 +44,7 @@ class TCPRequestHandler(socketserver.BaseRequestHandler):
 
         self.mapped_cwd = map_cwd(self.instance_path, message.get_cwd())
 
-        self.compiler_arguments = map_include_arguments(
+        self.compiler_arguments = map_arguments(
             self.instance_path, self.mapped_cwd, message.get_arguments()
         )
         logger.debug(f"Mapped compiler args: {str(self.compiler_arguments)}")
