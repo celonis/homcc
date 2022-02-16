@@ -1,10 +1,13 @@
 import uuid
 import os
 import subprocess
+import logging
 from pathlib import Path
 from typing import Dict, List
 
 from homcc.messages import ObjectFile
+
+logger = logging.getLogger(__name__)
 
 
 def create_instance_folder() -> str:
@@ -29,7 +32,7 @@ def save_dependency(absolute_dependency_path: str, content: bytearray):
     dependency_file = open(absolute_dependency_path, "wb")
     dependency_file.write(content)
 
-    print(f"Wrote file {absolute_dependency_path}")
+    logger.debug(f"Wrote file {absolute_dependency_path}")
 
 
 def get_needed_dependencies(dependencies: Dict[str, str]) -> Dict[str, str]:
@@ -100,12 +103,12 @@ def extract_source_files(arguments: List[str]) -> List[str]:
 
 
 def compile(mapped_cwd: str, arguments: List[str]) -> List[ObjectFile]:
-    print("Compiling...")
+    logger.info("Compiling...")
 
     # -c says that we do not want to link
     arguments.insert(1, "-c")
 
-    print(arguments)
+    logger.debug(f"Compile arguments: {arguments}")
 
     compiler_process = subprocess.Popen(
         arguments,
@@ -118,11 +121,11 @@ def compile(mapped_cwd: str, arguments: List[str]) -> List[ObjectFile]:
 
     stdout = stdout_bytes.decode("utf-8")
     if stdout:
-        print(f"Compiler gave output:\n {stdout}")
+        logger.debug(f"Compiler gave output:\n {stdout}")
 
     stderr = stderr_bytes.decode("utf-8")
     if stderr:
-        print(f"Compiler gave error output:\n {stderr}")
+        logger.error(f"Compiler gave error output:\n {stderr}")
 
     results: List[ObjectFile] = []
     source_files: List[str] = extract_source_files(arguments)
@@ -134,6 +137,6 @@ def compile(mapped_cwd: str, arguments: List[str]) -> List[ObjectFile]:
         object_file = ObjectFile(source_file, bytearray(object_file_content.read()))
         results.append(object_file)
 
-    print(f"Sending back #{len(results)} object files to the client.")
+    logger.info(f"Sending back #{len(results)} object files to the client.")
 
     return results

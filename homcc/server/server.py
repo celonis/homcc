@@ -1,6 +1,7 @@
 import threading
 import socketserver
 import hashlib
+import logging
 from typing import List, Dict
 from functools import singledispatchmethod
 
@@ -12,6 +13,8 @@ from homcc.messages import (
     CompilationResultMessage,
 )
 from homcc.server.environment import *
+
+logger = logging.getLogger(__name__)
 
 
 class TCPRequestHandler(socketserver.BaseRequestHandler):
@@ -34,38 +37,38 @@ class TCPRequestHandler(socketserver.BaseRequestHandler):
 
     @_handle_message.register
     def _handle_argument_message(self, message: ArgumentMessage):
-        print("Handling ArgumentMessage...")
+        logger.info("Handling ArgumentMessage...")
 
         self.instance_path = create_instance_folder()
-        print(f"Created dir {self.instance_path}")
+        logger.debug(f"Created dir {self.instance_path}")
 
         self.mapped_cwd = map_cwd(self.instance_path, message.get_cwd())
 
         self.compiler_arguments = map_include_arguments(
             self.instance_path, self.mapped_cwd, message.get_arguments()
         )
-        print(f"Mapped compiler args: {str(self.compiler_arguments)}")
+        logger.debug(f"Mapped compiler args: {str(self.compiler_arguments)}")
 
         self.mapped_dependencies = map_dependency_paths(
             self.instance_path, self.mapped_cwd, message.get_dependencies()
         )
-        print(f"Mapped dependencies: {self.mapped_dependencies}")
+        logger.debug(f"Mapped dependencies: {self.mapped_dependencies}")
 
         self.needed_dependencies = get_needed_dependencies(self.mapped_dependencies)
-        print(f"Needed dependencies: {self.needed_dependencies}")
+        logger.debug(f"Needed dependencies: {self.needed_dependencies}")
 
         self._request_next_dependency()
 
     @_handle_message.register
     def _handle_dependency_request_message(self, message: DependencyRequestMessage):
-        print(
+        logger.warn(
             "Received DependencyRequestMessage, but this message is only sent by the server!"
         )
 
     @_handle_message.register
     def _handle_dependency_reply_message(self, message: DependencyReplyMessage):
-        print("Handling DependencyReplyMessage...")
-        print(
+        logger.info("Handling DependencyReplyMessage...")
+        logger.debug(
             f"Len of dependency reply payload is {message.get_further_payload_size()}"
         )
 
@@ -76,7 +79,7 @@ class TCPRequestHandler(socketserver.BaseRequestHandler):
 
         # assertion: verify that the hashes match
         if dependency_hash != retrieved_dependency_hash:
-            print(
+            logger.error(
                 "Assertion failed: Hashes of requested file and received file do not match!"
             )
             # TODO: think about handling this
@@ -94,11 +97,9 @@ class TCPRequestHandler(socketserver.BaseRequestHandler):
 
     @_handle_message.register
     def _handle_compilation_result_message(self, message: CompilationResultMessage):
-        print("Handling CompilationResultMessage...")
-        print(
-            f"Len of compilation result payload is {message.get_further_payload_size()}"
+        logger.warn(
+            "Received CompilationResultMessage, but this message is only sent by the server!"
         )
-        pass
 
     def _request_next_dependency(self) -> bool:
         """Requests a dependency with the given sha1sum from the client.
@@ -108,7 +109,7 @@ class TCPRequestHandler(socketserver.BaseRequestHandler):
 
             request_message = DependencyRequestMessage(next_needed_hash)
 
-            print(
+            logger.info(
                 f"Sending request for dependency with hash {str(request_message.get_sha1sum())}"
             )
             self.request.sendall(request_message.to_bytes())
@@ -119,16 +120,16 @@ class TCPRequestHandler(socketserver.BaseRequestHandler):
         bytes_needed, parsed_message = Message.from_bytes(bytes)
 
         if bytes_needed < 0:
-            print(
+            logger.debug(
                 f"Received message, but having #{abs(bytes_needed)} bytes too much supplied."
             )
         elif bytes_needed > 0:
-            print(
+            logger.debug(
                 f"Supplied buffer does not suffice to parse the message, need further #{bytes_needed} bytes!"
             )
 
         if parsed_message is not None:
-            print(f"Received message of type {parsed_message.message_type}!")
+            logger.debug(f"Received message of type {parsed_message.message_type}!")
             self._handle_message(parsed_message)
 
         return bytes_needed
@@ -148,7 +149,7 @@ class TCPRequestHandler(socketserver.BaseRequestHandler):
             recv_bytes: bytearray = self.recv()
 
             if len(recv_bytes) == 0:
-                print("Connection closed gracefully.")
+                logger.info("Connection closed gracefully.")
                 return
 
             bytes_needed: int = Message.MINIMUM_SIZE_BYTES
@@ -164,7 +165,7 @@ class TCPRequestHandler(socketserver.BaseRequestHandler):
                     further_recv_bytes = self.recv()
 
                     if len(further_recv_bytes) == 0:
-                        print(
+                        logger.error(
                             "Connection closed while only partly received a message. Ungraceful disconnect."
                         )
                         return
