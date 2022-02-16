@@ -42,7 +42,7 @@ def get_needed_dependencies(dependencies: Dict[str, str]) -> Dict[str, str]:
     return dependencies.copy()
 
 
-def map_include_arguments(
+def map_arguments(
     instance_path: str, mapped_cwd: str, arguments: List[str]
 ) -> List[str]:
     """Maps include and src arguments (e.g. -I{dir} or the to be compiled .cpp files)
