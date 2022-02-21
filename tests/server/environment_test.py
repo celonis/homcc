@@ -32,6 +32,36 @@ class TestServerEnvironment:
         assert mapped_arguments.pop(0) == f"{mapped_cwd}/relative/relative.cpp"
         assert mapped_arguments.pop(0) == f"{instance_path}/opt/src/absolute.cpp"
 
+    def test_map_arguments_relative_paths(self):
+        instance_path = "/client1"
+        mapped_cwd = "/client1/test/xyz"
+
+        arguments = [
+            "gcc",
+            "-BsomeOtherArgument",
+            "-FooArgument",
+            "should_not_be_mapped",
+            "-I../abc/include/foo.h",
+            "-I./include/foo2.h",
+            "-isystem",
+            ".././../include/sys.h",
+            "../main.cpp",
+            "./relative.cpp",
+        ]
+
+        mapped_arguments = map_arguments(instance_path, mapped_cwd, arguments)
+
+        assert mapped_arguments.pop(0) == "gcc"
+        assert mapped_arguments.pop(0) == "-BsomeOtherArgument"
+        assert mapped_arguments.pop(0) == "-FooArgument"
+        assert mapped_arguments.pop(0) == "should_not_be_mapped"
+        assert mapped_arguments.pop(0) == "-I/client1/test/abc/include/foo.h"
+        assert mapped_arguments.pop(0) == f"-I{mapped_cwd}/include/foo2.h"
+        assert mapped_arguments.pop(0) == "-isystem"
+        assert mapped_arguments.pop(0) == "/client1/include/sys.h"
+        assert mapped_arguments.pop(0) == "/client1/test/main.cpp"
+        assert mapped_arguments.pop(0) == f"{mapped_cwd}/relative.cpp"
+
     def test_map_cwd(self):
         instance_path = "/client1/"
         cwd = "/home/xyz/query-engine"
