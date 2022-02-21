@@ -2,7 +2,8 @@ import threading
 import socketserver
 import hashlib
 import logging
-from typing import List, Dict, Tuple
+from tempfile import TemporaryDirectory
+from typing import List, Dict, Tuple, Optional
 from functools import singledispatchmethod
 
 from homcc.messages import (
@@ -15,6 +16,17 @@ from homcc.messages import (
 from homcc.server.environment import *
 
 logger = logging.getLogger(__name__)
+
+
+class TCPServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
+    root_temp_folder: TemporaryDirectory
+
+    def __init__(self, server_address, RequestHandlerClass) -> None:
+        super().__init__(server_address, RequestHandlerClass)
+        self.root_temp_folder = create_root_temp_folder()
+
+    def __del__(self) -> None:
+        self.root_temp_folder.cleanup()
 
 
 class TCPRequestHandler(socketserver.BaseRequestHandler):
@@ -30,6 +42,8 @@ class TCPRequestHandler(socketserver.BaseRequestHandler):
     """Path to the current compilation inside /tmp/."""
     mapped_cwd: str = ""
     """Absolute path to the working directory."""
+    server: TCPServer
+    """The TCP server belonging to this handler. (redefine for typing)"""
 
     @singledispatchmethod
     def _handle_message(self, message):
@@ -39,7 +53,7 @@ class TCPRequestHandler(socketserver.BaseRequestHandler):
     def _handle_argument_message(self, message: ArgumentMessage):
         logger.info("Handling ArgumentMessage...")
 
-        self.instance_path = create_instance_folder()
+        self.instance_path = create_instance_folder(self.server.root_temp_folder.name)
         logger.info(f"Created dir for new client: {self.instance_path}")
 
         self.mapped_cwd = map_cwd(self.instance_path, message.get_cwd())
@@ -80,7 +94,8 @@ class TCPRequestHandler(socketserver.BaseRequestHandler):
         # verify that the hashes match
         if dependency_hash != retrieved_dependency_hash:
             logger.error(
-                "Assertion failed: Hashes of requested file and received file do not match! This should not happen."
+                f"""Assertion failed: Hashes of requested file and received file 
+                (path: {dependency_path}) do not match! This should not happen."""
             )
         else:
             del self.needed_dependencies[dependency_path]
@@ -168,10 +183,6 @@ class TCPRequestHandler(socketserver.BaseRequestHandler):
                         return
 
                     recv_bytes += further_recv_bytes
-
-
-class TCPServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
-    pass
 
 
 def start_server(port: int = 0) -> Tuple[TCPServer, threading.Thread]:

@@ -2,6 +2,7 @@ import uuid
 import os
 import subprocess
 import logging
+from tempfile import TemporaryDirectory
 from pathlib import Path
 from typing import Dict, List
 
@@ -11,14 +12,20 @@ logger = logging.getLogger(__name__)
 _include_prefixes = ["-I", "-isysroot", "-isystem"]
 
 
-def create_instance_folder() -> str:
-    """Creates a folder with random name in /tmp/homcc.
-    This folder is used for storing dependencies and
-    compilation results of a single compilation."""
-    path = f"/tmp/homcc/{uuid.uuid4()}/"
-    Path(path).mkdir(parents=True, exist_ok=True)
+def create_root_temp_folder() -> TemporaryDirectory:
+    """Creates and returns the root folder of homcc inside /tmp."""
+    return TemporaryDirectory(prefix="homcc_")
 
-    return path
+
+def create_instance_folder(root_temp_folder: str) -> str:
+    """Creates a folder with random name in the root temp folder.
+    This folder is used for storing dependencies and
+    compilation results of a single compilation.
+    Returns the path to this folder."""
+    instance_folder = os.path.join(root_temp_folder, str(uuid.uuid4()))
+    Path(instance_folder).mkdir()
+
+    return instance_folder
 
 
 def map_cwd(instance_folder: str, cwd: str) -> str:
@@ -30,8 +37,7 @@ def map_cwd(instance_folder: str, cwd: str) -> str:
 def save_dependency(absolute_dependency_path: str, content: bytearray):
     """Writes the dependency to disk."""
     os.makedirs(os.path.dirname(absolute_dependency_path), exist_ok=True)
-    dependency_file = open(absolute_dependency_path, "wb")
-    dependency_file.write(content)
+    Path.write_bytes(Path(absolute_dependency_path), content)
 
     logger.debug(f"Wrote file {absolute_dependency_path}")
 
@@ -50,17 +56,28 @@ def map_arguments(
     to paths valid on the server."""
     mapped_arguments = [arguments[0]]
 
+    open_include_prefix = False
+    open_prefix = False
     for argument in arguments[1:]:
         if argument.startswith("-"):
+            open_prefix = True
             for include_prefix in _include_prefixes:
                 if argument.startswith(include_prefix) and argument != include_prefix:
+                    open_include_prefix = True
+
                     include_path = argument[len(include_prefix) :]
                     mapped_include_path = _map_path(
                         instance_path, mapped_cwd, include_path
                     )
                     argument = include_prefix + mapped_include_path
-        else:
+        elif open_include_prefix or not open_prefix:
+            # 'open_include_prefix': must be include argument, translate include argument paths
+            # not 'open_prefix': must be 'infile' argument (source files), also translate paths
             argument = _map_path(instance_path, mapped_cwd, argument)
+            open_include_prefix = False
+            open_prefix = False
+        else:
+            open_prefix = False
 
         mapped_arguments.append(argument)
 
@@ -70,12 +87,16 @@ def map_arguments(
 def _map_path(instance_path: str, mapped_cwd: str, path: str) -> str:
     """Maps absolute or relative path from client to
     absolute path on the server."""
+    joined_path: str
     if os.path.isabs(path):
         # in case of an absolute path we have to remove the first /
         # (else os.path.join ignores the paths previous to this)
-        return os.path.join(instance_path, path[1:])
+        joined_path = os.path.join(instance_path, path[1:])
     else:
-        return os.path.join(mapped_cwd, path)
+        joined_path = os.path.join(mapped_cwd, path)
+
+    # remove any '..' or '.' inside paths
+    return os.path.realpath(joined_path)
 
 
 def map_dependency_paths(
