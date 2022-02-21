@@ -2,21 +2,21 @@
 """
 homcc client
 """
+import asyncio
 import logging
-import os
 import sys
+import os
 
-from homcc.client import *
-from homcc.messages import ArgumentMessage
 from typing import Dict, List
 
-logging.basicConfig(level=logging.DEBUG)
-log: logging.Logger = logging.getLogger(__name__)
+from homcc.client.client import TCPClient, TCPClientError
+from homcc.client.client_utils import *
 
 
 async def main() -> int:
     """ client main function for parsing arguments and communicating with the homcc server """
     args: List[str] = sys.argv  # caller arguments
+    compiler: str = "g++"  # supported C/C++ compilers: [gcc, g++, clang, clang++]
     cwd: str = os.getcwd()  # current working directory
 
     host: str = "localhost"
@@ -28,52 +28,50 @@ async def main() -> int:
 
     client: TCPClient = TCPClient(host, port)
 
+    # overwrite homcc call with specified compiler
+    args[0] = compiler
+
     try:
         # 1.) find dependencies
         dependency_list: List[str] = get_dependencies(args)
-        log.debug("Dependency list: %s", dependency_list)
+        logger.debug("Dependency list: %s", dependency_list)
 
         # 2.) try to connect with server
         await client.connect()
 
         # 3.) parse cmd-line args and get dependencies
         dependency_hashes: Dict[str, str] = calculate_dependency_hashes(cwd, dependency_list)
-        log.debug("Dependency hashes: %s", dependency_hashes)
+        logger.debug("Dependency hashes: %s", dependency_hashes)
 
         # 4.) send argument message to server
-        argument_message: ArgumentMessage = ArgumentMessage(args, cwd, dependency_hashes)
-        await client.send(argument_message, timeout_send)
+        await client.send_argument_message(args, cwd, dependency_hashes, timeout_send)
 
-        # 4.a) handle timed out messages
-        timed_out_messages = await client.get_timed_out_messages()
-        for _ in timed_out_messages:
-            pass  # TODO(s.pirsch): resend or send to other servers?
-
-        if len(timed_out_messages) != 0:
-            compile_locally(args)
-            return os.EX_OK
-
-        # 5.) receive server response
-        _ = await client.receive(timeout=timeout_recv)
+        # 5.) receive server responses
+        # TODO(s.pirsch): receive DependencyRequestMessages
 
         # 6.) send missing dependencies
+        # await client.send_dependency_replay_messages(dependency_hashes, dependency_request_hashes)
 
-        # 7.) receive compilation results from server
+        # 7.) receive compilation result from server
+        # TODO(s.pirsch): receive CompilationResultMessage
+        # _ = await client.receive(timeout=timeout_recv)
 
-        # 8.) disconnect from server
+        # 8.) gracefully disconnect from server
         await client.close()
 
-    except subprocess.CalledProcessError as err:
-        log.error(err.stderr.decode(encoding))
+        return os.EX_OK
+
+    # unrecoverable errors
+    except CompilerError as err:
         return err.returncode
 
-    except ConnectionError as err:
-        log.warning("Failed to establish connection to %s:%i: %s", host, port, err)
-        compile_locally(args)
-        return err.errno
-
-    return os.EX_OK
+    # recoverable errors by compiling locally instead
+    except TCPClientError:
+        return local_compile(args)
 
 
 if __name__ == '__main__':
+    # TODO(s.pirsch): make logging level configurable by caller or config file
+    logging.basicConfig(level=logging.DEBUG)
+    logger: logging.Logger = logging.getLogger(__name__)
     sys.exit(asyncio.run(main()))
