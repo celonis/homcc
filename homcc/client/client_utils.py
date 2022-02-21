@@ -5,7 +5,6 @@ command line and the specified compiler
 
 import hashlib
 import logging
-import os
 import subprocess
 
 from typing import Dict, List
@@ -56,7 +55,7 @@ def get_dependencies(args: List[str]) -> List[str]:
         return dependency_list
 
     except subprocess.CalledProcessError as err:
-        logger.error("Preprocessor error of [%s]: %s", str(err.cmd), err.stderr.decode(encoding))
+        logger.error("Preprocessor error of [%s]: %s", ' '.join(err.cmd), err.stderr.decode(encoding))
         raise CompilerError(err) from None
 
 
@@ -83,8 +82,8 @@ def local_compile(args: List[str]) -> int:
         if result.stdout:
             logger.debug("Compiler result of [%s]: %s", ' '.join(result.args),
                          result.stdout.decode(encoding))
-        return os.EX_OK
+        return result.returncode
 
     except subprocess.CalledProcessError as err:
-        logger.error("Compiler error of [%s]: %s", str(err.cmd), err.stderr.decode(encoding))
+        logger.error("Compiler error of [%s]: %s", ' '.join(err.cmd), err.stderr.decode(encoding))
         return err.returncode
