@@ -84,3 +84,12 @@ class TestServerEnvironment:
         ] + source_file_arguments
 
         assert extract_source_files(arguments) == source_file_arguments
+
+    def test_extract_source_files_simple(self):
+        source_file_arguments = ["some/relative/path.c"]
+        arguments = [
+            "gcc",
+            "-O3",
+        ] + source_file_arguments
+
+        assert extract_source_files(arguments) == source_file_arguments
