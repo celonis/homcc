@@ -9,6 +9,7 @@ from typing import Dict, List, Optional
 
 from homcc.messages import (
     ArgumentMessage,
+    DependencyReplyMessage,
     Message
 )
 
@@ -25,6 +26,10 @@ class ClientConnectionError(TCPClientError):
     """ Exception for failing to connect with the server """
 
 
+class ClientParsingError(TCPClientError):
+    """ Exception for failing to parse message from the server """
+
+
 class SendTimedOutError(TCPClientError):
     """ Exception for time-outing during sending messages """
 
@@ -36,12 +41,15 @@ class ReceiveTimedOutError(TCPClientError):
 class TCPClient:
     """ Wrapper class to exchange homcc protocol messages and to manage timed out messages """
 
-    # noinspection PyTypeChecker
-    def __init__(self, host: str, port: int):
+    def __init__(self, host: str, port: int, read_buffer_size: int = -1):
         self.host: str = host
         self.port: int = port
-        self.reader: asyncio.StreamReader = None
-        self.writer: asyncio.StreamWriter = None
+
+        self.read_buffer_size: int = read_buffer_size
+        self.read_data: bytes = bytes()
+
+        self.reader: Optional[asyncio.StreamReader] = None
+        self.writer: Optional[asyncio.StreamWriter] = None
 
     async def connect(self):
         """ connect to specified server at host:port """
@@ -52,66 +60,69 @@ class TCPClient:
             logger.warning("Failed to establish connection to %s:%i: %s", self.host, self.port, err)
             raise ClientConnectionError from None
 
-    async def send(self, message: Message, timeout: Optional[int]):
+    async def _send(self, message: Message, timeout: Optional[int]):
         """ send a homcc message to server with timeout limit """
         logger.debug("Sending %s to %s:%i: %s", message.message_type, self.host, self.port,
                      message.get_json_str())
         try:
             self.writer.write(message.to_bytes())
             await asyncio.wait_for(self.writer.drain(), timeout=timeout)
-            return
 
         except asyncio.TimeoutError:
             logger.warning("Task timed out: %s", message.get_json_str())
             raise SendTimedOutError from None
-        except asyncio.CancelledError:
-            pass
-
-    async def sendall(self, messages: List[Message], timeout: Optional[int]):
-        """ send multiple homcc message to server with shared timeout limit """
-        tasks_send: List[asyncio.Task] = []
-        for message in messages:
-            task: asyncio.Task = asyncio.create_task(self.send(message, None))
-            task.set_name(message.get_json_str())
-            tasks_send.append(task)
-
-        _, pending_tasks = await asyncio.wait(tasks_send, timeout=timeout)
-
-        if not pending_tasks:
-            return
-
-        for pending_task in pending_tasks:
-            logger.warning("Task timed out: %s", pending_task.get_name())
-            pending_task.cancel()
-
-        raise SendTimedOutError
 
     async def send_argument_message(self, args: List[str], cwd: str,
                                     dependency_hashes: Dict[str, str], timeout: Optional[int]):
         """ send a homcc argument message to server with timeout limit """
-        argument_message: ArgumentMessage = ArgumentMessage(args, cwd, dependency_hashes)
-        await self.send(argument_message, timeout)
+        # swap key (filehash) <-> value (filename) to conform with server implementation
+        dependency_hashes_inv: Dict[str, str] = dict((v, k) for k, v in dependency_hashes.items())
 
-    async def send_dependency_replay_messages(self):
-        """ send multiple homcc dependency reply messages to server with timeout limit """
-        # TODO(s.pirsch): send multiple DependencyReplyMessage
-        # dependency_reply_messages: List[DependencyReplyMessage]
-        # await self.sendall(dependency_reply_messages)
+        argument_message: ArgumentMessage = ArgumentMessage(args, cwd, dependency_hashes_inv)
+        await self._send(argument_message, timeout)
+
+    async def send_dependency_reply_message(self, filepath: str, timeout: Optional[int]):
+        """ send homcc dependency reply message to server with timeout limit """
+        with open(filepath, mode="rb") as file:
+            dependency_reply: DependencyReplyMessage = DependencyReplyMessage(
+                bytearray(file.read()))
+            await self._send(dependency_reply, timeout=timeout)
 
     async def receive(self, timeout: Optional[int]) -> Message:
         """ receive data from server with timeout limit and convert to a homcc message """
         try:
-            data: bytes = await asyncio.wait_for(self.reader.read(), timeout=timeout)
-            _, parsed_message = Message.from_bytes(bytearray(data))
-
-            if parsed_message:
-                logger.debug("Received %s message from %s:%i:\n%s", parsed_message.message_type,
-                             self.host, self.port, parsed_message.get_json_str())
-                return parsed_message
+            return await asyncio.wait_for(self._timed_receive(), timeout=timeout)
 
         except asyncio.TimeoutError:
             logger.warning("Waiting for server response timed out!")
             raise ReceiveTimedOutError from None
+
+    async def _timed_receive(self) -> Message:
+        #  read stream into buffer, default: read until EOF
+        self.read_data += await self.reader.read(self.read_buffer_size)
+        bytes_needed, parsed_message = Message.from_bytes(bytearray(self.read_data))
+
+        # if message is incomplete, continue reading from stream until no more bytes are missing
+        while bytes_needed > 0:
+            self.read_data += await self.reader.read(min(self.read_buffer_size, bytes_needed))
+            bytes_needed, parsed_message = Message.from_bytes(bytearray(self.read_data))
+
+        # manage consistency of internal buffer
+        if bytes_needed == 0:
+            # reset the internal buffer
+            self.read_data = bytes()
+        elif bytes_needed < 0:
+            # remove the already parsed message
+            self.read_data = self.read_data[len(self.read_data) - abs(bytes_needed):]
+
+        # return received message
+        if not parsed_message:
+            logger.error("Received data could not be parsed to message!")
+            raise ClientParsingError
+
+        logger.debug("Received %s message from %s:%i:\n%s", parsed_message.message_type,
+                     self.host, self.port, parsed_message.get_json_str())
+        return parsed_message
 
     async def close(self):
         """ disconnect from server and close client socket """

@@ -23,50 +23,53 @@ class CompilerError(subprocess.CalledProcessError):
         super().__init__(err.returncode, err.cmd, err.output, err.stderr)
 
 
-def get_dependencies(args: List[str]) -> List[str]:
+def find_dependencies(args: List[str]) -> List[str]:
     """ get list of dependencies by calling the preprocessor """
-    cmd = args.copy()
+    args = args.copy()
 
-    # count and specify preprocessor targets, usually only one
-    target_count: int = 0
+    # replace unwanted options with empty flags
+    for i, arg in enumerate(args):
+        if arg == "-c":  # remove no linking option
+            args[i] = ""
+        elif arg == "-o":  # remove output option + corresponding output file
+            args[i] = ""
+            args[i + 1] = ""
 
-    for i, arg in enumerate(cmd):
-        if arg == "-o":
-            target_count += 1
-            cmd[i] = "-MT"
+    # filter empty flags
+    args = [arg for arg in args if arg != ""]
 
     # add option to get dependencies without system headers
-    cmd.insert(1, "-MM")
+    args.insert(1, "-MM")
 
     try:
         # execute preprocessor command, e.g.: "g++ -MM foo.cpp -MT bar.o"
-        result: subprocess.CompletedProcess = subprocess.run(cmd, check=True,
+        result: subprocess.CompletedProcess = subprocess.run(args, check=True,
                                                              stdout=subprocess.PIPE,
                                                              stderr=subprocess.PIPE)
-
-        if result.stdout:
-            logger.debug("Preprocessor result of [%s]:\n%s", ' '.join(result.args),
-                         result.stdout.decode(encoding))
-
-        # ignore target file(s) and line break characters
-        dependency_list: List[str] = list(filter(lambda dependency: dependency != '\\',
-                                                 result.stdout.decode(encoding)
-                                                 .split()[target_count:]))
-        return dependency_list
-
     except subprocess.CalledProcessError as err:
-        logger.error("Preprocessor error of [%s]: %s", ' '.join(err.cmd), err.stderr.decode(encoding))
+        logger.error("Preprocessor error of [%s]: %s", ' '.join(err.cmd),
+                     err.stderr.decode(encoding))
         raise CompilerError(err) from None
+
+    if result.stdout:
+        logger.debug("Preprocessor result of [%s]:\n%s", ' '.join(result.args),
+                     result.stdout.decode(encoding))
+
+    # ignore target file and line break characters
+    dependency_list: List[str] = list(filter(lambda dependency: dependency != '\\',
+                                             result.stdout.decode(encoding)
+                                             .split()[1:]))
+    return dependency_list
 
 
 def calculate_dependency_hashes(cwd: str, dependency_list: List[str]) -> Dict[str, str]:
-    """ calculate dependency file hashes """
+    """ calculate dependency file hashes mapping to their corresponding filenames """
 
     def hash_file(filepath: str) -> str:
         with open(filepath, mode="rb") as file:
             return hashlib.sha1(file.read()).hexdigest()
 
-    return {filename: hash_file(f"{cwd}/{filename}") for filename in dependency_list}
+    return {hash_file(f"{cwd}/{filename}"): filename for filename in dependency_list}
 
 
 def local_compile(args: List[str]) -> int:
@@ -79,11 +82,11 @@ def local_compile(args: List[str]) -> int:
         result: subprocess.CompletedProcess = subprocess.run(args, check=True,
                                                              stdout=subprocess.PIPE,
                                                              stderr=subprocess.PIPE)
-        if result.stdout:
-            logger.debug("Compiler result of [%s]: %s", ' '.join(result.args),
-                         result.stdout.decode(encoding))
-        return result.returncode
-
     except subprocess.CalledProcessError as err:
         logger.error("Compiler error of [%s]: %s", ' '.join(err.cmd), err.stderr.decode(encoding))
         return err.returncode
+
+    if result.stdout:
+        logger.debug("Compiler result of [%s]: %s", ' '.join(result.args),
+                     result.stdout.decode(encoding))
+    return result.returncode
