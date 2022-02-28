@@ -75,7 +75,7 @@ class TCPRequestHandler(socketserver.BaseRequestHandler):
 
     @_handle_message.register
     def _handle_dependency_request_message(self, message: DependencyRequestMessage):
-        logger.warn(
+        logger.warning(
             "Received DependencyRequestMessage, but this message is only sent by the server!"
         )
 
@@ -87,7 +87,7 @@ class TCPRequestHandler(socketserver.BaseRequestHandler):
         )
 
         dependency_content = message.get_content()
-        dependency_path, dependency_hash = next(iter(self.needed_dependencies.items()))
+        dependency_hash, dependency_path = next(iter(self.needed_dependencies.items()))
 
         retrieved_dependency_hash = hashlib.sha1(dependency_content).hexdigest()
 
@@ -98,18 +98,18 @@ class TCPRequestHandler(socketserver.BaseRequestHandler):
                 (path: {dependency_path}) do not match! This should not happen."""
             )
         else:
-            del self.needed_dependencies[dependency_path]
+            del self.needed_dependencies[dependency_hash]
             save_dependency(dependency_path, dependency_content)
 
         if not self._request_next_dependency():
             # no further dependencies needed, compile now
-            object_files = compile(self.mapped_cwd, self.compiler_arguments)
+            object_files = do_compilation(self.mapped_cwd, self.compiler_arguments)
             result_message = CompilationResultMessage(object_files)
             self.request.sendall(result_message.to_bytes())
 
     @_handle_message.register
     def _handle_compilation_result_message(self, message: CompilationResultMessage):
-        logger.warn(
+        logger.warning(
             "Received CompilationResultMessage, but this message is only sent by the server!"
         )
 
@@ -117,7 +117,7 @@ class TCPRequestHandler(socketserver.BaseRequestHandler):
         """Requests a dependency with the given sha1sum from the client.
         Returns False if there is nothing to request any more."""
         if len(self.needed_dependencies) > 0:
-            next_needed_hash = next(iter(self.needed_dependencies.values()))
+            next_needed_hash = next(iter(self.needed_dependencies.keys()))
 
             request_message = DependencyRequestMessage(next_needed_hash)
 

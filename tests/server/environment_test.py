@@ -24,7 +24,7 @@ class TestServerEnvironment:
         assert mapped_arguments.pop(0) == "gcc"
         assert mapped_arguments.pop(0) == f"-I{mapped_cwd}/relative_path/relative.h"
         assert mapped_arguments.pop(0) == f"-I{instance_path}/var/includes/absolute.h"
-        assert mapped_arguments.pop(0) == f"-I"
+        assert mapped_arguments.pop(0) == "-I"
         assert mapped_arguments.pop(0) == f"{instance_path}/var/includes/absolute.h"
         assert mapped_arguments.pop(0) == f"-isysroot{instance_path}/var/lib/sysroot.h"
         assert mapped_arguments.pop(0) == f"-isystem{instance_path}/var/lib/system.h"
