@@ -1,9 +1,30 @@
-from homcc.server import *
+import logging
+import argparse
+import signal
+
+from homcc.server.server import *
+
+
+def signal_handler(sig, frame):
+    stop_server(server)
+
 
 if __name__ == "__main__":
-    port: int = 3633
-    server: TCPServer = start_server(port=port)
+    logging.basicConfig(level=logging.INFO)
 
-    with server:
-        input("Press key to exit")
-        stop_server(server)
+    parser = argparse.ArgumentParser(
+        description="homcc server for compiling cpp files from home."
+    )
+    parser.add_argument(
+        "--port",
+        required=False,
+        default=3633,
+        type=int,
+        help="Port to listen to incoming connections",
+    )
+
+    args = parser.parse_args()
+
+    server, server_thread = start_server(port=args.port)
+    signal.signal(signal.SIGINT, signal_handler)
+    server_thread.join()
