@@ -104,9 +104,9 @@ def map_dependency_paths(
 ) -> Dict[str, str]:
     """Maps dependency paths that the client sent to paths valid at the server."""
     mapped_dependencies = {}
-    for path, sha1sum in dependencies.items():
+    for sha1sum, path in dependencies.items():
         mapped_path = _map_path(instance_path, mapped_cwd, path)
-        mapped_dependencies[mapped_path] = sha1sum
+        mapped_dependencies[sha1sum] = mapped_path
 
     return mapped_dependencies
 
@@ -135,7 +135,7 @@ def extract_source_files(arguments: List[str]) -> List[str]:
     return source_file_paths
 
 
-def compile(mapped_cwd: str, arguments: List[str]) -> List[ObjectFile]:
+def do_compilation(mapped_cwd: str, arguments: List[str]) -> List[ObjectFile]:
     logger.info("Compiling...")
 
     # -c says that we do not want to link
@@ -143,21 +143,19 @@ def compile(mapped_cwd: str, arguments: List[str]) -> List[ObjectFile]:
 
     logger.debug(f"Compile arguments: {arguments}")
 
-    compiler_process = subprocess.Popen(
+    result = subprocess.run(
         arguments,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         cwd=mapped_cwd,
     )
 
-    stdout_bytes, stderr_bytes = compiler_process.communicate()
-
-    stdout = stdout_bytes.decode("utf-8")
-    if stdout:
+    if result.stdout:
+        stdout = result.stdout.decode("utf-8")
         logger.debug(f"Compiler gave output:\n {stdout}")
 
-    stderr = stderr_bytes.decode("utf-8")
-    if stderr:
+    if result.stderr:
+        stderr = result.stderr.decode("utf-8")
         logger.error(f"Compiler gave error output:\n {stderr}")
 
     results: List[ObjectFile] = []
@@ -165,9 +163,9 @@ def compile(mapped_cwd: str, arguments: List[str]) -> List[ObjectFile]:
 
     for source_file in source_files:
         file_name = f"{Path(source_file).stem}.o"
-        object_file_content = open(os.path.join(mapped_cwd, file_name), "rb")
+        object_file_content = Path.read_bytes(Path(os.path.join(mapped_cwd, file_name)))
 
-        object_file = ObjectFile(source_file, bytearray(object_file_content.read()))
+        object_file = ObjectFile(source_file, bytearray(object_file_content))
         results.append(object_file)
 
     logger.info(f"Sending back #{len(results)} object files to the client.")
