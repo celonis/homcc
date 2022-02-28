@@ -156,7 +156,7 @@ class Message(ABC):
 
 class ArgumentMessage(Message):
     """Initial message in the protocol. Client sends arguments, working directory and
-    dependencies (file paths and their SHA1SUM)."""
+    dependencies (key: SHA1SUM, value file paths)."""
 
     def __init__(
         self, arguments: List[str], cwd: str, dependencies: Dict[str, str]
