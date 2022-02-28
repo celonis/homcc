@@ -69,7 +69,7 @@ def calculate_dependency_hashes(cwd: str, dependency_list: List[str]) -> Dict[st
         with open(filepath, mode="rb") as file:
             return hashlib.sha1(file.read()).hexdigest()
 
-    return {hash_file(f"{cwd}/{filename}"): filename for filename in dependency_list}
+    return {hash_file(f"{cwd}/{filename}"): f"{cwd}/{filename}" for filename in dependency_list}
 
 
 def local_compile(args: List[str]) -> int:

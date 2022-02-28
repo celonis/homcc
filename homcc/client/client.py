@@ -39,14 +39,14 @@ class ReceiveTimedOutError(TCPClientError):
 
 
 class TCPClient:
-    """ Wrapper class to exchange homcc protocol messages and to manage timed out messages """
+    """ Wrapper class to exchange homcc protocol messages and manage timeouts """
 
-    def __init__(self, host: str, port: int, read_buffer_size: int = -1):
+    def __init__(self, host: str, port: int, buffer_size: Optional[int] = None):
         self.host: str = host
         self.port: int = port
 
-        self.read_buffer_size: int = read_buffer_size
-        self.read_data: bytes = bytes()
+        self.buffer_size: Optional[int] = buffer_size
+        self.data: bytes = bytes()
 
         self.reader: Optional[asyncio.StreamReader] = None
         self.writer: Optional[asyncio.StreamWriter] = None
@@ -55,7 +55,15 @@ class TCPClient:
         """ connect to specified server at host:port """
         try:
             logger.debug("Connecting to %s:%i", self.host, self.port)
-            self.reader, self.writer = await asyncio.open_connection(host=self.host, port=self.port)
+            if not self.buffer_size:
+                # default reading buffer size limit is 64 KiB
+                self.reader, self.writer = await asyncio.open_connection(host=self.host,
+                                                                         port=self.port)
+            else:
+                # specify the buffer size limit of reader explicitly
+                self.reader, self.writer = await asyncio.open_connection(host=self.host,
+                                                                         port=self.port,
+                                                                         limit=self.buffer_size)
         except ConnectionError as err:
             logger.warning("Failed to establish connection to %s:%i: %s", self.host, self.port, err)
             raise ClientConnectionError from None
@@ -75,10 +83,7 @@ class TCPClient:
     async def send_argument_message(self, args: List[str], cwd: str,
                                     dependency_hashes: Dict[str, str], timeout: Optional[int]):
         """ send a homcc argument message to server with timeout limit """
-        # swap key (filehash) <-> value (filename) to conform with server implementation
-        dependency_hashes_inv: Dict[str, str] = dict((v, k) for k, v in dependency_hashes.items())
-
-        argument_message: ArgumentMessage = ArgumentMessage(args, cwd, dependency_hashes_inv)
+        argument_message: ArgumentMessage = ArgumentMessage(args, cwd, dependency_hashes)
         await self._send(argument_message, timeout)
 
     async def send_dependency_reply_message(self, filepath: str, timeout: Optional[int]):
@@ -98,22 +103,22 @@ class TCPClient:
             raise ReceiveTimedOutError from None
 
     async def _timed_receive(self) -> Message:
-        #  read stream into buffer, default: read until EOF
-        self.read_data += await self.reader.read(self.read_buffer_size)
-        bytes_needed, parsed_message = Message.from_bytes(bytearray(self.read_data))
+        #  read stream into internal buffer
+        self.data += await self.reader.read()
+        bytes_needed, parsed_message = Message.from_bytes(bytearray(self.data))
 
         # if message is incomplete, continue reading from stream until no more bytes are missing
         while bytes_needed > 0:
-            self.read_data += await self.reader.read(min(self.read_buffer_size, bytes_needed))
-            bytes_needed, parsed_message = Message.from_bytes(bytearray(self.read_data))
+            self.data += await self.reader.read(bytes_needed)
+            bytes_needed, parsed_message = Message.from_bytes(bytearray(self.data))
 
-        # manage consistency of internal buffer
+        # manage internal buffer consistency
         if bytes_needed == 0:
             # reset the internal buffer
-            self.read_data = bytes()
+            self.data = bytes()
         elif bytes_needed < 0:
             # remove the already parsed message
-            self.read_data = self.read_data[len(self.read_data) - abs(bytes_needed):]
+            self.data = self.data[len(self.data) - abs(bytes_needed):]
 
         # return received message
         if not parsed_message:

@@ -11,7 +11,7 @@ from typing import Dict, List
 
 from homcc.client.client import TCPClient, TCPClientError
 from homcc.client.client_utils import *
-from homcc.messages import Message, DependencyRequestMessage
+from homcc.messages import Message, DependencyRequestMessage, MessageType
 
 
 async def main() -> int:
@@ -48,10 +48,10 @@ async def main() -> int:
         await client.send_argument_message(args, cwd, dependency_hashes, timeout_send)
 
         # 5.) provide requested, missing dependencies
-        # TODO(s.pirsch): change this to react on the correct message type
-        for _ in range(0, len(dependency_list)):
+        server_response: Message = await client.receive(timeout=timeout_recv)
+
+        while server_response.message_type == MessageType.DependencyRequestMessage:
             # 5.1) receive request for missing dependency
-            server_response: Message = await client.receive(timeout=timeout_recv)
             dependency_request: DependencyRequestMessage = DependencyRequestMessage.from_dict(
                 server_response._get_json_dict())
 
@@ -60,8 +60,11 @@ async def main() -> int:
             dependency_file_path: str = f"{cwd}/{dependency_file_name}"
             await client.send_dependency_reply_message(dependency_file_path, timeout=timeout_send)
 
+            server_response = await client.receive(timeout=timeout_recv)
+
         # 6.) receive compilation result from server
         # TODO(s.pirsch): receive CompilationResultMessage
+        # if server_response.message_type == MessageType.CompilationResultMessage:
         # _ = await client.receive(timeout=timeout_recv)
 
         # 7.) gracefully disconnect from server
