@@ -6,13 +6,14 @@ from typing import Dict, List, Set
 import pytest
 
 from homcc.client.client import TCPClient
-from homcc.client.client_utils import calculate_dependency_hashes, find_dependencies
+from homcc.client.client_utils import calculate_dependency_dict, find_dependencies
 from homcc.server.server import start_server, stop_server
 
 
-# pylint: disable=missing-class-docstring
 # pylint: disable=missing-function-docstring
 class TestClient:
+    """ Tests for client/client.py"""
+
     # pylint: disable=W0201
     @pytest.fixture(autouse=True)
     def _init(self, unused_tcp_port: int):
@@ -42,9 +43,8 @@ class TestClient:
                            "-o", str(self.example_out_file.absolute())]
         cwd: str = ""
         dependencies: Set[str] = find_dependencies(args)
-        dependency_hashes: Dict[str, str] = calculate_dependency_hashes(cwd, dependencies)
-        timeout_send: int = 1
+        dependency_dict: Dict[str, str] = calculate_dependency_dict(dependencies)
 
         await self.client.connect()
-        await self.client.send_argument_message(args, cwd, dependency_hashes, timeout_send)
+        await self.client.send_argument_message(args, cwd, dependency_dict)
         await self.client.close()

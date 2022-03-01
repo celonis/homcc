@@ -12,15 +12,11 @@ from typing import Dict, List, Set
 from homcc.client.client import TCPClient, TCPClientError
 from homcc.client.client_utils import (
     CompilerError,
-    calculate_dependency_hashes,
+    calculate_dependency_dict,
     find_dependencies,
     local_compile
 )
-from homcc.messages import (
-    Message,
-    DependencyRequestMessage,
-    MessageType
-)
+from homcc.messages import Message, MessageType, ObjectFile
 
 
 async def main() -> int:
@@ -32,9 +28,8 @@ async def main() -> int:
     host: str = "localhost"
     port: int = 3633
 
-    # timeout windows in seconds for sending and receiving messages
-    timeout_send: int = 30
-    timeout_recv: int = 180
+    # timeout window in seconds for receiving messages
+    timeout: int = 1
 
     client: TCPClient = TCPClient(host, port)
 
@@ -50,32 +45,32 @@ async def main() -> int:
         await client.connect()
 
         # 3.) parse cmd-line arguments and calculate file hashes of given dependencies
-        dependency_hashes: Dict[str, str] = calculate_dependency_hashes(cwd, dependencies)
-        logger.debug("Dependency hashes: %s", dependency_hashes)
+        dependency_dict: Dict[str, str] = calculate_dependency_dict(dependencies)
+        logger.debug("Dependency hashes: %s", dependency_dict)
 
         # 4.) send argument message to server
-        await client.send_argument_message(args, cwd, dependency_hashes, timeout_send)
+        await client.send_argument_message(args, cwd, dependency_dict)
 
         # 5.) provide requested, missing dependencies
-        server_response: Message = await client.receive(timeout=timeout_recv)
+        server_response: Message = await client.receive(timeout=timeout)
 
         while server_response.message_type == MessageType.DependencyRequestMessage:
-            # 5.1) receive request for missing dependency
-            dependency_request: DependencyRequestMessage = DependencyRequestMessage.from_dict(
-                server_response._get_json_dict())
+            requested_dependency: str = dependency_dict[server_response.get_sha1sum()]
+            await client.send_dependency_reply_message(requested_dependency)
 
-            # 5.2) respond with missing dependency
-            dependency_file_name: str = dependency_hashes[dependency_request.get_sha1sum()]
-            dependency_file_path: str = f"{cwd}/{dependency_file_name}"
+            server_response = await client.receive(timeout=timeout)
 
-            await client.send_dependency_reply_message(dependency_file_path, timeout=timeout_send)
+        # 6.) compilation result expected
+        if not server_response.message_type == MessageType.CompilationResultMessage:
+            logger.error("Unexpected message of type %s received!",
+                         str(server_response.message_type))
+            raise TCPClientError
 
-            server_response = await client.receive(timeout=timeout_recv)
+        object_files: List[ObjectFile] = server_response.get_object_files()
 
-        # 6.) receive compilation result from server
-        # TODO(s.pirsch): receive CompilationResultMessage
-        # if server_response.message_type == MessageType.CompilationResultMessage:
-        # _ = await client.receive(timeout=timeout_recv)
+        for object_file in object_files:
+            with open(object_file.file_name, "wb") as file:
+                file.write(object_file.content)
 
         # 7.) gracefully disconnect from server
         await client.close()

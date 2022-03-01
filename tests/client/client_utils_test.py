@@ -10,9 +10,10 @@ import pytest
 from homcc.client.client_utils import find_dependencies, local_compile
 
 
-# pylint: disable=missing-class-docstring
 # pylint: disable=missing-function-docstring
 class TestClientUtils:
+    """ Tests for client/client_utils.py"""
+
     # pylint: disable=W0201
     @pytest.fixture(autouse=True)
     def _init(self):

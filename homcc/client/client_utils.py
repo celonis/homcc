@@ -55,7 +55,7 @@ def find_dependencies(args: List[str]) -> Set[str]:
         logger.debug("Preprocessor result of [%s]:\n%s", ' '.join(result.args),
                      result.stdout.decode(encoding))
 
-    # create unique set of dependencies as relative filenames by filtering the preprocessor result
+    # create unique set of dependencies by filtering the preprocessor result
     def filter_output_target_and_line_break(dependency: str):
         return not dependency.endswith('.o:') and dependency != '\\'
 
@@ -63,14 +63,14 @@ def find_dependencies(args: List[str]) -> Set[str]:
                       result.stdout.decode(encoding).split()))
 
 
-def calculate_dependency_hashes(cwd: str, dependencies: Set[str]) -> Dict[str, str]:
+def calculate_dependency_dict(dependencies: Set[str]) -> Dict[str, str]:
     """ calculate dependency file hashes mapping to their corresponding absolute filenames """
 
-    def hash_file(filepath: str) -> str:
-        with open(filepath, mode="rb") as file:
+    def hash_file(path: str) -> str:
+        with open(path, mode="rb") as file:
             return hashlib.sha1(file.read()).hexdigest()
 
-    return {hash_file(f"{cwd}/{filename}"): f"{cwd}/{filename}" for filename in dependencies}
+    return {hash_file(dependency): dependency for dependency in dependencies}
 
 
 def local_compile(args: List[str]) -> int:

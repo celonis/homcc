@@ -39,62 +39,50 @@ class ReceiveTimedOutError(TCPClientError):
 
 
 class TCPClient:
-    """ Wrapper class to exchange homcc protocol messages and manage timeouts """
+    """ Wrapper class to exchange homcc protocol messages """
 
-    def __init__(self, host: str, port: int, buffer_size: Optional[int] = None):
+    def __init__(self, host: str, port: int, buffer_limit: Optional[int] = None):
         self.host: str = host
         self.port: int = port
 
-        self.buffer_size: Optional[int] = buffer_size
-        self.data: bytes = bytes()
+        # default buffer size limit of StreamReader is 64 KiB
+        self.buffer_limit: int = buffer_limit if buffer_limit else 65536
 
-        self.reader: Optional[asyncio.StreamReader] = None
-        self.writer: Optional[asyncio.StreamWriter] = None
+        self._data: bytes = bytes()
+        self._reader: Optional[asyncio.StreamReader] = None
+        self._writer: Optional[asyncio.StreamWriter] = None
 
     async def connect(self):
         """ connect to specified server at host:port """
+        logger.debug("Connecting to %s:%i", self.host, self.port)
+
         try:
-            logger.debug("Connecting to %s:%i", self.host, self.port)
-            if not self.buffer_size:
-                # default reading buffer size limit is 64 KiB
-                self.reader, self.writer = await asyncio.open_connection(host=self.host,
-                                                                         port=self.port)
-            else:
-                # specify the buffer size limit of reader explicitly
-                self.reader, self.writer = await asyncio.open_connection(host=self.host,
-                                                                         port=self.port,
-                                                                         limit=self.buffer_size)
+            self._reader, self._writer = await asyncio.open_connection(host=self.host,
+                                                                       port=self.port,
+                                                                       limit=self.buffer_limit)
         except ConnectionError as err:
             logger.warning("Failed to establish connection to %s:%i: %s", self.host, self.port, err)
             raise ClientConnectionError from None
 
-    async def _send(self, message: Message, timeout: Optional[int]):
-        """ send a homcc message to server with timeout limit """
+    async def _send(self, message: Message):
+        """ send a message to homcc server """
         logger.debug("Sending %s to %s:%i: %s", message.message_type, self.host, self.port,
                      message.get_json_str())
-        try:
-            self.writer.write(message.to_bytes())
-            await asyncio.wait_for(self.writer.drain(), timeout=timeout)
-
-        except asyncio.TimeoutError:
-            logger.warning("Task timed out: %s", message.get_json_str())
-            raise SendTimedOutError from None
+        self._writer.write(message.to_bytes())
+        await self._writer.drain()
 
     async def send_argument_message(self, args: List[str], cwd: str,
-                                    dependency_hashes: Dict[str, str], timeout: Optional[int]):
-        """ send a homcc argument message to server with timeout limit """
-        argument_message: ArgumentMessage = ArgumentMessage(args, cwd, dependency_hashes)
-        await self._send(argument_message, timeout)
+                                    dependency_dict: Dict[str, str]):
+        """ send an argument message to homcc server """
+        await self._send(ArgumentMessage(args, cwd, dependency_dict))
 
-    async def send_dependency_reply_message(self, filepath: str, timeout: Optional[int]):
-        """ send homcc dependency reply message to server with timeout limit """
-        with open(filepath, mode="rb") as file:
-            dependency_reply: DependencyReplyMessage = DependencyReplyMessage(
-                bytearray(file.read()))
-            await self._send(dependency_reply, timeout=timeout)
+    async def send_dependency_reply_message(self, dependency: str):
+        """ send dependency reply message to homcc server """
+        with open(dependency, mode="rb") as file:
+            await self._send(DependencyReplyMessage(bytearray(file.read())))
 
     async def receive(self, timeout: Optional[int]) -> Message:
-        """ receive data from server with timeout limit and convert to a homcc message """
+        """ receive data from homcc server with timeout limit and convert to message """
         try:
             return await asyncio.wait_for(self._timed_receive(), timeout=timeout)
 
@@ -104,26 +92,25 @@ class TCPClient:
 
     async def _timed_receive(self) -> Message:
         #  read stream into internal buffer
-        self.data += await self.reader.read()
-        bytes_needed, parsed_message = Message.from_bytes(bytearray(self.data))
+        self._data += await self._reader.read(self.buffer_limit)
+        bytes_needed, parsed_message = Message.from_bytes(bytearray(self._data))
 
         # if message is incomplete, continue reading from stream until no more bytes are missing
         while bytes_needed > 0:
             logger.debug("Message is incomplete by %i bytes!", bytes_needed)
-            self.data += await self.reader.read(bytes_needed)
-            bytes_needed, parsed_message = Message.from_bytes(bytearray(self.data))
+            self._data += await self._reader.read(bytes_needed)
+            bytes_needed, parsed_message = Message.from_bytes(bytearray(self._data))
 
         # manage internal buffer consistency
         if bytes_needed == 0:
             # reset the internal buffer
             logger.debug("Resetting internal buffer!")
-            self.data = bytes()
+            self._data = bytes()
         elif bytes_needed < 0:
             # remove the already parsed message
             logger.debug("Additional data of %i bytes in buffer!", abs(bytes_needed))
-            self.data = self.data[len(self.data) - abs(bytes_needed):]
+            self._data = self._data[len(self._data) - abs(bytes_needed):]
 
-        # return received message
         if not parsed_message:
             logger.error("Received data could not be parsed to message!")
             raise ClientParsingError
@@ -135,5 +122,5 @@ class TCPClient:
     async def close(self):
         """ disconnect from server and close client socket """
         logger.debug("Disconnecting from %s:%i", self.host, self.port)
-        self.writer.close()
-        await self.writer.wait_closed()
+        self._writer.close()
+        await self._writer.wait_closed()
