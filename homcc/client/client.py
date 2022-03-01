@@ -109,15 +109,18 @@ class TCPClient:
 
         # if message is incomplete, continue reading from stream until no more bytes are missing
         while bytes_needed > 0:
+            logger.debug("Message is incomplete by %i bytes!", bytes_needed)
             self.data += await self.reader.read(bytes_needed)
             bytes_needed, parsed_message = Message.from_bytes(bytearray(self.data))
 
         # manage internal buffer consistency
         if bytes_needed == 0:
             # reset the internal buffer
+            logger.debug("Resetting internal buffer!")
             self.data = bytes()
         elif bytes_needed < 0:
             # remove the already parsed message
+            logger.debug("Additional data of %i bytes in buffer!", abs(bytes_needed))
             self.data = self.data[len(self.data) - abs(bytes_needed):]
 
         # return received message

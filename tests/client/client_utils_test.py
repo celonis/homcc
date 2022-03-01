@@ -1,11 +1,17 @@
+""" Tests for client/client_utils.py"""
 import os
-import pytest
 
 from datetime import datetime
-from homcc.client.client_utils import *
 from pathlib import Path
+from typing import List, Set
+
+import pytest
+
+from homcc.client.client_utils import find_dependencies, local_compile
 
 
+# pylint: disable=missing-class-docstring
+# pylint: disable=missing-function-docstring
 class TestClientUtils:
     # pylint: disable=W0201
     @pytest.fixture(autouse=True)
@@ -18,23 +24,35 @@ class TestClientUtils:
         self.example_out_dir: Path = self.example_base_dir / "build"
         self.example_out_dir.mkdir(exist_ok=True)
 
-    def test_find_dependencies(self):
-        assert self.example_main_cpp.exists()
-
+    def test_find_dependencies_without_class_impl(self):
+        # absolute paths of: "g++ main.cpp -Iinclude/"
         args: List[str] = ["g++", str(self.example_main_cpp.absolute()),
                            f"-I{str(self.example_inc_dir.absolute())}"]
-        dependency_list: List[str] = find_dependencies(args)
+        dependencies: Set[str] = find_dependencies(args)
+        example_dependency: Path = self.example_inc_dir / "foo.h"
 
-        example_dep: Path = self.example_inc_dir / "foo.h"
+        assert len(dependencies) == 2
+        assert str(self.example_main_cpp.absolute()) in dependencies
+        assert str(example_dependency.absolute()) in dependencies
 
-        assert len(dependency_list) == 2
-        assert dependency_list[0] == str(self.example_main_cpp.absolute())
-        assert dependency_list[1] == str(example_dep.absolute())
+    def test_find_dependencies_with_class_impl(self):
+        # absolute paths of: "g++ main.cpp foo.cpp -Iinclude/"
+        args: List[str] = ["g++", str(self.example_main_cpp.absolute()),
+                           str(self.example_foo_cpp.absolute()),
+                           f"-I{str(self.example_inc_dir.absolute())}"]
+        dependencies: Set[str] = find_dependencies(args)
+        example_dependency: Path = self.example_inc_dir / "foo.h"
+
+        assert len(dependencies) == 3
+        assert str(self.example_main_cpp.absolute()) in dependencies
+        assert str(self.example_foo_cpp.absolute()) in dependencies
+        assert str(example_dependency.absolute()) in dependencies
 
     def test_local_compilation(self):
         time_str: str = datetime.now().strftime("%Y%m%d-%H%M%S")
         example_out_file: Path = self.example_out_dir / f"example-{time_str}"
 
+        # absolute paths of: "g++ main.cpp foo.cpp -Iinclude/ -o example-YYYYmmdd-HHMMSS"
         args: List[str] = ["g++", str(self.example_main_cpp.absolute()),
                            str(self.example_foo_cpp.absolute()),
                            f"-I{str(self.example_inc_dir.absolute())}",

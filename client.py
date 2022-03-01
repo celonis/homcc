@@ -7,11 +7,20 @@ import logging
 import sys
 import os
 
-from typing import Dict, List
+from typing import Dict, List, Set
 
 from homcc.client.client import TCPClient, TCPClientError
-from homcc.client.client_utils import *
-from homcc.messages import Message, DependencyRequestMessage, MessageType
+from homcc.client.client_utils import (
+    CompilerError,
+    calculate_dependency_hashes,
+    find_dependencies,
+    local_compile
+)
+from homcc.messages import (
+    Message,
+    DependencyRequestMessage,
+    MessageType
+)
 
 
 async def main() -> int:
@@ -34,14 +43,14 @@ async def main() -> int:
 
     try:
         # 1.) find dependencies
-        dependency_list: List[str] = find_dependencies(args)
-        logger.debug("Dependency list: %s", dependency_list)
+        dependencies: Set[str] = find_dependencies(args)
+        logger.debug("Dependency list: %s", dependencies)
 
         # 2.) try to connect with server
         await client.connect()
 
         # 3.) parse cmd-line arguments and calculate file hashes of given dependencies
-        dependency_hashes: Dict[str, str] = calculate_dependency_hashes(cwd, dependency_list)
+        dependency_hashes: Dict[str, str] = calculate_dependency_hashes(cwd, dependencies)
         logger.debug("Dependency hashes: %s", dependency_hashes)
 
         # 4.) send argument message to server
@@ -58,6 +67,7 @@ async def main() -> int:
             # 5.2) respond with missing dependency
             dependency_file_name: str = dependency_hashes[dependency_request.get_sha1sum()]
             dependency_file_path: str = f"{cwd}/{dependency_file_name}"
+
             await client.send_dependency_reply_message(dependency_file_path, timeout=timeout_send)
 
             server_response = await client.receive(timeout=timeout_recv)

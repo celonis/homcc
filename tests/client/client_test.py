@@ -1,11 +1,17 @@
+""" Tests for client/client.py"""
+
+from pathlib import Path
+from typing import Dict, List, Set
+
 import pytest
 
-from homcc.client.client import *
-from homcc.client.client_utils import *
+from homcc.client.client import TCPClient
+from homcc.client.client_utils import calculate_dependency_hashes, find_dependencies
 from homcc.server.server import start_server, stop_server
-from pathlib import Path
 
 
+# pylint: disable=missing-class-docstring
+# pylint: disable=missing-function-docstring
 class TestClient:
     # pylint: disable=W0201
     @pytest.fixture(autouse=True)
@@ -35,9 +41,8 @@ class TestClient:
                            f"-I{str(self.example_inc_dir.absolute())}",
                            "-o", str(self.example_out_file.absolute())]
         cwd: str = ""
-        dependency_list: List[str] = find_dependencies(args)
-        assert not dependency_list  # TODO(s.pirsch): remove
-        dependency_hashes: Dict[str, str] = calculate_dependency_hashes(cwd, dependency_list)
+        dependencies: Set[str] = find_dependencies(args)
+        dependency_hashes: Dict[str, str] = calculate_dependency_hashes(cwd, dependencies)
         timeout_send: int = 1
 
         await self.client.connect()
