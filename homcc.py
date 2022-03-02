@@ -7,6 +7,7 @@ import logging
 import sys
 import os
 
+from pathlib import Path
 from typing import Dict, List, Set
 
 from homcc.client.client import TCPClient, TCPClientError
@@ -69,8 +70,7 @@ async def main() -> int:
         object_files: List[ObjectFile] = server_response.get_object_files()
 
         for object_file in object_files:
-            with open(object_file.file_name, "wb") as file:
-                file.write(object_file.content)
+            Path(object_file.file_name).write_bytes(object_file.content)
 
         # 7.) gracefully disconnect from server
         await client.close()

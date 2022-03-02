@@ -5,6 +5,7 @@ TCPClient class and related Exception classes for the homcc client
 import asyncio
 import logging
 
+from pathlib import Path
 from typing import Dict, List, Optional
 
 from homcc.messages import (
@@ -78,8 +79,8 @@ class TCPClient:
 
     async def send_dependency_reply_message(self, dependency: str):
         """ send dependency reply message to homcc server """
-        with open(dependency, mode="rb") as file:
-            await self._send(DependencyReplyMessage(bytearray(file.read())))
+        content: bytearray = bytearray(Path(dependency).read_bytes())
+        await self._send(DependencyReplyMessage(content))
 
     async def receive(self, timeout: Optional[int]) -> Message:
         """ receive data from homcc server with timeout limit and convert to message """
