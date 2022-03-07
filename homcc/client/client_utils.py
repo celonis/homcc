@@ -7,6 +7,7 @@ import hashlib
 import logging
 import subprocess
 
+from pathlib import Path
 from typing import Dict, List, Set
 
 logger = logging.getLogger(__name__)
@@ -67,8 +68,7 @@ def calculate_dependency_dict(dependencies: Set[str]) -> Dict[str, str]:
     """ calculate dependency file hashes mapping to their corresponding absolute filenames """
 
     def hash_file(path: str) -> str:
-        with open(path, mode="rb") as file:
-            return hashlib.sha1(file.read()).hexdigest()
+        return hashlib.sha1(Path(path).read_bytes()).hexdigest()
 
     return {hash_file(dependency): dependency for dependency in dependencies}
 
