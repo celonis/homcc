@@ -18,7 +18,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-      - name: Test homcc with pytest
+      - name: Run tests
         run: python -m pytest -v
   lints:
     runs-on: ubuntu-latest
@@ -33,12 +33,12 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-      - name: Execute linters on homcc
-        uses: psf/black@stable
-        with:
-          options: "--check --color --diff --verbose"
+      - name: Execute linters
         # TODO(s.pirsch): replace wildcards
         run: |
           pylint -v --rcfile=.pylintrc *.py **/*.py
           mypy -v *.py **/*.py
-          
+      - name: Execute format-check
+        uses: psf/black@stable
+        with:
+          options: "--check --color --diff --verbose"
