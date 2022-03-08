@@ -10,7 +10,7 @@ from homcc.messages import (
     Message,
     ObjectFile,
 )
-from homcc.server.server import *
+from homcc.server.server import start_server, stop_server, TCPRequestHandler
 
 
 class TestServerReceive:
@@ -52,7 +52,9 @@ class TestServerReceive:
 
             result1 = ObjectFile("foo.o", bytearray([0x1, 0x3, 0x2, 0x4, 0x5, 0x6]))
             result2 = ObjectFile("dir/other_foo.o", bytearray([0xA, 0xFF, 0xAA]))
-            self.messages.append(CompilationResultMessage([result1, result2]))
+            self.messages.append(
+                CompilationResultMessage([result1, result2], "stdout-foo", "stderr-foo")
+            )
 
             self.messages.append(DependencyReplyMessage(bytearray(13337)))
 

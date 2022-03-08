@@ -3,7 +3,7 @@ import socketserver
 import hashlib
 import logging
 from tempfile import TemporaryDirectory
-from typing import List, Dict, Tuple, Optional
+from typing import List, Dict, Tuple
 from functools import singledispatchmethod
 
 from homcc.messages import (
@@ -57,7 +57,6 @@ class TCPRequestHandler(socketserver.BaseRequestHandler):
         logger.info(f"Created dir for new client: {self.instance_path}")
 
         self.mapped_cwd = map_cwd(self.instance_path, message.get_cwd())
-
         self.compiler_arguments = map_arguments(
             self.instance_path, self.mapped_cwd, message.get_arguments()
         )
@@ -103,8 +102,10 @@ class TCPRequestHandler(socketserver.BaseRequestHandler):
 
         if not self._request_next_dependency():
             # no further dependencies needed, compile now
-            object_files = do_compilation(self.mapped_cwd, self.compiler_arguments)
-            result_message = CompilationResultMessage(object_files)
+            result_message = do_compilation(
+                self.instance_path, self.mapped_cwd, self.compiler_arguments
+            )
+
             self.request.sendall(result_message.to_bytes())
 
     @_handle_message.register

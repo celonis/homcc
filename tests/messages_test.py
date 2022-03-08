@@ -59,8 +59,7 @@ class TestCompilationResultMessage:
             content: bytearray = bytearray(os.urandom(index))
             object_files.append(ObjectFile(file_name, content))
 
-        message = CompilationResultMessage(object_files)
-
+        message = CompilationResultMessage(object_files, "some", "")
         message_bytes = message.to_bytes()
 
         _, serialized_message = Message.from_bytes(message_bytes)
