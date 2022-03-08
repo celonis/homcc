@@ -1,0 +1,17 @@
+[tool.black]
+line-length = 120
+target-version = ['py36']
+skip-string-normalization = true
+
+[tool.pytest.ini_options]
+log_cli = true
+log_cli_level = "DEBUG"
+
+[tool.mypy]
+show_error_codes = true
+disable_error_code = "attr-defined"
+
+#TODO(s.pirsch): find modules or remove
+[[tool.mypy.overrides]]
+module = []
+ignore_missing_imports = true

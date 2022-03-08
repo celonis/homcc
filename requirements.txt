@@ -1,0 +1,5 @@
+black
+mypy>=0.931
+pylint
+pytest
+pytest-timeout
