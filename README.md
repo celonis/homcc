@@ -1,8 +1,7 @@
-# homcc - Home-Office friendly distcc replacement
+# homcc - home-office friendly distcc replacement
 
 ## Documentation
-
-###!TODO
+!TODO
 
 ## Development
 
@@ -13,7 +12,7 @@
 
 ### Testing
 - Tests and test coverage analysis are performed via [`pytest`](https://github.com/pytest-dev/pytest)
-- Execute all tests in `./tests` and produce a test and coverage summary: `pytest -v -rfEs --cov=homcc`
+- Execute all tests in [`./tests`](tests) and produce a test and coverage summary: `pytest -v -rfEs --cov=homcc`
 
 
 ### Linting
