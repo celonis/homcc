@@ -35,11 +35,10 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
       - name: Execute linters
-        # TODO(s.pirsch): replace wildcards
         # TODO(s.pirsch): pylint --fall-under=8 ?
         run: |
-          pylint -v --rcfile=.pylintrc *.py **/*.py
-          mypy -v *.py **/*.py
+          pylint -v --rcfile=.pylintrc *.py homcc tests
+          mypy -v *.py homcc
   format-check:
     runs-on: ubuntu-latest
     steps:
