@@ -35,7 +35,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
       - name: Execute linters
-        # TODO(s.pirsch): pylint --fall-under=8 ?
+        # TODO(s.pirsch): pylint --fail-under=8 ?
         run: |
           pylint -v --rcfile=.pylintrc *.py homcc tests
           mypy -v *.py homcc

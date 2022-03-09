@@ -1,18 +1,10 @@
 # homcc - Home-Office friendly distcc replacement
 
----
-
 ## Documentation
 
----
-
 ###!TODO
-[comment]: #TODO(s.pirsch)
-
 
 ## Development
-
----
 
 ### Setup
 - Install required dependencies:<br/>
