@@ -150,7 +150,7 @@ class TCPRequestHandler(socketserver.BaseRequestHandler):
         """Function that receives from the connection and returns an empty
         bytearray when the connection has been closed."""
         try:
-            return self.request.recv(self.BUFFER_SIZE).strip()
+            return self.request.recv(self.BUFFER_SIZE)
         except ConnectionError:
             return bytearray()
 

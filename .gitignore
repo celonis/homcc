@@ -110,6 +110,17 @@ ENV/
 env.bak/
 venv.bak/
 
+### JetBrains template
+# Covers JetBrains IDEs: IntelliJ, RubyMine, PhpStorm, AppCode, PyCharm, CLion, Android Studio and Webstorm
+# Reference: https://intellij-support.jetbrains.com/hc/en-us/articles/206544839
+
+# User-specific stuff:
+.idea/**/workspace.xml
+.idea/**/tasks.xml
+.idea/dictionaries
+.idea
+*iml
+
 # Spyder project settings
 .spyderproject
 .spyproject
