@@ -232,7 +232,11 @@ def do_compilation(
             object_file = ObjectFile(client_output_path, bytearray(object_file_content))
             object_files.append(object_file)
 
-    logger.info("Sending back #%i object files.", len(object_files))
+    logger.info(
+        "Compiler returned code '%i', sending back #%i object files.",
+        result.return_code,
+        len(object_files),
+    )
     return CompilationResultMessage(
         object_files, result.stdout, result.stderr, result.return_code
     )
