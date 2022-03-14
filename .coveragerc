@@ -3,7 +3,9 @@ branch = True
 source =
     homcc
     tests
-omit = example/*
+omit =
+    **/__init__.py
+    example/*
 
 [report]
 show_missing = True
