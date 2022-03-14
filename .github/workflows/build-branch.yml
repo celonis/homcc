@@ -1,6 +1,13 @@
-name: Pull Request CI
+name: Build Branch
 
-on: [pull_request, push]
+on:
+  push:
+    paths-ignore:
+      - README.md
+      - .gitignore
+  pull_request:
+    types:
+      - opened
 
 jobs:
   linter:
