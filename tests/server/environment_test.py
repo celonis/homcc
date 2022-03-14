@@ -1,13 +1,19 @@
+from pytest_mock.plugin import MockerFixture
+
 from homcc.server.environment import (
+    CompilerResult,
     map_arguments,
     map_cwd,
     _unmap_path,
     extract_source_files,
     get_output_path,
+    do_compilation,
 )
 
 
 class TestServerEnvironmentPathMapping:
+    """Tests the server environment path mappings."""
+
     def test_map_arguments(self):
         instance_path = "/client1"
         mapped_cwd = "/client1/test/xyz"
@@ -136,3 +142,78 @@ class TestServerEnvironmentPathMapping:
         ] + source_file_arguments
 
         assert extract_source_files(arguments) == source_file_arguments
+
+    def test_extract_single_source_file(self):
+        source_file_arguments = ["some/relative/path.c"]
+        arguments = [
+            "gcc",
+            "-o/output/out.o",
+        ] + source_file_arguments
+
+        assert extract_source_files(arguments) == source_file_arguments
+
+
+class TestServerCompilation:
+    """Tests the server compilation process."""
+
+    def setup_mocks(self, mocker: MockerFixture):
+        mocked_compiler_result = CompilerResult(0, "", "")
+        mocker.patch(
+            "homcc.server.environment.invoke_compiler",
+            return_value=mocked_compiler_result,
+        )
+        mocker.patch("pathlib.Path.read_bytes", return_value=bytes())
+
+    def test_multiple_files(self, mocker: MockerFixture):
+        self.setup_mocks(mocker)
+
+        instance_path = "/tmp/homcc/test-id"
+        mapped_cwd = "/tmp/homcc/test-id/home/user/cwd"
+        arguments = [
+            "gcc",
+            "-I../abc/include/foo.h",
+            f"{mapped_cwd}/src/main.cpp",
+            f"{mapped_cwd}/other.cpp",
+        ]
+
+        result_message = do_compilation(instance_path, mapped_cwd, arguments)
+
+        assert len(result_message.object_files) == 2
+        assert result_message.object_files[0].file_name == "/home/user/cwd/main.o"
+        assert result_message.object_files[1].file_name == "/home/user/cwd/other.o"
+
+    def test_single_file(self, mocker: MockerFixture):
+        self.setup_mocks(mocker)
+
+        instance_path = "/tmp/homcc/test-id"
+        mapped_cwd = "/tmp/homcc/test-id/home/user/cwd"
+        arguments = [
+            "gcc",
+            "-I../abc/include/foo.h",
+            f"{mapped_cwd}/src/this_is_a_source_file.cpp",
+        ]
+
+        result_message = do_compilation(instance_path, mapped_cwd, arguments)
+
+        assert len(result_message.object_files) == 1
+        assert (
+            result_message.object_files[0].file_name
+            == "/home/user/cwd/this_is_a_source_file.o"
+        )
+
+    def test_single_file_o_argument(self, mocker: MockerFixture):
+        self.setup_mocks(mocker)
+
+        instance_path = "/tmp/homcc/test-id"
+        mapped_cwd = "/tmp/homcc/test-id/home/user/cwd"
+        arguments = [
+            "gcc",
+            "-I../abc/include/foo.h",
+            f"-o{mapped_cwd}/output/out.o",
+            f"{mapped_cwd}/src/this_is_a_source_file.cpp",
+        ]
+
+        result_message = do_compilation(instance_path, mapped_cwd, arguments)
+
+        assert len(result_message.object_files) == 1
+        assert result_message.object_files[0].file_name == "/home/user/cwd/output/out.o"
