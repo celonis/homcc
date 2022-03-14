@@ -201,7 +201,7 @@ class TestServerCompilation:
             == "/home/user/cwd/this_is_a_source_file.o"
         )
 
-    def test_single_file_o_argument(self, mocker: MockerFixture):
+    def test_single_file_output_argument(self, mocker: MockerFixture):
         self.setup_mocks(mocker)
 
         instance_path = "/tmp/homcc/test-id"

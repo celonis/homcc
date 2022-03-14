@@ -308,25 +308,27 @@ class CompilationResultMessage(Message):
     the file in bytes and the actual file bytes."""
 
     def __init__(
-        self, object_files: List[ObjectFile], stdout: str, stderr: str
+        self, object_files: List[ObjectFile], stdout: str, stderr: str, return_code: int
     ) -> None:
         self.object_files = object_files
         self.stdout = stdout
         self.stderr = stderr
+        self.return_code = return_code
 
         super().__init__(MessageType.CompilationResultMessage)
 
     def _get_json_dict(self) -> Dict:
-        dict: Dict = super()._get_json_dict()
+        json_dict: Dict = super()._get_json_dict()
 
         files = []
         for object_file in self.object_files:
             files.append({"filename": object_file.file_name, "size": object_file.size})
-        dict["files"] = files
-        dict["stdout"] = self.stdout
-        dict["stderr"] = self.stderr
+        json_dict["files"] = files
+        json_dict["stdout"] = self.stdout
+        json_dict["stderr"] = self.stderr
+        json_dict["return_code"] = self.return_code
 
-        return dict
+        return json_dict
 
     def get_object_files(self) -> List[ObjectFile]:
         return self.object_files
@@ -336,6 +338,9 @@ class CompilationResultMessage(Message):
 
     def get_stderr(self) -> str:
         return self.stderr
+
+    def get_return_code(self) -> int:
+        return self.return_code
 
     def get_further_payload(self) -> bytearray:
         """Overwritten so that the dependencies' content can be appended to the message."""
@@ -370,6 +375,7 @@ class CompilationResultMessage(Message):
                 self.get_object_files() == other.get_object_files()
                 and self.get_stdout() == other.get_stdout()
                 and self.get_stderr() == other.get_stderr()
+                and self.get_return_code() == other.get_return_code()
             )
 
         return False
@@ -388,5 +394,6 @@ class CompilationResultMessage(Message):
 
         stdout = json_dict["stdout"]
         stderr = json_dict["stderr"]
+        return_code = json_dict["return_code"]
 
-        return CompilationResultMessage(object_files, stdout, stderr)
+        return CompilationResultMessage(object_files, stdout, stderr, return_code)

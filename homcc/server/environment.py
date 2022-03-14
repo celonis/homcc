@@ -182,6 +182,8 @@ def invoke_compiler(mapped_cwd: str, arguments: List[str]) -> CompilerResult:
 
     logger.info("Compile arguments: %s", arguments)
 
+    # pylint: disable=subprocess-run-check
+    # (justification: we explicitly return the result code)
     result = subprocess.run(
         arguments,
         stdout=subprocess.PIPE,
@@ -231,4 +233,6 @@ def do_compilation(
             object_files.append(object_file)
 
     logger.info("Sending back #%i object files.", len(object_files))
-    return CompilationResultMessage(object_files, result.stdout, result.stderr)
+    return CompilationResultMessage(
+        object_files, result.stdout, result.stderr, result.return_code
+    )
