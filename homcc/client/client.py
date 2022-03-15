@@ -64,8 +64,8 @@ class TCPClient:
     async def _send(self, message: Message):
         """send a message to homcc server"""
         logger.debug("Sending %s to %s:%i: %s", message.message_type, self.host, self.port, message.get_json_str())
-        self._writer.write(message.to_bytes())
-        await self._writer.drain()
+        self._writer.write(message.to_bytes())  # type: ignore[union-attr]
+        await self._writer.drain()  # type: ignore[union-attr]
 
     async def send_argument_message(self, args: List[str], cwd: str, dependency_dict: Dict[str, str]):
         """send an argument message to homcc server"""
@@ -87,13 +87,13 @@ class TCPClient:
 
     async def _timed_receive(self) -> Message:
         #  read stream into internal buffer
-        self._data += await self._reader.read(self.buffer_limit)
+        self._data += await self._reader.read(self.buffer_limit)  # type: ignore[union-attr]
         bytes_needed, parsed_message = Message.from_bytes(bytearray(self._data))
 
         # if message is incomplete, continue reading from stream until no more bytes are missing
         while bytes_needed > 0:
             logger.debug("Message is incomplete by %i bytes!", bytes_needed)
-            self._data += await self._reader.read(bytes_needed)
+            self._data += await self._reader.read(bytes_needed)  # type: ignore[union-attr]
             bytes_needed, parsed_message = Message.from_bytes(bytearray(self._data))
 
         # manage internal buffer consistency
