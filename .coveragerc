@@ -1,0 +1,12 @@
+[run]
+branch = True
+source =
+    homcc
+    tests
+omit =
+    **/__init__.py
+    example/*
+
+[report]
+show_missing = True
+precision = 2
