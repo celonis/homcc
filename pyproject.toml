@@ -5,7 +5,6 @@ skip-string-normalization = true
 
 [tool.mypy]
 show_error_codes = true
-disable_error_code = "attr-defined"
 
 [tool.pytest.ini_options]
 log_cli = true
