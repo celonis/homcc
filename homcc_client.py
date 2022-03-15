@@ -51,7 +51,7 @@ async def main() -> int:
         server_response: Message = await client.receive(timeout=timeout)
 
         while server_response.message_type == MessageType.DependencyRequestMessage:
-            requested_dependency: str = dependency_dict[server_response.get_sha1sum()]
+            requested_dependency: str = dependency_dict[server_response.get_sha1sum()]  # type: ignore[attr-defined]
             await client.send_dependency_reply_message(requested_dependency)
 
             server_response = await client.receive(timeout=timeout)
@@ -61,7 +61,7 @@ async def main() -> int:
             logger.error("Unexpected message of type %s received!", str(server_response.message_type))
             raise TCPClientError
 
-        object_files: List[ObjectFile] = server_response.get_object_files()
+        object_files: List[ObjectFile] = server_response.get_object_files()  # type: ignore[attr-defined]
 
         for object_file in object_files:
             Path(object_file.file_name).write_bytes(object_file.content)
