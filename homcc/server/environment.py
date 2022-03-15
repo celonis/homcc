@@ -39,7 +39,7 @@ def save_dependency(absolute_dependency_path: str, content: bytearray):
     os.makedirs(os.path.dirname(absolute_dependency_path), exist_ok=True)
     Path.write_bytes(Path(absolute_dependency_path), content)
 
-    logger.debug(f"Wrote file {absolute_dependency_path}")
+    logger.debug("Wrote file %s", absolute_dependency_path)
 
 
 def get_needed_dependencies(dependencies: Dict[str, str]) -> Dict[str, str]:
@@ -49,9 +49,7 @@ def get_needed_dependencies(dependencies: Dict[str, str]) -> Dict[str, str]:
     return dependencies.copy()
 
 
-def map_arguments(
-    instance_path: str, mapped_cwd: str, arguments: List[str]
-) -> List[str]:
+def map_arguments(instance_path: str, mapped_cwd: str, arguments: List[str]) -> List[str]:
     """Maps include and src arguments (e.g. -I{dir} or the to be compiled .cpp files)
     to paths valid on the server."""
     mapped_arguments = [arguments[0]]
@@ -66,9 +64,7 @@ def map_arguments(
                     open_include_prefix = True
 
                     include_path = argument[len(include_prefix) :]
-                    mapped_include_path = _map_path(
-                        instance_path, mapped_cwd, include_path
-                    )
+                    mapped_include_path = _map_path(instance_path, mapped_cwd, include_path)
                     argument = include_prefix + mapped_include_path
         elif open_include_prefix or not open_prefix:
             # 'open_include_prefix': must be include argument, translate include argument paths
@@ -99,9 +95,7 @@ def _map_path(instance_path: str, mapped_cwd: str, path: str) -> str:
     return os.path.realpath(joined_path)
 
 
-def map_dependency_paths(
-    instance_path: str, mapped_cwd: str, dependencies: Dict[str, str]
-) -> Dict[str, str]:
+def map_dependency_paths(instance_path: str, mapped_cwd: str, dependencies: Dict[str, str]) -> Dict[str, str]:
     """Maps dependency paths that the client sent to paths valid at the server."""
     mapped_dependencies = {}
     for sha1sum, path in dependencies.items():
@@ -141,8 +135,10 @@ def do_compilation(mapped_cwd: str, arguments: List[str]) -> List[ObjectFile]:
     # -c says that we do not want to link
     arguments.insert(1, "-c")
 
-    logger.debug(f"Compile arguments: {arguments}")
+    logger.debug("Compile arguments: %s", arguments)
 
+    # pylint: disable=subprocess-run-check
+    # (justification: we explicitly return the result code)
     result = subprocess.run(
         arguments,
         stdout=subprocess.PIPE,
@@ -152,11 +148,11 @@ def do_compilation(mapped_cwd: str, arguments: List[str]) -> List[ObjectFile]:
 
     if result.stdout:
         stdout = result.stdout.decode("utf-8")
-        logger.debug(f"Compiler gave output:\n {stdout}")
+        logger.debug("Compiler gave output:\n%s", stdout)
 
     if result.stderr:
         stderr = result.stderr.decode("utf-8")
-        logger.error(f"Compiler gave error output:\n {stderr}")
+        logger.error("Compiler gave error output:\n%s", stderr)
 
     results: List[ObjectFile] = []
     source_files: List[str] = extract_source_files(arguments)
@@ -168,6 +164,6 @@ def do_compilation(mapped_cwd: str, arguments: List[str]) -> List[ObjectFile]:
         object_file = ObjectFile(source_file, bytearray(object_file_content))
         results.append(object_file)
 
-    logger.info(f"Sending back #{len(results)} object files to the client.")
+    logger.info("Sending back #%i object files to the client.", len(results))
 
     return results
