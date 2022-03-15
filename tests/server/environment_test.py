@@ -1,7 +1,10 @@
-from homcc.server.environment import *
+"""Tests for the server environment."""
+from homcc.server.environment import map_arguments, map_cwd, extract_source_files
 
 
 class TestServerEnvironment:
+    """Tests the server environment."""
+
     def test_map_arguments(self):
         instance_path = "/client1"
         mapped_cwd = "/client1/test/xyz"

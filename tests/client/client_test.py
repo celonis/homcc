@@ -10,11 +10,9 @@ from homcc.client.client_utils import calculate_dependency_dict, find_dependenci
 from homcc.server.server import start_server, stop_server
 
 
-# pylint: disable=missing-function-docstring
 class TestClient:
-    """ Tests for client/client.py"""
+    """Tests for client/client.py"""
 
-    # pylint: disable=W0201
     @pytest.fixture(autouse=True)
     def _init(self, unused_tcp_port: int):
         host: str = "localhost"
@@ -37,10 +35,14 @@ class TestClient:
     @pytest.mark.asyncio
     @pytest.mark.timeout(1)
     async def test_connectivity_and_send_argument_message(self):
-        args: List[str] = ["g++", str(self.example_main_cpp.absolute()),
-                           str(self.example_foo_cpp.absolute()),
-                           f"-I{str(self.example_inc_dir.absolute())}",
-                           "-o", str(self.example_out_file.absolute())]
+        args: List[str] = [
+            "g++",
+            str(self.example_main_cpp.absolute()),
+            str(self.example_foo_cpp.absolute()),
+            f"-I{str(self.example_inc_dir.absolute())}",
+            "-o",
+            str(self.example_out_file.absolute()),
+        ]
         cwd: str = ""
         dependencies: Set[str] = find_dependencies(args)
         dependency_dict: Dict[str, str] = calculate_dependency_dict(dependencies)

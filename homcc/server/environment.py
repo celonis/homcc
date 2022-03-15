@@ -1,3 +1,4 @@
+"""Module containing methods to manage the server environment, mostly file and path manipulation."""
 import uuid
 import os
 import subprocess

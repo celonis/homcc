@@ -1,3 +1,4 @@
+"""Main logic for the homcc server."""
 import threading
 import socketserver
 import hashlib
@@ -40,6 +41,8 @@ class TCPServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
 
 
 class TCPRequestHandler(socketserver.BaseRequestHandler):
+    """Handles all requests received from the client."""
+
     BUFFER_SIZE = 4096
 
     mapped_dependencies: Dict[str, str] = {}
@@ -96,7 +99,8 @@ class TCPRequestHandler(socketserver.BaseRequestHandler):
         # verify that the hashes match
         if dependency_hash != retrieved_dependency_hash:
             logger.error(
-                "Assertion failed: Hashes of requested file and received file (path: %s) do not match! This should not happen.",
+                """Assertion failed: Hashes of requested file and received file (path: %s) do not match!
+                This should not happen.""",
                 dependency_path,
             )
         else:

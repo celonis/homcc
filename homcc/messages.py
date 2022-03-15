@@ -1,3 +1,4 @@
+"""Creation and parsing for messages transferred between the client and the server."""
 from __future__ import annotations
 from typing import List, Dict, Tuple, Optional
 from abc import ABC
@@ -9,6 +10,8 @@ import json
 class MessageType(Enum):
     """Lists all different types of messages."""
 
+    # pylint: disable=invalid-name
+    # justification: we want the enum values to be of the same name as the classes
     ArgumentMessage = auto()
     DependencyRequestMessage = auto()
     DependencyReplyMessage = auto()

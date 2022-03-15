@@ -1,3 +1,4 @@
+"""Tests regarding the server."""
 import socket
 import pytest
 from typing import List
@@ -10,10 +11,12 @@ from homcc.messages import (
     Message,
     ObjectFile,
 )
-from homcc.server.server import *
+from homcc.server.server import TCPRequestHandler, start_server, stop_server
 
 
 class TestServerReceive:
+    """Integration test to test if the server is handling received messages correctly."""
+
     client_socket: socket.socket
     messages: List[Message] = []
     received_messages: List[Message] = []
@@ -22,8 +25,8 @@ class TestServerReceive:
         self.client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.client_socket.connect(("localhost", port))
 
-    def client_send(self, bytes):
-        self.client_socket.send(bytes)
+    def client_send(self, bytes_to_send):
+        self.client_socket.send(bytes_to_send)
 
     def client_stop(self):
         self.client_socket.close()
@@ -33,6 +36,8 @@ class TestServerReceive:
 
     @pytest.mark.timeout(1)
     def test_receive_multiple_messages(self):
+        # pylint: disable=protected-access
+        # justification: needed for monkey patching
         # monkey patch the server's handler, so that we can compare
         # messages sent by the client with messages that the server deserialized
         TCPRequestHandler._handle_message = self.patched_handle_message
@@ -46,9 +51,7 @@ class TestServerReceive:
 
             self.messages.append(DependencyRequestMessage("asd123"))
 
-            self.messages.append(
-                DependencyReplyMessage(bytearray([0x1, 0x2, 0x3, 0x4, 0x5]))
-            )
+            self.messages.append(DependencyReplyMessage(bytearray([0x1, 0x2, 0x3, 0x4, 0x5])))
 
             result1 = ObjectFile("foo.o", bytearray([0x1, 0x3, 0x2, 0x4, 0x5, 0x6]))
             result2 = ObjectFile("dir/other_foo.o", bytearray([0xA, 0xFF, 0xAA]))
