@@ -1,4 +1,5 @@
 from pytest_mock.plugin import MockerFixture
+import pytest
 
 from homcc.server.environment import (
     CompilerResult,
@@ -156,6 +157,7 @@ class TestServerEnvironmentPathMapping:
 class TestServerCompilation:
     """Tests the server compilation process."""
 
+    @pytest.fixture(autouse=True)
     def setup_mocks(self, mocker: MockerFixture):
         mocked_compiler_result = CompilerResult(0, "", "")
         mocker.patch(
@@ -164,9 +166,7 @@ class TestServerCompilation:
         )
         mocker.patch("pathlib.Path.read_bytes", return_value=bytes())
 
-    def test_multiple_files(self, mocker: MockerFixture):
-        self.setup_mocks(mocker)
-
+    def test_multiple_files(self):
         instance_path = "/tmp/homcc/test-id"
         mapped_cwd = "/tmp/homcc/test-id/home/user/cwd"
         arguments = [
@@ -182,9 +182,7 @@ class TestServerCompilation:
         assert result_message.object_files[0].file_name == "/home/user/cwd/main.o"
         assert result_message.object_files[1].file_name == "/home/user/cwd/other.o"
 
-    def test_single_file(self, mocker: MockerFixture):
-        self.setup_mocks(mocker)
-
+    def test_single_file(self):
         instance_path = "/tmp/homcc/test-id"
         mapped_cwd = "/tmp/homcc/test-id/home/user/cwd"
         arguments = [
@@ -201,9 +199,7 @@ class TestServerCompilation:
             == "/home/user/cwd/this_is_a_source_file.o"
         )
 
-    def test_single_file_output_argument(self, mocker: MockerFixture):
-        self.setup_mocks(mocker)
-
+    def test_single_file_output_argument(self):
         instance_path = "/tmp/homcc/test-id"
         mapped_cwd = "/tmp/homcc/test-id/home/user/cwd"
         arguments = [
