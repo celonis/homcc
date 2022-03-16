@@ -1,4 +1,0 @@
-pytest
-pytest-timeout
-pytest-mock
-pytest-asyncio

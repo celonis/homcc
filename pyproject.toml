@@ -1,0 +1,11 @@
+[tool.black]
+line-length = 120
+target-version = ['py36']
+skip-string-normalization = true
+
+[tool.mypy]
+show_error_codes = true
+
+[tool.pytest.ini_options]
+log_cli = true
+log_cli_level = "DEBUG"
