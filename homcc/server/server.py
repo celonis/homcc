@@ -109,8 +109,8 @@ class TCPRequestHandler(socketserver.BaseRequestHandler):
 
         if not self._request_next_dependency():
             # no further dependencies needed, compile now
-            object_files = do_compilation(self.mapped_cwd, self.compiler_arguments)
-            result_message = CompilationResultMessage(object_files)
+            result_message = do_compilation(self.instance_path, self.mapped_cwd, self.compiler_arguments)
+
             self.request.sendall(result_message.to_bytes())
 
     @_handle_message.register

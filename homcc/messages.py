@@ -285,11 +285,14 @@ class ObjectFile:
 
 class CompilationResultMessage(Message):
     """Message that contains the compilation result (list of files).
-    A file contains the filename (relative to the working directory),
-    the size of the file in bytes and the actual file bytes."""
+    A file contains the filename (valid on client side), the size of
+    the file in bytes and the actual file bytes."""
 
-    def __init__(self, object_files: List[ObjectFile]) -> None:
+    def __init__(self, object_files: List[ObjectFile], stdout: str, stderr: str, return_code: int) -> None:
         self.object_files = object_files
+        self.stdout = stdout
+        self.stderr = stderr
+        self.return_code = return_code
 
         super().__init__(MessageType.CompilationResultMessage)
 
@@ -301,10 +304,23 @@ class CompilationResultMessage(Message):
             files.append({"filename": object_file.file_name, "size": object_file.size})
         json_dict["files"] = files
 
+        json_dict["stdout"] = self.stdout
+        json_dict["stderr"] = self.stderr
+        json_dict["return_code"] = self.return_code
+
         return json_dict
 
     def get_object_files(self) -> List[ObjectFile]:
         return self.object_files
+
+    def get_stdout(self) -> str:
+        return self.stdout
+
+    def get_stderr(self) -> str:
+        return self.stderr
+
+    def get_return_code(self) -> int:
+        return self.return_code
 
     def get_further_payload(self) -> bytearray:
         """Overwritten so that the dependencies' content can be appended to the message."""
@@ -333,7 +349,13 @@ class CompilationResultMessage(Message):
 
     def __eq__(self, other):
         if isinstance(other, CompilationResultMessage):
-            return self.get_object_files() == other.get_object_files()
+            return (
+                self.get_object_files() == other.get_object_files()
+                and self.get_stdout() == other.get_stdout()
+                and self.get_stderr() == other.get_stderr()
+                and self.get_return_code() == other.get_return_code()
+            )
+
         return False
 
     @staticmethod
@@ -348,4 +370,8 @@ class CompilationResultMessage(Message):
             object_file.size = object_file_size
             object_files.append(object_file)
 
-        return CompilationResultMessage(object_files)
+        stdout = json_dict["stdout"]
+        stderr = json_dict["stderr"]
+        return_code = json_dict["return_code"]
+
+        return CompilationResultMessage(object_files, stdout, stderr, return_code)

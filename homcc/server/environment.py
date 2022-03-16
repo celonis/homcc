@@ -1,4 +1,5 @@
 """Module containing methods to manage the server environment, mostly file and path manipulation."""
+from dataclasses import dataclass
 import uuid
 import os
 import subprocess
@@ -7,10 +8,12 @@ from tempfile import TemporaryDirectory
 from pathlib import Path
 from typing import Dict, List
 
-from homcc.messages import ObjectFile
+from homcc.messages import CompilationResultMessage, ObjectFile
 
 logger = logging.getLogger(__name__)
-_include_prefixes = ["-I", "-isysroot", "-isystem"]
+
+# arguments of which the path should be translated
+_path_argument_prefixes = ["-I", "-isysroot", "-isystem", "-o"]
 
 
 def create_root_temp_folder() -> TemporaryDirectory:
@@ -51,27 +54,30 @@ def get_needed_dependencies(dependencies: Dict[str, str]) -> Dict[str, str]:
 
 
 def map_arguments(instance_path: str, mapped_cwd: str, arguments: List[str]) -> List[str]:
-    """Maps include and src arguments (e.g. -I{dir} or the to be compiled .cpp files)
-    to paths valid on the server."""
+    """Maps arguments that should be translated (e.g. -I{dir}, .cpp files,
+    or the -o argument) to paths valid on the server."""
     mapped_arguments = [arguments[0]]
 
-    open_include_prefix = False
+    open_path_argument_prefix = False
     open_prefix = False
     for argument in arguments[1:]:
         if argument.startswith("-"):
             open_prefix = True
-            for include_prefix in _include_prefixes:
-                if argument.startswith(include_prefix) and argument != include_prefix:
-                    open_include_prefix = True
+            for path_argument_prefix in _path_argument_prefixes:
+                if argument.startswith(path_argument_prefix):
+                    open_path_argument_prefix = True
 
-                    include_path = argument[len(include_prefix) :]
-                    mapped_include_path = _map_path(instance_path, mapped_cwd, include_path)
-                    argument = include_prefix + mapped_include_path
-        elif open_include_prefix or not open_prefix:
-            # 'open_include_prefix': must be include argument, translate include argument paths
+                    if argument == path_argument_prefix:
+                        break
+                    else:
+                        argument_path = argument[len(path_argument_prefix) :]
+                        mapped_path = _map_path(instance_path, mapped_cwd, argument_path)
+                        argument = path_argument_prefix + mapped_path
+        elif open_path_argument_prefix or not open_prefix:
+            # 'open_path_argument_prefix': must be an argument which requires path translation
             # not 'open_prefix': must be 'infile' argument (source files), also translate paths
             argument = _map_path(instance_path, mapped_cwd, argument)
-            open_include_prefix = False
+            open_path_argument_prefix = False
             open_prefix = False
         else:
             open_prefix = False
@@ -96,6 +102,11 @@ def _map_path(instance_path: str, mapped_cwd: str, path: str) -> str:
     return os.path.realpath(joined_path)
 
 
+def _unmap_path(instance_path: str, server_path: str) -> str:
+    """Unmaps an absolute path from the server to an absolute path valid on the client."""
+    return f"/{os.path.relpath(server_path, instance_path)}"
+
+
 def map_dependency_paths(instance_path: str, mapped_cwd: str, dependencies: Dict[str, str]) -> Dict[str, str]:
     """Maps dependency paths that the client sent to paths valid at the server."""
     mapped_dependencies = {}
@@ -110,33 +121,58 @@ def extract_source_files(arguments: List[str]) -> List[str]:
     """Given arguments, extracts files to be compiled and returns their paths."""
     source_file_paths: List[str] = []
 
-    open_include_arguments = False
+    other_open_arguments = False
     # only consider real arguments (not the compiler, hence arguments[1:])
     for argument in arguments[1:]:
         if argument.startswith("-"):
-            for include_prefix in _include_prefixes:
-                if argument == include_prefix:
-                    open_include_arguments = True
+            for path_argument_prefix in _path_argument_prefixes:
+                if argument == path_argument_prefix:
+                    other_open_arguments = True
                     break
 
-            if open_include_arguments:
+            if other_open_arguments:
                 continue
         else:
-            if not open_include_arguments:
+            if not other_open_arguments:
                 source_file_paths.append(argument)
 
-        open_include_arguments = False
+        other_open_arguments = False
 
     return source_file_paths
 
 
-def do_compilation(mapped_cwd: str, arguments: List[str]) -> List[ObjectFile]:
-    logger.info("Compiling...")
+def get_output_path(mapped_cwd: str, source_file_name: str, arguments: List[str]) -> str:
+    """Extracts the output path (-o argument) from the argument list.
+    If there is no output argument given by the user, returns the default output path."""
+    output_path = os.path.join(mapped_cwd, f"{Path(source_file_name).stem}.o")
 
+    for index, argument in enumerate(arguments):
+        if argument.startswith("-o"):
+            if argument == "-o":
+                output_path = arguments[index + 1]
+            else:
+                output_path = argument[2:]
+
+            break
+
+    return output_path
+
+
+@dataclass
+class CompilerResult:
+    """Information that the compiler process gives after executing."""
+
+    return_code: int
+    stdout: str
+    stderr: str
+
+
+def invoke_compiler(mapped_cwd: str, arguments: List[str]) -> CompilerResult:
+    """Actually invokes the compiler process."""
     # -c says that we do not want to link
     arguments.insert(1, "-c")
 
-    logger.debug("Compile arguments: %s", arguments)
+    logger.info("Compile arguments: %s", arguments)
 
     # pylint: disable=subprocess-run-check
     # (justification: we explicitly return the result code)
@@ -147,24 +183,48 @@ def do_compilation(mapped_cwd: str, arguments: List[str]) -> List[ObjectFile]:
         cwd=mapped_cwd,
     )
 
+    stdout = ""
     if result.stdout:
         stdout = result.stdout.decode("utf-8")
-        logger.debug("Compiler gave output:\n%s", stdout)
+        logger.debug("Compiler gave output:\n'%s'", stdout)
 
+    stderr = ""
     if result.stderr:
         stderr = result.stderr.decode("utf-8")
-        logger.error("Compiler gave error output:\n%s", stderr)
+        logger.warning("Compiler gave error output:\n'%s'", stderr)
 
-    results: List[ObjectFile] = []
-    source_files: List[str] = extract_source_files(arguments)
+    return CompilerResult(result.returncode, stdout, stderr)
 
-    for source_file in source_files:
-        file_name = f"{Path(source_file).stem}.o"
-        object_file_content = Path.read_bytes(Path(os.path.join(mapped_cwd, file_name)))
 
-        object_file = ObjectFile(source_file, bytearray(object_file_content))
-        results.append(object_file)
+def do_compilation(instance_path: str, mapped_cwd: str, arguments: List[str]) -> CompilationResultMessage:
+    """Does the compilation and returns the filled result message."""
+    logger.info("Compiling...")
 
-    logger.info("Sending back #%i object files to the client.", len(results))
+    result = invoke_compiler(mapped_cwd, arguments)
 
-    return results
+    object_files: List[ObjectFile] = []
+    if result.return_code == 0:
+        source_files: List[str] = extract_source_files(arguments)
+
+        for source_file in source_files:
+            if len(source_files) == 1:
+                # with only one source file, the client could specify
+                # -o (not possible to set if there is more than one source file).
+                file_path = get_output_path(mapped_cwd, source_file, arguments)
+            else:
+                file_name = f"{Path(source_file).stem}.o"
+                file_path = os.path.join(mapped_cwd, file_name)
+
+            object_file_content = Path.read_bytes(Path(file_path))
+
+            client_output_path = _unmap_path(instance_path, file_path)
+
+            object_file = ObjectFile(client_output_path, bytearray(object_file_content))
+            object_files.append(object_file)
+
+    logger.info(
+        "Compiler returned code '%i', sending back #%i object files.",
+        result.return_code,
+        len(object_files),
+    )
+    return CompilationResultMessage(object_files, result.stdout, result.stderr, result.return_code)

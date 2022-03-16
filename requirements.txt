@@ -5,3 +5,4 @@ pytest
 pytest-asyncio
 pytest-cov
 pytest-timeout
+pytest-mock
