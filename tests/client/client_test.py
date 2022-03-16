@@ -33,7 +33,7 @@ class TestClient:
         server_thread.join()
 
     @pytest.mark.asyncio
-    @pytest.mark.timeout(1)
+    @pytest.mark.timeout(5)
     async def test_connectivity_and_send_argument_message(self):
         args: List[str] = [
             "g++",
