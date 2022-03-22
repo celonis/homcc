@@ -342,6 +342,9 @@ class CompilationResultMessage(Message):
     def get_return_code(self) -> int:
         return self.return_code
 
+    def get_compilation_info(self) -> Tuple[str, str, int]:
+        return self.stdout, self.stderr, self.return_code
+
     def get_further_payload(self) -> bytearray:
         """Overwritten so that the dependencies' content can be appended to the message."""
         further_payload = bytearray()

@@ -8,7 +8,8 @@ import logging
 from pathlib import Path
 from typing import Dict, List, Optional
 
-from homcc.messages import (
+from homcc.common.arguments import Arguments
+from homcc.common.messages import (
     ArgumentMessage,
     DependencyReplyMessage,
     Message
@@ -37,6 +38,10 @@ class SendTimedOutError(TCPClientError):
 
 class ReceiveTimedOutError(TCPClientError):
     """ Exception for time-outing during receiving messages """
+
+
+class UnexpectedMessageTypeError(TCPClientError):
+    """Exception for receiving a message with an unexpected type"""
 
 
 class TCPClient:
@@ -72,10 +77,10 @@ class TCPClient:
         self._writer.write(message.to_bytes())
         await self._writer.drain()
 
-    async def send_argument_message(self, args: List[str], cwd: str,
+    async def send_argument_message(self, arguments: Arguments, cwd: str,
                                     dependency_dict: Dict[str, str]):
         """ send an argument message to homcc server """
-        await self._send(ArgumentMessage(args, cwd, dependency_dict))
+        await self._send(ArgumentMessage(list(arguments), cwd, dependency_dict))
 
     async def send_dependency_reply_message(self, dependency: str):
         """ send dependency reply message to homcc server """

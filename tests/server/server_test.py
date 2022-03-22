@@ -2,7 +2,7 @@ import socket
 import pytest
 from typing import List
 
-from homcc.messages import (
+from homcc.common.messages import (
     ArgumentMessage,
     DependencyRequestMessage,
     DependencyReplyMessage,

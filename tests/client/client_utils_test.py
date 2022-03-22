@@ -7,6 +7,7 @@ from typing import List, Set
 
 import pytest
 
+from homcc.common.arguments import Arguments
 from homcc.client.client_utils import find_dependencies, local_compile
 
 
@@ -29,7 +30,7 @@ class TestClientUtils:
         # absolute paths of: "g++ main.cpp -Iinclude/"
         args: List[str] = ["g++", str(self.example_main_cpp.absolute()),
                            f"-I{str(self.example_inc_dir.absolute())}"]
-        dependencies: Set[str] = find_dependencies(args)
+        dependencies: Set[str] = find_dependencies(Arguments(args))
         example_dependency: Path = self.example_inc_dir / "foo.h"
 
         assert len(dependencies) == 2
@@ -41,7 +42,7 @@ class TestClientUtils:
         args: List[str] = ["g++", str(self.example_main_cpp.absolute()),
                            str(self.example_foo_cpp.absolute()),
                            f"-I{str(self.example_inc_dir.absolute())}"]
-        dependencies: Set[str] = find_dependencies(args)
+        dependencies: Set[str] = find_dependencies(Arguments(args))
         example_dependency: Path = self.example_inc_dir / "foo.h"
 
         assert len(dependencies) == 3
@@ -60,7 +61,7 @@ class TestClientUtils:
                            "-o", str(example_out_file.absolute())]
 
         assert not example_out_file.exists()
-        assert local_compile(args) == os.EX_OK
+        assert local_compile(Arguments(args)) == os.EX_OK
         assert example_out_file.exists()
 
         example_out_file.unlink()

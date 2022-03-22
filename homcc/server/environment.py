@@ -8,7 +8,7 @@ from tempfile import TemporaryDirectory
 from pathlib import Path
 from typing import Dict, List
 
-from homcc.messages import CompilationResultMessage, ObjectFile
+from homcc.common.messages import CompilationResultMessage, ObjectFile
 
 logger = logging.getLogger(__name__)
 

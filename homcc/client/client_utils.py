@@ -10,6 +10,8 @@ import subprocess
 from pathlib import Path
 from typing import Dict, List, Set
 
+from homcc.common.arguments import Arguments
+
 logger = logging.getLogger(__name__)
 encoding: str = "utf-8"
 
@@ -24,27 +26,11 @@ class CompilerError(subprocess.CalledProcessError):
         super().__init__(err.returncode, err.cmd, err.output, err.stderr)
 
 
-def find_dependencies(args: List[str]) -> Set[str]:
+def find_dependencies(arguments: Arguments) -> Set[str]:
     """ get unique set of dependencies by calling the preprocessor and filtering the result """
-    args = args.copy()
-
-    # replace unwanted options with empty flags
-    for i, arg in enumerate(args):
-        if arg == "-c":  # remove no linking option
-            args[i] = ""
-        elif arg == "-o":  # remove output option + corresponding output file
-            args[i] = ""
-            args[i + 1] = ""
-
-    # remove empty flags
-    args = [arg for arg in args if arg != ""]
-
-    # add option to get dependencies without system headers
-    args.insert(1, "-MM")
-
     try:
         # execute preprocessor command, e.g.: "g++ -MM main.cpp"
-        result: subprocess.CompletedProcess = subprocess.run(args, check=True,
+        result: subprocess.CompletedProcess = subprocess.run(list(arguments), check=True,
                                                              stdout=subprocess.PIPE,
                                                              stderr=subprocess.PIPE)
     except subprocess.CalledProcessError as err:
@@ -73,14 +59,37 @@ def calculate_dependency_dict(dependencies: Set[str]) -> Dict[str, str]:
     return {hash_file(dependency): dependency for dependency in dependencies}
 
 
-def local_compile(args: List[str]) -> int:
+def link_object_files(arguments: Arguments) -> int:
+    """link all object files compiled by the server"""
+    source_file_to_object_file_map: Dict[str, str] = dict(
+        zip(arguments.source_files,
+            [str(Path(source_file).with_suffix(".o")) for source_file in arguments.source_files])
+    )
+    arguments.replace_source_files_with_object_files(source_file_to_object_file_map)
+
+    try:
+        # execute linking command, e.g.: "g++ -ofoobar foo.o bar.o"
+        result: subprocess.CompletedProcess = subprocess.run(list(arguments), check=True,
+                                                             stdout=subprocess.PIPE,
+                                                             stderr=subprocess.PIPE)
+    except subprocess.CalledProcessError as err:
+        logger.error("Linking error of [%s]:\n%s", ' '.join(err.cmd), err.stderr.decode(encoding))
+        return err.returncode
+
+    if result.stdout:
+        logger.debug("Linking result of [%s]:\n%s", ' '.join(result.args),
+                     result.stdout.decode(encoding))
+    return result.returncode
+
+
+def local_compile(arguments: Arguments) -> int:
     """ execute local compilation """
     logger.warning("Compiling locally instead!")
-    logger.debug("Compiler arguments: [%s]", ' '.join(args))
+    logger.debug("Compiler arguments: [%s]", ' '.join(arguments))
 
     try:
         # execute compile command, e.g.: "g++ foo.cpp -o bar.o"
-        result: subprocess.CompletedProcess = subprocess.run(args, check=True,
+        result: subprocess.CompletedProcess = subprocess.run(list(arguments), check=True,
                                                              stdout=subprocess.PIPE,
                                                              stderr=subprocess.PIPE)
     except subprocess.CalledProcessError as err:
