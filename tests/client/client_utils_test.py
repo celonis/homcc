@@ -8,7 +8,7 @@ from typing import List, Set
 import pytest
 
 from homcc.common.arguments import Arguments
-from homcc.client.client_utils import find_dependencies, local_compile
+from homcc.client.client_utils import CompilerError, find_dependencies, local_compile
 
 
 # pylint: disable=missing-function-docstring
@@ -50,6 +50,16 @@ class TestClientUtils:
         assert str(self.example_foo_cpp.absolute()) in dependencies
         assert str(example_dependency.absolute()) in dependencies
 
+    def test_find_dependencies_error(self):
+        args: List[str] = ["g++", str(self.example_main_cpp.absolute()),
+                           str(self.example_foo_cpp.absolute()),
+                           f"-I{str(self.example_inc_dir.absolute())}",
+                           "-OError"]
+
+        with pytest.raises(CompilerError):
+            _: Set[str] = find_dependencies(Arguments(args))
+            assert False
+
     def test_local_compilation(self):
         time_str: str = datetime.now().strftime("%Y%m%d-%H%M%S")
         example_out_file: Path = self.example_out_dir / f"example-{time_str}"
@@ -65,3 +75,6 @@ class TestClientUtils:
         assert example_out_file.exists()
 
         example_out_file.unlink()
+
+        # intentionally execute an erroneous call
+        assert local_compile(Arguments(args + ["-OError"])) != os.EX_OK

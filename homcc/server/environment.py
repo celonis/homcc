@@ -8,6 +8,7 @@ from tempfile import TemporaryDirectory
 from pathlib import Path
 from typing import Dict, List
 
+from homcc.common.arguments import Arguments
 from homcc.common.messages import CompilationResultMessage, ObjectFile
 
 logger = logging.getLogger(__name__)
@@ -210,7 +211,7 @@ def do_compilation(
     """Does the compilation and returns the filled result message."""
     logger.info("Compiling...")
 
-    result = invoke_compiler(mapped_cwd, arguments)
+    result = invoke_compiler(mapped_cwd, list(Arguments(arguments).remove_output_args()))
 
     object_files: List[ObjectFile] = []
     if result.return_code == 0:

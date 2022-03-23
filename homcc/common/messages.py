@@ -5,6 +5,7 @@ from enum import Enum, auto
 from dataclasses import dataclass
 import json
 
+from homcc.common.arguments import ArgumentsExecutionResult, encoding
 
 class MessageType(Enum):
     """Lists all different types of messages."""
@@ -342,8 +343,8 @@ class CompilationResultMessage(Message):
     def get_return_code(self) -> int:
         return self.return_code
 
-    def get_compilation_info(self) -> Tuple[str, str, int]:
-        return self.stdout, self.stderr, self.return_code
+    def get_compilation_result(self) -> ArgumentsExecutionResult:
+        return ArgumentsExecutionResult(self.return_code, self.stdout, self.stderr)
 
     def get_further_payload(self) -> bytearray:
         """Overwritten so that the dependencies' content can be appended to the message."""

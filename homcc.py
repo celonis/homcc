@@ -10,7 +10,7 @@ import os
 from pathlib import Path
 from typing import Dict, Set
 
-from homcc.common.arguments import Arguments
+from homcc.common.arguments import Arguments, ArgumentsExecutionResult
 from homcc.client.client import TCPClient, TCPClientError, UnexpectedMessageTypeError
 from homcc.client.client_utils import (
     CompilerError,
@@ -40,24 +40,20 @@ async def main() -> int:
     arguments.compiler = compiler
 
     try:
-        # 1.) test whether arguments should be sent otherwise prepare for communication with server
+        # 1.) test whether arguments should be sent, prepare for communication with server
         if not arguments.is_sendable():
             return local_compile(arguments)
 
         dependencies: Set[str] = find_dependencies(arguments)
         logger.debug("Dependency list: %s", dependencies)
-
-        # 2.) try to connect with server
-        await client.connect()
-
-        # 3.) parse cmd-line arguments and calculate file hashes of given dependencies
         dependency_dict: Dict[str, str] = calculate_dependency_dict(dependencies)
         logger.debug("Dependency hashes: %s", dependency_dict)
 
-        # 4.) send argument message to server
+        await client.connect()
+
+        # 2.) send arguments and dependency information to server and provide requested dependencies
         await client.send_argument_message(arguments, cwd, dependency_dict)
 
-        # 5.) provide requested, missing dependencies
         server_response: Message = await client.receive(timeout=timeout)
 
         while isinstance(server_response, DependencyRequestMessage):
@@ -66,36 +62,42 @@ async def main() -> int:
 
             server_response = await client.receive(timeout=timeout)
 
-        # 6.) receive final message and close client
+        # 3.) receive final message and close client
         if not isinstance(server_response, CompilationResultMessage):
-            logger.error("Unexpected message of type %s received!",
-                         str(server_response.message_type))
+            logger.error("Unexpected message of type %s received!", server_response.message_type)
             raise UnexpectedMessageTypeError
 
         await client.close()
 
-        # 7.) extract compilation results and link them if required
-        stdout, stderr, return_code = server_response.get_compilation_info()
+        # 4.) extract compilation results
+        server_result: ArgumentsExecutionResult = server_response.get_compilation_result()
 
-        if stdout:
-            logger.debug("Server output:\n%s", stdout)
+        if server_result.stdout:
+            logger.debug("Server output:\n%s", server_result.stdout)
 
-        if return_code != os.EX_OK:
-            logger.warning("Server error(%i):\n%s", return_code, stderr)
+        if server_result.return_code != os.EX_OK:
+            logger.warning("Server error(%i):\n%s", server_result.return_code, server_result.stderr)
 
-            # for now, we try to recover from server compilation error via local compilation to track bugs
-            local_return_code: int = local_compile(arguments)
+            # for now, we try to recover from server compilation errors via local compilation to track bugs
+            return_code: int = local_compile(arguments)
 
-            if return_code != local_return_code:
-                logger.debug("Different compilation result errors: Server error(%i) - Client error(%i)",
-                             return_code, local_return_code)
-            return local_return_code
+            if return_code != server_result.return_code:
+                logger.debug("Different compilation result errors: Client error(%i) - Server error(%i)",
+                             return_code, server_result.return_code)
+
+            return return_code
 
         for object_file in server_response.get_object_files():
             Path(object_file.file_name).write_bytes(object_file.content)
 
+        # 5.) link and delete object files if required
         if arguments.is_linking():
-            return link_object_files(arguments)
+            return_code: int = link_object_files(arguments)
+
+            for object_file in server_response.get_object_files():
+                Path(object_file.file_name).unlink()
+
+            return return_code
 
         return os.EX_OK
 

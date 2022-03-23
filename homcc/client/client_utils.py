@@ -8,12 +8,11 @@ import logging
 import subprocess
 
 from pathlib import Path
-from typing import Dict, List, Set
+from typing import Dict, Set
 
-from homcc.common.arguments import Arguments
+from homcc.common.arguments import Arguments, ArgumentsExecutionResult
 
 logger = logging.getLogger(__name__)
-encoding: str = "utf-8"
 
 
 class CompilerError(subprocess.CalledProcessError):
@@ -29,25 +28,20 @@ class CompilerError(subprocess.CalledProcessError):
 def find_dependencies(arguments: Arguments) -> Set[str]:
     """ get unique set of dependencies by calling the preprocessor and filtering the result """
     try:
-        # execute preprocessor command, e.g.: "g++ -MM main.cpp"
-        result: subprocess.CompletedProcess = subprocess.run(list(arguments), check=True,
-                                                             stdout=subprocess.PIPE,
-                                                             stderr=subprocess.PIPE)
+        # execute preprocessor command, e.g.: "g++ main.cpp -MM"
+        result: ArgumentsExecutionResult = arguments.dependency_finding().execute(check=True)
     except subprocess.CalledProcessError as err:
-        logger.error("Preprocessor error of [%s]: %s", ' '.join(err.cmd),
-                     err.stderr.decode(encoding))
-        raise CompilerError(err) from None
+        logger.error("Preprocessor error:\n%s", err.stderr)  # TODO: fix double output
+        raise CompilerError(err) from err
 
     if result.stdout:
-        logger.debug("Preprocessor result of [%s]:\n%s", ' '.join(result.args),
-                     result.stdout.decode(encoding))
+        logger.debug("Preprocessor result:\n%s", result.stdout)
 
     # create unique set of dependencies by filtering the preprocessor result
-    def filter_output_target_and_line_break(dependency: str):
-        return not dependency.endswith('.o:') and dependency != '\\'
+    def filter_preprocessor_target_and_line_break(dependency: str):
+        return dependency not in [f"{Arguments.preprocessor_target}:", "\\"]
 
-    return set(filter(filter_output_target_and_line_break,
-                      result.stdout.decode(encoding).split()))
+    return set(filter(filter_preprocessor_target_and_line_break, result.stdout.split()))
 
 
 def calculate_dependency_dict(dependencies: Set[str]) -> Dict[str, str]:
@@ -67,36 +61,29 @@ def link_object_files(arguments: Arguments) -> int:
     )
     arguments.replace_source_files_with_object_files(source_file_to_object_file_map)
 
+    logger.debug("Linking!")
     try:
-        # execute linking command, e.g.: "g++ -ofoobar foo.o bar.o"
-        result: subprocess.CompletedProcess = subprocess.run(list(arguments), check=True,
-                                                             stdout=subprocess.PIPE,
-                                                             stderr=subprocess.PIPE)
+        # execute linking command, e.g.: "g++ foo.o bar.o -ofoobar"
+        result: ArgumentsExecutionResult = arguments.execute(check=True)
     except subprocess.CalledProcessError as err:
-        logger.error("Linking error of [%s]:\n%s", ' '.join(err.cmd), err.stderr.decode(encoding))
+        logger.error("Linker error:\n%s", err.stderr)
         return err.returncode
 
     if result.stdout:
-        logger.debug("Linking result of [%s]:\n%s", ' '.join(result.args),
-                     result.stdout.decode(encoding))
-    return result.returncode
+        logger.debug("Linker result:\n%s", result.stdout)
+    return result.return_code
 
 
 def local_compile(arguments: Arguments) -> int:
     """ execute local compilation """
     logger.warning("Compiling locally instead!")
-    logger.debug("Compiler arguments: [%s]", ' '.join(arguments))
-
     try:
-        # execute compile command, e.g.: "g++ foo.cpp -o bar.o"
-        result: subprocess.CompletedProcess = subprocess.run(list(arguments), check=True,
-                                                             stdout=subprocess.PIPE,
-                                                             stderr=subprocess.PIPE)
+        # execute compile command, e.g.: "g++ foo.cpp -o foo"
+        result: ArgumentsExecutionResult = arguments.execute(check=True)
     except subprocess.CalledProcessError as err:
-        logger.error("Compiler error of [%s]:\n%s", ' '.join(err.cmd), err.stderr.decode(encoding))
+        logger.error("Compiler error:\n%s", err.stderr)
         return err.returncode
 
     if result.stdout:
-        logger.debug("Compiler result of [%s]:\n%s", ' '.join(result.args),
-                     result.stdout.decode(encoding))
-    return result.returncode
+        logger.debug("Compiler result:\n%s", result.stdout)
+    return result.return_code

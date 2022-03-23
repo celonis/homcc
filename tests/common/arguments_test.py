@@ -27,7 +27,7 @@ class TestArguments:
         assert not Arguments(not_linking_args).is_linking()
 
     def test_output_target(self):
-        args: List[str] = ["g++", "foo.cpp"]
+        args: List[str] = ["g++", "foo.cpp", "-O0"]
         assert Arguments(args).output is None
 
         single_output_args: List[str] = args + ["-o", "foo"]
@@ -48,8 +48,23 @@ class TestArguments:
             _: Optional[str] = Arguments(ill_formed_output_args).output
             assert False
 
+    def test_add_output_arg(self):
+        output: str = "foo"
+
+        args: List[str] = ["g++", "foo.cpp", "-O0"]
+        arguments: Arguments = Arguments(args)
+        arguments.output = output
+        assert arguments.output == output
+
+        multiple_output_args: List[str] = args + ["-o", "foo", "-o", "bar"]
+        multiple_output_arguments: Arguments = Arguments(multiple_output_args)
+        assert multiple_output_arguments.output == "bar"
+        multiple_output_arguments.output = output
+        assert multiple_output_arguments.output == output
+
+
     def test_remove_output_args(self):
-        args: List[str] = ["g++", "foo.cpp"]
+        args: List[str] = ["g++", "foo.cpp", "-O0"]
         assert Arguments(args).remove_output_args() == args
 
         single_output_args: List[str] = args + ["-o", "foo"]
@@ -74,7 +89,7 @@ class TestArguments:
 
         assert Arguments(args).source_files == source_file_arg
 
-    def test_multiple_source_file_args(self):
+    def test_multiple_source_file_args_with_output(self):
         source_file_args: List[str] = [
             "main.cpp",
             "relative/relative.cpp",
@@ -85,6 +100,8 @@ class TestArguments:
             "-Irelative_path/relative.h",
             "-I",
             "/var/includes/absolute.h",
+            "-o",
+            "out"
         ] + source_file_args
 
         assert Arguments(args).source_files == source_file_args

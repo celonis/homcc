@@ -6,7 +6,7 @@ import asyncio
 import logging
 
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, Optional
 
 from homcc.common.arguments import Arguments
 from homcc.common.messages import (
@@ -67,7 +67,7 @@ class TCPClient:
                                                                        port=self.port,
                                                                        limit=self.buffer_limit)
         except ConnectionError as err:
-            logger.warning("Failed to establish connection to %s:%i: %s", self.host, self.port, err)
+            logger.warning("Failed to establish connection: %s", err)
             raise ClientConnectionError from None
 
     async def _send(self, message: Message):
