@@ -7,7 +7,7 @@ from homcc.common.arguments import Arguments, ArgumentsOutputError
 
 
 class TestArguments:
-    """ Tests for common/arguments.py"""
+    """Tests for common/arguments.py"""
 
     def test_is_sendable(self):
         sendable_args: List[str] = ["g++", "foo.cpp", "-ofoo"]
@@ -62,7 +62,6 @@ class TestArguments:
         multiple_output_arguments.output = output
         assert multiple_output_arguments.output == output
 
-
     def test_remove_output_args(self):
         args: List[str] = ["g++", "foo.cpp", "-O0"]
         assert Arguments(args).remove_output_args() == args
@@ -101,7 +100,7 @@ class TestArguments:
             "-I",
             "/var/includes/absolute.h",
             "-o",
-            "out"
+            "out",
         ] + source_file_args
 
         assert Arguments(args).source_files == source_file_args

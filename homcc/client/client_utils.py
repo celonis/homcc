@@ -16,17 +16,15 @@ logger = logging.getLogger(__name__)
 
 
 class CompilerError(subprocess.CalledProcessError):
-    """
-    Error class to indicate unrecoverability for the client main function and provide error
-    information that occurred during execution of compiler commands
-    """
+    """Error class to indicate unrecoverability for the client main function and provide error information that occurred
+    during execution of compiler commands."""
 
     def __init__(self, err: subprocess.CalledProcessError):
         super().__init__(err.returncode, err.cmd, err.output, err.stderr)
 
 
 def find_dependencies(arguments: Arguments) -> Set[str]:
-    """ get unique set of dependencies by calling the preprocessor and filtering the result """
+    """get unique set of dependencies by calling the preprocessor and filtering the result"""
     try:
         # execute preprocessor command, e.g.: "g++ main.cpp -MM"
         result: ArgumentsExecutionResult = arguments.dependency_finding().execute(check=True)
@@ -45,7 +43,7 @@ def find_dependencies(arguments: Arguments) -> Set[str]:
 
 
 def calculate_dependency_dict(dependencies: Set[str]) -> Dict[str, str]:
-    """ calculate dependency file hashes mapping to their corresponding absolute filenames """
+    """calculate dependency file hashes mapping to their corresponding absolute filenames"""
 
     def hash_file(path: str) -> str:
         return hashlib.sha1(Path(path).read_bytes()).hexdigest()
@@ -56,8 +54,9 @@ def calculate_dependency_dict(dependencies: Set[str]) -> Dict[str, str]:
 def link_object_files(arguments: Arguments) -> int:
     """link all object files compiled by the server"""
     source_file_to_object_file_map: Dict[str, str] = dict(
-        zip(arguments.source_files,
-            [str(Path(source_file).with_suffix(".o")) for source_file in arguments.source_files])
+        zip(
+            arguments.source_files, [str(Path(source_file).with_suffix(".o")) for source_file in arguments.source_files]
+        )
     )
     arguments.replace_source_files_with_object_files(source_file_to_object_file_map)
 
@@ -75,7 +74,7 @@ def link_object_files(arguments: Arguments) -> int:
 
 
 def local_compile(arguments: Arguments) -> int:
-    """ execute local compilation """
+    """execute local compilation"""
     logger.warning("Compiling locally instead!")
     try:
         # execute compile command, e.g.: "g++ foo.cpp -o foo"

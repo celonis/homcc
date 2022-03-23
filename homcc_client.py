@@ -17,13 +17,13 @@ from homcc.client.client_utils import (
     calculate_dependency_dict,
     find_dependencies,
     local_compile,
-    link_object_files
+    link_object_files,
 )
 from homcc.common.messages import Message, CompilationResultMessage, DependencyRequestMessage
 
 
 async def main() -> int:
-    """ client main function for parsing arguments and communicating with the homcc server """
+    """client main function for parsing arguments and communicating with the homcc server"""
     arguments: Arguments = Arguments(sys.argv)  # caller arguments
     compiler: str = "g++"  # supported C/C++ compilers: [gcc, g++, clang, clang++]
     cwd: str = os.getcwd()  # current working directory
@@ -79,25 +79,30 @@ async def main() -> int:
             logger.warning("Server error(%i):\n%s", server_result.return_code, server_result.stderr)
 
             # for now, we try to recover from server compilation errors via local compilation to track bugs
-            return_code: int = local_compile(arguments)
+            compilation_return_code: int = local_compile(arguments)
 
-            if return_code != server_result.return_code:
-                logger.debug("Different compilation result errors: Client error(%i) - Server error(%i)",
-                             return_code, server_result.return_code)
+            if compilation_return_code != server_result.return_code:
+                logger.debug(
+                    "Different compilation result errors: Client error(%i) - Server error(%i)",
+                    compilation_return_code,
+                    server_result.return_code,
+                )
 
-            return return_code
+            return compilation_return_code
 
         for object_file in server_response.get_object_files():
+            logger.debug("Writing file %s!", object_file.file_name)
             Path(object_file.file_name).write_bytes(object_file.content)
 
         # 5.) link and delete object files if required
         if arguments.is_linking():
-            return_code: int = link_object_files(arguments)
+            linker_return_code: int = link_object_files(arguments)
 
             for object_file in server_response.get_object_files():
+                logger.debug("Deleting file %s!", object_file.file_name)
                 Path(object_file.file_name).unlink()
 
-            return return_code
+            return linker_return_code
 
         return os.EX_OK
 
@@ -110,7 +115,7 @@ async def main() -> int:
         return local_compile(arguments)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     # TODO(s.pirsch): make logging level configurable via caller or config file
     logging.basicConfig(level=logging.DEBUG)
     logger: logging.Logger = logging.getLogger(__name__)

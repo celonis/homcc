@@ -15,6 +15,7 @@ encoding: str = "utf-8"
 @dataclass
 class ArgumentsExecutionResult:
     """Information that the Execution of Arguments produces."""
+
     return_code: int
     stdout: str
     stderr: str
@@ -34,6 +35,7 @@ class Arguments:
     Note that most modifying methods assume sendability as modifications to the arguments are only required for
     non-local compilation which implies sendable arguments!
     """
+
     no_assembly_arg: str = "-S"
     no_linking_arg: str = "-c"
     output_arg: str = "-o"
@@ -103,12 +105,14 @@ class Arguments:
 
     def dependency_finding(self) -> Arguments:
         """return arguments to find dependencies"""
-        return Arguments(self.args)\
-            .remove_arg(self.no_linking_arg)\
-            .remove_output_args()\
-            .add_arg("-MM")\
-            .add_arg("-MT")\
+        return (
+            Arguments(self.args)
+            .remove_arg(self.no_linking_arg)
+            .remove_output_args()
+            .add_arg("-MM")
+            .add_arg("-MT")
             .add_arg(self.preprocessor_target)
+        )
 
     def no_linking(self) -> Arguments:
         """return no linking arguments"""
@@ -195,9 +199,7 @@ class Arguments:
         - cwd: changes the current working directory
         """
         logger.debug("Executing %s!", self)
-        result: subprocess.CompletedProcess = subprocess.run(self.args,
-                                                             check=check, cwd=cwd,
-                                                             encoding=encoding,
-                                                             stdout=subprocess.PIPE,
-                                                             stderr=subprocess.PIPE)
+        result: subprocess.CompletedProcess = subprocess.run(
+            self.args, check=check, cwd=cwd, encoding=encoding, stdout=subprocess.PIPE, stderr=subprocess.PIPE
+        )
         return ArgumentsExecutionResult.from_process_result(result)
