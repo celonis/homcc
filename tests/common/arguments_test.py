@@ -1,5 +1,4 @@
-""" Tests for common/arguments.py"""
-
+"""Tests regarding the arguments module of homcc."""
 import pytest
 
 from typing import Dict, List, Optional

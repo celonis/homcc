@@ -14,7 +14,6 @@ from homcc.client.client_utils import CompilerError, find_dependencies, local_co
 class TestClientUtils:
     """Tests for client/client_utils.py"""
 
-    # pylint: disable=W0201
     @pytest.fixture(autouse=True)
     def _init(self):
         self.example_base_dir: Path = Path("example")

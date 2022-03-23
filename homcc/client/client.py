@@ -15,9 +15,7 @@ logger = logging.getLogger(__name__)
 
 
 class TCPClientError(Exception):
-    """
-    Base class for TCPClient exceptions to indicate recoverability for the client main function
-    """
+    """Base class for TCPClient exceptions to indicate recoverability for the client main function"""
 
 
 class ClientConnectionError(TCPClientError):

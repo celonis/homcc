@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 class CompilerError(subprocess.CalledProcessError):
     """Error class to indicate unrecoverability for the client main function and provide error information that occurred
-    during execution of compiler commands."""
+    during execution of compiler commands"""
 
     def __init__(self, err: subprocess.CalledProcessError):
         super().__init__(err.returncode, err.cmd, err.output, err.stderr)

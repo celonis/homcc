@@ -14,7 +14,7 @@ encoding: str = "utf-8"
 
 @dataclass
 class ArgumentsExecutionResult:
-    """Information that the Execution of Arguments produces."""
+    """Information that the Execution of Arguments produces"""
 
     return_code: int
     stdout: str
@@ -33,7 +33,7 @@ class Arguments:
     """
     Class to encapsulate and produce compiler arguments.
     Note that most modifying methods assume sendability as modifications to the arguments are only required for
-    non-local compilation which implies sendable arguments!
+    non-local compilation which implies arguments being sent!
     """
 
     no_assembly_arg: str = "-S"
@@ -144,7 +144,7 @@ class Arguments:
     def source_files(self) -> List[str]:
         """extracts files to be compiled and returns their paths"""
         source_file_paths: List[str] = []
-        source_file_pattern: str = r"^\S+\.(c|cc|cp|cpp|cxx|c\+\+)$"
+        source_file_pattern: str = r"^\S+\.(c|cc|cp|cpp|cxx|c\+\+)$"  # e.g. foo.cpp
         other_open_arg: bool = False
 
         for arg in self.args[1:]:
