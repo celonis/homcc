@@ -45,9 +45,9 @@ async def main() -> int:
             return local_compile(arguments)
 
         dependencies: Set[str] = find_dependencies(arguments)
-        logger.debug("Dependency list: %s", dependencies)
+        logger.debug("Dependency list:\n%s", dependencies)
         dependency_dict: Dict[str, str] = calculate_dependency_dict(dependencies)
-        logger.debug("Dependency hashes: %s", dependency_dict)
+        logger.debug("Dependency dict:\n%s", dependency_dict)
 
         await client.connect()
 
@@ -62,14 +62,14 @@ async def main() -> int:
 
             server_response = await client.receive(timeout=timeout)
 
-        # 3.) receive final message and close client
-        if not isinstance(server_response, CompilationResultMessage):
-            logger.error("Unexpected message of type %s received!", server_response.message_type)
-            raise UnexpectedMessageTypeError
-
+        # 3.) close client and handle final message
         await client.close()
 
-        # 4.) extract compilation results
+        if not isinstance(server_response, CompilationResultMessage):
+            logger.error("Received message of unexpected type %s", server_response.message_type)
+            raise UnexpectedMessageTypeError
+
+        # 4.) extract and use compilation result
         server_result: ArgumentsExecutionResult = server_response.get_compilation_result()
 
         if server_result.stdout:
@@ -78,6 +78,7 @@ async def main() -> int:
         if server_result.return_code != os.EX_OK:
             logger.warning("Server error(%i):\n%s", server_result.return_code, server_result.stderr)
 
+            # TODO(s.pirsch): remove local compilation fallback after extensive testing
             # for now, we try to recover from server compilation errors via local compilation to track bugs
             compilation_return_code: int = local_compile(arguments)
 
@@ -91,7 +92,7 @@ async def main() -> int:
             return compilation_return_code
 
         for object_file in server_response.get_object_files():
-            logger.debug("Writing file %s!", object_file.file_name)
+            logger.debug("Writing file %s", object_file.file_name)
             Path(object_file.file_name).write_bytes(object_file.content)
 
         # 5.) link and delete object files if required
@@ -99,7 +100,7 @@ async def main() -> int:
             linker_return_code: int = link_object_files(arguments)
 
             for object_file in server_response.get_object_files():
-                logger.debug("Deleting file %s!", object_file.file_name)
+                logger.debug("Deleting file %s", object_file.file_name)
                 Path(object_file.file_name).unlink()
 
             return linker_return_code

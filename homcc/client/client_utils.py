@@ -29,7 +29,7 @@ def find_dependencies(arguments: Arguments) -> Set[str]:
         # execute preprocessor command, e.g.: "g++ main.cpp -MM"
         result: ArgumentsExecutionResult = arguments.dependency_finding().execute(check=True)
     except subprocess.CalledProcessError as err:
-        logger.error("Preprocessor error:\n%s", err.stderr)  # TODO: fix double output
+        logger.error("Preprocessor error:\n%s", err.stderr)  # TODO(s.pirsch): fix doubled stderr message
         raise CompilerError(err) from err
 
     if result.stdout:
@@ -60,7 +60,6 @@ def link_object_files(arguments: Arguments) -> int:
     )
     arguments.replace_source_files_with_object_files(source_file_to_object_file_map)
 
-    logger.debug("Linking!")
     try:
         # execute linking command, e.g.: "g++ foo.o bar.o -ofoobar"
         result: ArgumentsExecutionResult = arguments.execute(check=True)
@@ -70,6 +69,7 @@ def link_object_files(arguments: Arguments) -> int:
 
     if result.stdout:
         logger.debug("Linker result:\n%s", result.stdout)
+
     return result.return_code
 
 
@@ -85,4 +85,5 @@ def local_compile(arguments: Arguments) -> int:
 
     if result.stdout:
         logger.debug("Compiler result:\n%s", result.stdout)
+
     return result.return_code

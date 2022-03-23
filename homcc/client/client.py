@@ -68,8 +68,7 @@ class TCPClient:
 
     async def _send(self, message: Message):
         """send a message to homcc server"""
-        # TODO(s.pirsch): mypy types
-        logger.debug("Sending %s to %s:%i: %s", message.message_type, self.host, self.port, message.get_json_str())
+        logger.debug("Sending %s to %s:%i:\n%s", message.message_type, self.host, self.port, message.get_json_str())
         self._writer.write(message.to_bytes())  # type: ignore[union-attr]
         await self._writer.drain()  # type: ignore[union-attr]
 
@@ -98,18 +97,18 @@ class TCPClient:
 
         # if message is incomplete, continue reading from stream until no more bytes are missing
         while bytes_needed > 0:
-            logger.debug("Message is incomplete by %i bytes!", bytes_needed)
+            logger.debug("Message is incomplete by %i bytes", bytes_needed)
             self._data += await self._reader.read(bytes_needed)  # type: ignore[union-attr]
             bytes_needed, parsed_message = Message.from_bytes(bytearray(self._data))
 
         # manage internal buffer consistency
         if bytes_needed == 0:
             # reset the internal buffer
-            logger.debug("Resetting internal buffer!")
+            logger.debug("Resetting internal buffer")
             self._data = bytes()
         elif bytes_needed < 0:
             # remove the already parsed message
-            logger.debug("Additional data of %i bytes in buffer!", abs(bytes_needed))
+            logger.debug("Additional data of %i bytes in buffer", abs(bytes_needed))
             self._data = self._data[len(self._data) - abs(bytes_needed) :]
 
         if not parsed_message:

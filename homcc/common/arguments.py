@@ -198,7 +198,7 @@ class Arguments:
         - check: enables the raising of CalledProcessError
         - cwd: changes the current working directory
         """
-        logger.debug("Executing %s!", self)
+        logger.debug("Executing %s", self)
         result: subprocess.CompletedProcess = subprocess.run(
             self.args, check=check, cwd=cwd, encoding=encoding, stdout=subprocess.PIPE, stderr=subprocess.PIPE
         )
