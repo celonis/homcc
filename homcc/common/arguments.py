@@ -66,7 +66,7 @@ class Arguments:
         return "[" + " ".join(self.args) + "]"
 
     def is_sendable(self) -> bool:
-        """determine if args leads to a meaningful compilation on the server"""
+        """determine if the current Arguments lead to a meaningful compilation on the server"""
         # if only the preprocessor should be executed or if no assembly step is required, do not send to server
         for arg in self.args[1:]:
             if arg in [self.no_assembly_arg] + self.preprocessor_args:
@@ -74,15 +74,15 @@ class Arguments:
         return True
 
     def is_linking(self) -> bool:
-        """checks whether the linking flag is present"""
-        return self.no_linking_arg not in self.args
+        """check whether the linking flag is present"""
+        return not self.has_arg(self.no_linking_arg)
 
     @property
     def args(self) -> List[str]:
         return self._args
 
     def has_arg(self, arg: str) -> bool:
-        """checks whether a specific arg is present"""
+        """check whether a specific arg is present"""
         return arg in self.args
 
     def add_arg(self, arg: str) -> Arguments:
@@ -109,8 +109,8 @@ class Arguments:
             Arguments(self.args)
             .remove_arg(self.no_linking_arg)
             .remove_output_args()
-            .add_arg("-MM")
-            .add_arg("-MT")
+            .add_arg("-MM")  # output dependencies without system headers
+            .add_arg("-MT")  # change target of the dependency generation
             .add_arg(self.preprocessor_target)
         )
 
@@ -167,7 +167,7 @@ class Arguments:
         return source_file_paths
 
     def remove_output_args(self) -> Arguments:
-        """remove all output related arguments"""
+        """returns new Arguments with all output related arguments removed"""
         args: List[str] = [self.args[0]]
 
         it: Iterator[str] = iter(self.args[1:])
@@ -183,7 +183,7 @@ class Arguments:
         return self
 
     def replace_source_files_with_object_files(self, source_file_to_object_file_map: Dict[str, str]) -> Arguments:
-        """replace all source file paths with their respective object file paths"""
+        """returns new Arguments with all source file paths replaced with their respective object file paths"""
         for i, arg in enumerate(self.args[1:]):
             if arg in source_file_to_object_file_map.keys():
                 self._args[i + 1] = source_file_to_object_file_map[arg]  # +1 offset due to skipping compiler arg
@@ -192,7 +192,7 @@ class Arguments:
 
     def execute(self, check: bool = False, cwd: Optional[str] = None) -> ArgumentsExecutionResult:
         """
-        execute the current arguments as command
+        execute the current arguments as command and return its execution result
 
         parameters:
         - check: enables the raising of CalledProcessError
