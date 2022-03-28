@@ -104,7 +104,7 @@ class Arguments:
         self._args[0] = compiler
 
     def dependency_finding(self) -> Arguments:
-        """return arguments to find dependencies"""
+        """return Arguments with which to find dependencies via the preprocessor"""
         return (
             Arguments(self.args)
             .remove_arg(self.no_linking_arg)
@@ -115,7 +115,7 @@ class Arguments:
         )
 
     def no_linking(self) -> Arguments:
-        """return no linking arguments"""
+        """return copy of Arguments with linking argument removed"""
         return Arguments(self.args).remove_output_args().add_arg(self.no_linking_arg)
 
     @property
@@ -167,7 +167,7 @@ class Arguments:
         return source_file_paths
 
     def remove_output_args(self) -> Arguments:
-        """returns new Arguments with all output related arguments removed"""
+        """returns modified Arguments with all output related arguments removed"""
         args: List[str] = [self.args[0]]
 
         it: Iterator[str] = iter(self.args[1:])
@@ -183,7 +183,7 @@ class Arguments:
         return self
 
     def replace_source_files_with_object_files(self, source_file_to_object_file_map: Dict[str, str]) -> Arguments:
-        """returns new Arguments with all source file paths replaced with their respective object file paths"""
+        """returns modified Arguments with all source file paths replaced with their respective object file paths"""
         for i, arg in enumerate(self.args[1:]):
             if arg in source_file_to_object_file_map.keys():
                 self._args[i + 1] = source_file_to_object_file_map[arg]  # +1 offset due to skipping compiler arg
