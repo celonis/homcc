@@ -73,7 +73,7 @@ class Arguments:
                 return False
 
         if not self.source_files:
-            logging.info("No source files given, can not distribute to server.")
+            logger.info("No source files given, can not distribute to server.")
             return False
 
         return True

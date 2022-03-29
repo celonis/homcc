@@ -50,6 +50,13 @@ async def main() -> int:
         dependency_dict: Dict[str, str] = calculate_dependency_dict(dependencies)
         logger.debug("Dependency dict:\n%s", dependency_dict)
 
+        if len(dependencies) != len(dependency_dict.values()):
+            logger.error(
+                "Hash collision detected. There are #%i dependencies, while there are #%i when dictified.",
+                len(dependencies),
+                len(dependency_dict.values()),
+            )
+
         await client.connect()
 
         # 2.) send arguments and dependency information to server and provide requested dependencies

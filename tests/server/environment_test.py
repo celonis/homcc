@@ -6,7 +6,7 @@ from homcc.server.environment import (
     CompilerResult,
     map_arguments,
     map_cwd,
-    _unmap_path,
+    unmap_path,
     get_output_path,
     do_compilation,
 )
@@ -99,7 +99,7 @@ class TestServerEnvironment:
         client_path = "/home/user/output/a.out"
         mapped_path = f"{instance_path}/{client_path}"
 
-        unmapped = _unmap_path(instance_path, mapped_path)
+        unmapped = unmap_path(instance_path, mapped_path)
 
         assert unmapped == client_path
 

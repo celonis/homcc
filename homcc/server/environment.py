@@ -103,7 +103,7 @@ def _map_path(instance_path: str, mapped_cwd: str, path: str) -> str:
     return os.path.realpath(joined_path)
 
 
-def _unmap_path(instance_path: str, server_path: str) -> str:
+def unmap_path(instance_path: str, server_path: str) -> str:
     """Unmaps an absolute path from the server to an absolute path valid on the client."""
     return f"/{os.path.relpath(server_path, instance_path)}"
 
@@ -192,7 +192,7 @@ def do_compilation(instance_path: str, mapped_cwd: str, args: List[str]) -> Comp
             object_file_path: str = map_source_file_to_object_file(mapped_cwd, source_file)
             object_file_content = Path.read_bytes(Path(object_file_path))
 
-            client_output_path = _unmap_path(instance_path, object_file_path)
+            client_output_path = unmap_path(instance_path, object_file_path)
 
             object_file = ObjectFile(client_output_path, bytearray(object_file_content))
             object_files.append(object_file)

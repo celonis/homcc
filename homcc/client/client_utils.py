@@ -3,7 +3,6 @@ fundamental utility functions and Exception class for the homcc client to intera
 command line and the specified compiler
 """
 
-import hashlib
 import logging
 import subprocess
 
@@ -11,6 +10,7 @@ from pathlib import Path
 from typing import Dict, Set
 
 from homcc.common.arguments import Arguments, ArgumentsExecutionResult
+from homcc.common.hashing import hash_file_with_path
 
 logger = logging.getLogger(__name__)
 
@@ -44,11 +44,7 @@ def find_dependencies(arguments: Arguments) -> Set[str]:
 
 def calculate_dependency_dict(dependencies: Set[str]) -> Dict[str, str]:
     """calculate dependency file hashes mapping to their corresponding absolute filenames"""
-
-    def hash_file(path: str) -> str:
-        return hashlib.sha1(Path(path).read_bytes()).hexdigest()
-
-    return {hash_file(dependency): dependency for dependency in dependencies}
+    return {hash_file_with_path(dependency): dependency for dependency in dependencies}
 
 
 def link_object_files(arguments: Arguments) -> int:

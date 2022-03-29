@@ -1,7 +1,6 @@
 """Main logic for the homcc server."""
 import threading
 import socketserver
-import hashlib
 import logging
 from tempfile import TemporaryDirectory
 from typing import List, Dict, Tuple
@@ -15,6 +14,8 @@ from homcc.common.messages import (
     CompilationResultMessage,
 )
 
+from homcc.common.hashing import hash_file_with_bytes
+
 from homcc.server.environment import (
     create_root_temp_folder,
     create_instance_folder,
@@ -24,6 +25,7 @@ from homcc.server.environment import (
     map_dependency_paths,
     save_dependency,
     do_compilation,
+    unmap_path,
 )
 
 logger = logging.getLogger(__name__)
@@ -94,7 +96,11 @@ class TCPRequestHandler(socketserver.BaseRequestHandler):
         dependency_content = message.get_content()
         dependency_hash, dependency_path = next(iter(self.needed_dependencies.items()))
 
-        retrieved_dependency_hash = hashlib.sha1(dependency_content).hexdigest()
+        retrieved_dependency_hash = hash_file_with_bytes(
+            # need to unmap here because the hash is also based on the path of the file
+            unmap_path(self.instance_path, dependency_path),
+            dependency_content,
+        )
 
         # verify that the hashes match
         if dependency_hash != retrieved_dependency_hash:
