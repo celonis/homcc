@@ -7,7 +7,6 @@ from homcc.server.environment import (
     map_arguments,
     map_cwd,
     _unmap_path,
-    extract_source_files,
     get_output_path,
     do_compilation,
 )
@@ -124,39 +123,6 @@ class TestServerEnvironment:
 
         output_path = get_output_path("cwd", source_file_name, arguments)
         assert output_path == "cwd/foo.o"
-
-    def test_extract_source_files(self):
-        source_file_arguments = [
-            "main.cpp",
-            "relative/relative.cpp",
-            "/opt/src/absolute.cpp",
-        ]
-        arguments = [
-            "gcc",
-            "-Irelative_path/relative.h",
-            "-I",
-            "/var/includes/absolute.h",
-        ] + source_file_arguments
-
-        assert extract_source_files(arguments) == source_file_arguments
-
-    def test_extract_source_files_simple(self):
-        source_file_arguments = ["some/relative/path.c"]
-        arguments = [
-            "gcc",
-            "-O3",
-        ] + source_file_arguments
-
-        assert extract_source_files(arguments) == source_file_arguments
-
-    def test_extract_single_source_file(self):
-        source_file_arguments = ["some/relative/path.c"]
-        arguments = [
-            "gcc",
-            "-o/output/out.o",
-        ] + source_file_arguments
-
-        assert extract_source_files(arguments) == source_file_arguments
 
 
 class TestServerCompilation:

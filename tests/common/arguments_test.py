@@ -41,6 +41,9 @@ class TestArguments:
         output_flag_as_output_args: List[str] = args + ["-ofoo", "-o", "-o"]
         assert Arguments(output_flag_as_output_args).output == "-o"
 
+        long_output_path_args: List[str] = args + ["-o", "long/path/to/output"]
+        assert Arguments(long_output_path_args).output == "long/path/to/output"
+
         # failing output extraction as 2nd output argument has no specified target
         with pytest.raises(ArgumentsOutputError):
             ill_formed_output_args: List[str] = args + ["-ofoo", "-o"]

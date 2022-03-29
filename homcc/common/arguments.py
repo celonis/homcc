@@ -115,7 +115,12 @@ class Arguments:
         )
 
     def no_linking(self) -> Arguments:
-        """return copy of Arguments with linking argument removed"""
+        """return copy of Arguments with no linking argument added"""
+        # with only one source file, both -o and -c arguments can be specified
+        if len(self.source_files) == 1:
+            return Arguments(self.args).add_arg(self.no_linking_arg)
+
+        # remove -o arguments if multiple source files are provided
         return Arguments(self.args).remove_output_args().add_arg(self.no_linking_arg)
 
     @property
