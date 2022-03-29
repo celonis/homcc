@@ -180,4 +180,4 @@ class TestServerCompilation:
         result_message = do_compilation(instance_path, mapped_cwd, arguments)
 
         assert len(result_message.object_files) == 1
-        assert result_message.object_files[0].file_name == "/home/user/cwd/output/out.o"
+        assert result_message.object_files[0].file_name == "/home/user/cwd/this_is_a_source_file.o"

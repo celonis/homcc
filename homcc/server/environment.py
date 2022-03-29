@@ -6,7 +6,7 @@ import subprocess
 import logging
 from tempfile import TemporaryDirectory
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 from homcc.common.arguments import Arguments
 from homcc.common.messages import CompilationResultMessage, ObjectFile
