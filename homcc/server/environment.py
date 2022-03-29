@@ -174,15 +174,14 @@ def invoke_compiler(mapped_cwd: str, arguments: List[str]) -> CompilerResult:
     return CompilerResult(result.returncode, stdout, stderr)
 
 
-def do_compilation(instance_path: str, mapped_cwd: str, arguments: List[str]) -> CompilationResultMessage:
+def do_compilation(instance_path: str, mapped_cwd: str, args: List[str]) -> CompilationResultMessage:
     """Does the compilation and returns the filled result message."""
     logger.info("Compiling...")
 
     # create the mapped current working directory if it doesn't exist yet
     Path(mapped_cwd).mkdir(parents=True, exist_ok=True)
 
-    arguments: Arguments = Arguments(arguments).no_linking()
-    output_target: Optional[str] = arguments.output
+    arguments: Arguments = Arguments(args).no_linking()
     source_files: List[str] = arguments.source_files
 
     result = invoke_compiler(mapped_cwd, list(arguments))
@@ -190,7 +189,7 @@ def do_compilation(instance_path: str, mapped_cwd: str, arguments: List[str]) ->
     object_files: List[ObjectFile] = []
     if result.return_code == 0:
         for source_file in source_files:
-            object_file_path: str = output_target or map_source_file_to_object_file(mapped_cwd, source_file)
+            object_file_path: str = map_source_file_to_object_file(mapped_cwd, source_file)
             object_file_content = Path.read_bytes(Path(object_file_path))
 
             client_output_path = _unmap_path(instance_path, object_file_path)

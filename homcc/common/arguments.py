@@ -21,7 +21,7 @@ class ArgumentsExecutionResult:
     stderr: str
 
     @classmethod
-    def from_process_result(cls, result: subprocess.CompletedProcess):
+    def from_process_result(cls, result: subprocess.CompletedProcess) -> ArgumentsExecutionResult:
         return cls(result.returncode, result.stdout, result.stderr)
 
 

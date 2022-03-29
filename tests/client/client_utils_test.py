@@ -61,7 +61,6 @@ class TestClientUtils:
 
         with pytest.raises(CompilerError):
             _: Set[str] = find_dependencies(Arguments(args))
-            assert False
 
     def test_local_compilation(self):
         time_str: str = datetime.now().strftime("%Y%m%d-%H%M%S")

@@ -58,6 +58,7 @@ def link_object_files(arguments: Arguments) -> int:
             arguments.source_files, [str(Path(source_file).with_suffix(".o")) for source_file in arguments.source_files]
         )
     )
+
     arguments.replace_source_files_with_object_files(source_file_to_object_file_map)
 
     try:
