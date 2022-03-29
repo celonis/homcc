@@ -33,7 +33,7 @@ async def main() -> int:
     port: int = 3633
 
     # timeout window in seconds for receiving messages
-    timeout: int = 1
+    timeout: int = 180
 
     client: TCPClient = TCPClient(host, port)
 

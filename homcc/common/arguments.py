@@ -71,6 +71,11 @@ class Arguments:
         for arg in self.args[1:]:
             if arg in [self.no_assembly_arg] + self.preprocessor_args:
                 return False
+
+        if not self.source_files:
+            logging.info("No source files given, can not distribute to server.")
+            return False
+
         return True
 
     def is_linking(self) -> bool:
@@ -109,18 +114,13 @@ class Arguments:
             Arguments(self.args)
             .remove_arg(self.no_linking_arg)
             .remove_output_args()
-            .add_arg("-MM")  # output dependencies without system headers
+            .add_arg("-M")  # output dependencies without system headers
             .add_arg("-MT")  # change target of the dependency generation
             .add_arg(self.preprocessor_target)
         )
 
     def no_linking(self) -> Arguments:
         """return copy of Arguments with no linking argument added"""
-        # with only one source file, both -o and -c arguments can be specified
-        if len(self.source_files) == 1:
-            return Arguments(self.args).add_arg(self.no_linking_arg)
-
-        # remove -o arguments if multiple source files are provided
         return Arguments(self.args).remove_output_args().add_arg(self.no_linking_arg)
 
     @property
@@ -149,7 +149,6 @@ class Arguments:
     def source_files(self) -> List[str]:
         """extracts files to be compiled and returns their paths"""
         source_file_paths: List[str] = []
-        source_file_pattern: str = r"^\S+\.(c|cc|cp|cpp|cxx|c\+\+)$"  # e.g. foo.cpp
         other_open_arg: bool = False
 
         for arg in self.args[1:]:
@@ -163,9 +162,11 @@ class Arguments:
                     continue
 
             elif not other_open_arg:
-                if not re.match(source_file_pattern, arg.lower()):
-                    logger.debug("Suspicious source file added: %s", arg)
-                source_file_paths.append(arg)
+                source_file_pattern: str = r"^\S+\.(c|cc|cp|cpp|cxx|c\+\+)$"  # e.g. foo.cpp
+                if re.match(source_file_pattern, arg.lower()):
+                    source_file_paths.append(arg)
+                else:
+                    logger.debug("Not adding '%s' as source file, as it doesn't match source file regex.", arg)
 
             other_open_arg = False
 

@@ -88,7 +88,7 @@ class TCPRequestHandler(socketserver.BaseRequestHandler):
 
     @_handle_message.register
     def _handle_dependency_reply_message(self, message: DependencyReplyMessage):
-        logger.info("Handling DependencyReplyMessage...")
+        logger.debug("Handling DependencyReplyMessage...")
         logger.debug("Len of dependency reply payload is %i", message.get_further_payload_size())
 
         dependency_content = message.get_content()
@@ -125,7 +125,7 @@ class TCPRequestHandler(socketserver.BaseRequestHandler):
 
             request_message = DependencyRequestMessage(next_needed_hash)
 
-            logger.info("Sending request for dependency with hash %s", str(request_message.get_sha1sum()))
+            logger.debug("Sending request for dependency with hash %s", str(request_message.get_sha1sum()))
             self.request.sendall(request_message.to_bytes())
 
         return len(self.needed_dependencies) > 0

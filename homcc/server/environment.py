@@ -150,7 +150,7 @@ class CompilerResult:
 
 def invoke_compiler(mapped_cwd: str, arguments: List[str]) -> CompilerResult:
     """Actually invokes the compiler process."""
-    logger.info("Compile arguments: %s", arguments)
+    logger.debug("Compile arguments: %s", arguments)
 
     # pylint: disable=subprocess-run-check
     # (justification: we explicitly return the result code)
