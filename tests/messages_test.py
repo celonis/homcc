@@ -1,3 +1,4 @@
+"""Tests the messages module of homcc."""
 from typing import List, Dict
 import os
 from homcc.messages import (
@@ -11,6 +12,8 @@ from homcc.messages import (
 
 
 class TestArgumentMessage:
+    """Tests related to the ArgumentMessage."""
+
     def test_serialization(self):
         arguments: List[str] = ["a", "b", "-c", "--help"]
         cwd: str = "/home/oliver/test123"
@@ -28,6 +31,8 @@ class TestArgumentMessage:
 
 
 class TestDependencyRequestMessage:
+    """Tests related to the DependencyRequestMessage."""
+
     def test_serialization(self):
         sha1sum: str = "0a62827cfce18c7da06444d8e8c9eec876a7e65f"
         message = DependencyRequestMessage(sha1sum)
@@ -40,6 +45,8 @@ class TestDependencyRequestMessage:
 
 
 class TestDependencyReplyMessage:
+    """Tests related to the DependencyReplyMessage."""
+
     def test_serialization(self):
         content: bytearray = bytearray(os.urandom(133337))
         message = DependencyReplyMessage(content)
@@ -52,6 +59,8 @@ class TestDependencyReplyMessage:
 
 
 class TestCompilationResultMessage:
+    """Tests related to the CompilationResultMessage."""
+
     def test_serialization(self):
         object_files: List[ObjectFile] = []
         for index in range(1, 1337):

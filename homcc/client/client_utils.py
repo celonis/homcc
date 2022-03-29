@@ -25,7 +25,7 @@ class CompilerError(subprocess.CalledProcessError):
 
 
 def find_dependencies(args: List[str]) -> Set[str]:
-    """ get unique set of dependencies by calling the preprocessor and filtering the result """
+    """get unique set of dependencies by calling the preprocessor and filtering the result"""
     args = args.copy()
 
     # replace unwanted options with empty flags
@@ -44,28 +44,25 @@ def find_dependencies(args: List[str]) -> Set[str]:
 
     try:
         # execute preprocessor command, e.g.: "g++ -MM main.cpp"
-        result: subprocess.CompletedProcess = subprocess.run(args, check=True,
-                                                             stdout=subprocess.PIPE,
-                                                             stderr=subprocess.PIPE)
+        result: subprocess.CompletedProcess = subprocess.run(
+            args, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE
+        )
     except subprocess.CalledProcessError as err:
-        logger.error("Preprocessor error of [%s]: %s", ' '.join(err.cmd),
-                     err.stderr.decode(encoding))
+        logger.error("Preprocessor error of [%s]: %s", " ".join(err.cmd), err.stderr.decode(encoding))
         raise CompilerError(err) from None
 
     if result.stdout:
-        logger.debug("Preprocessor result of [%s]:\n%s", ' '.join(result.args),
-                     result.stdout.decode(encoding))
+        logger.debug("Preprocessor result of [%s]:\n%s", " ".join(result.args), result.stdout.decode(encoding))
 
     # create unique set of dependencies by filtering the preprocessor result
     def filter_output_target_and_line_break(dependency: str):
-        return not dependency.endswith('.o:') and dependency != '\\'
+        return not dependency.endswith(".o:") and dependency != "\\"
 
-    return set(filter(filter_output_target_and_line_break,
-                      result.stdout.decode(encoding).split()))
+    return set(filter(filter_output_target_and_line_break, result.stdout.decode(encoding).split()))
 
 
 def calculate_dependency_dict(dependencies: Set[str]) -> Dict[str, str]:
-    """ calculate dependency file hashes mapping to their corresponding absolute filenames """
+    """calculate dependency file hashes mapping to their corresponding absolute filenames"""
 
     def hash_file(path: str) -> str:
         return hashlib.sha1(Path(path).read_bytes()).hexdigest()
@@ -74,20 +71,19 @@ def calculate_dependency_dict(dependencies: Set[str]) -> Dict[str, str]:
 
 
 def local_compile(args: List[str]) -> int:
-    """ execute local compilation """
+    """execute local compilation"""
     logger.warning("Compiling locally instead!")
-    logger.debug("Compiler arguments: [%s]", ' '.join(args))
+    logger.debug("Compiler arguments: [%s]", " ".join(args))
 
     try:
         # execute compile command, e.g.: "g++ foo.cpp -o bar.o"
-        result: subprocess.CompletedProcess = subprocess.run(args, check=True,
-                                                             stdout=subprocess.PIPE,
-                                                             stderr=subprocess.PIPE)
+        result: subprocess.CompletedProcess = subprocess.run(
+            args, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE
+        )
     except subprocess.CalledProcessError as err:
-        logger.error("Compiler error of [%s]:\n%s", ' '.join(err.cmd), err.stderr.decode(encoding))
+        logger.error("Compiler error of [%s]:\n%s", " ".join(err.cmd), err.stderr.decode(encoding))
         return err.returncode
 
     if result.stdout:
-        logger.debug("Compiler result of [%s]:\n%s", ' '.join(result.args),
-                     result.stdout.decode(encoding))
+        logger.debug("Compiler result of [%s]:\n%s", " ".join(result.args), result.stdout.decode(encoding))
     return result.returncode

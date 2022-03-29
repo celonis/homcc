@@ -53,9 +53,7 @@ def get_needed_dependencies(dependencies: Dict[str, str]) -> Dict[str, str]:
     return dependencies.copy()
 
 
-def map_arguments(
-    instance_path: str, mapped_cwd: str, arguments: List[str]
-) -> List[str]:
+def map_arguments(instance_path: str, mapped_cwd: str, arguments: List[str]) -> List[str]:
     """Maps arguments that should be translated (e.g. -I{dir}, .cpp files,
     or the -o argument) to paths valid on the server."""
     mapped_arguments = [arguments[0]]
@@ -73,9 +71,7 @@ def map_arguments(
                         break
                     else:
                         argument_path = argument[len(path_argument_prefix) :]
-                        mapped_path = _map_path(
-                            instance_path, mapped_cwd, argument_path
-                        )
+                        mapped_path = _map_path(instance_path, mapped_cwd, argument_path)
                         argument = path_argument_prefix + mapped_path
         elif open_path_argument_prefix or not open_prefix:
             # 'open_path_argument_prefix': must be an argument which requires path translation
@@ -111,9 +107,7 @@ def _unmap_path(instance_path: str, server_path: str) -> str:
     return f"/{os.path.relpath(server_path, instance_path)}"
 
 
-def map_dependency_paths(
-    instance_path: str, mapped_cwd: str, dependencies: Dict[str, str]
-) -> Dict[str, str]:
+def map_dependency_paths(instance_path: str, mapped_cwd: str, dependencies: Dict[str, str]) -> Dict[str, str]:
     """Maps dependency paths that the client sent to paths valid at the server."""
     mapped_dependencies = {}
     for sha1sum, path in dependencies.items():
@@ -147,9 +141,7 @@ def extract_source_files(arguments: List[str]) -> List[str]:
     return source_file_paths
 
 
-def get_output_path(
-    mapped_cwd: str, source_file_name: str, arguments: List[str]
-) -> str:
+def get_output_path(mapped_cwd: str, source_file_name: str, arguments: List[str]) -> str:
     """Extracts the output path (-o argument) from the argument list.
     If there is no output argument given by the user, returns the default output path."""
     output_path = os.path.join(mapped_cwd, f"{Path(source_file_name).stem}.o")
@@ -194,19 +186,17 @@ def invoke_compiler(mapped_cwd: str, arguments: List[str]) -> CompilerResult:
     stdout = ""
     if result.stdout:
         stdout = result.stdout.decode("utf-8")
-        logger.debug("Compiler gave output: '%s'\n", stdout)
+        logger.debug("Compiler gave output:\n'%s'", stdout)
 
     stderr = ""
     if result.stderr:
         stderr = result.stderr.decode("utf-8")
-        logger.warning("Compiler gave error output: '%s'\n", stderr)
+        logger.warning("Compiler gave error output:\n'%s'", stderr)
 
     return CompilerResult(result.returncode, stdout, stderr)
 
 
-def do_compilation(
-    instance_path: str, mapped_cwd: str, arguments: List[str]
-) -> CompilationResultMessage:
+def do_compilation(instance_path: str, mapped_cwd: str, arguments: List[str]) -> CompilationResultMessage:
     """Does the compilation and returns the filled result message."""
     logger.info("Compiling...")
 
@@ -237,6 +227,4 @@ def do_compilation(
         result.return_code,
         len(object_files),
     )
-    return CompilationResultMessage(
-        object_files, result.stdout, result.stderr, result.return_code
-    )
+    return CompilationResultMessage(object_files, result.stdout, result.stderr, result.return_code)

@@ -1,3 +1,4 @@
+"""Tests for the server environment."""
 from pytest_mock.plugin import MockerFixture
 import pytest
 
@@ -14,6 +15,10 @@ from homcc.server.environment import (
 
 class TestServerEnvironmentPathMapping:
     """Tests the server environment path mappings."""
+
+
+class TestServerEnvironment:
+    """Tests the server environment."""
 
     def test_map_arguments(self):
         instance_path = "/client1"
@@ -194,10 +199,7 @@ class TestServerCompilation:
         result_message = do_compilation(instance_path, mapped_cwd, arguments)
 
         assert len(result_message.object_files) == 1
-        assert (
-            result_message.object_files[0].file_name
-            == "/home/user/cwd/this_is_a_source_file.o"
-        )
+        assert result_message.object_files[0].file_name == "/home/user/cwd/this_is_a_source_file.o"
 
     def test_single_file_output_argument(self):
         instance_path = "/tmp/homcc/test-id"
