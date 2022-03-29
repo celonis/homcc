@@ -12,7 +12,7 @@ from homcc.client.client_utils import find_dependencies, local_compile
 
 # pylint: disable=missing-function-docstring
 class TestClientUtils:
-    """ Tests for client/client_utils.py"""
+    """Tests for client/client_utils.py"""
 
     # pylint: disable=W0201
     @pytest.fixture(autouse=True)
@@ -27,8 +27,7 @@ class TestClientUtils:
 
     def test_find_dependencies_without_class_impl(self):
         # absolute paths of: "g++ main.cpp -Iinclude/"
-        args: List[str] = ["g++", str(self.example_main_cpp.absolute()),
-                           f"-I{str(self.example_inc_dir.absolute())}"]
+        args: List[str] = ["g++", str(self.example_main_cpp.absolute()), f"-I{str(self.example_inc_dir.absolute())}"]
         dependencies: Set[str] = find_dependencies(args)
         example_dependency: Path = self.example_inc_dir / "foo.h"
 
@@ -38,9 +37,12 @@ class TestClientUtils:
 
     def test_find_dependencies_with_class_impl(self):
         # absolute paths of: "g++ main.cpp foo.cpp -Iinclude/"
-        args: List[str] = ["g++", str(self.example_main_cpp.absolute()),
-                           str(self.example_foo_cpp.absolute()),
-                           f"-I{str(self.example_inc_dir.absolute())}"]
+        args: List[str] = [
+            "g++",
+            str(self.example_main_cpp.absolute()),
+            str(self.example_foo_cpp.absolute()),
+            f"-I{str(self.example_inc_dir.absolute())}",
+        ]
         dependencies: Set[str] = find_dependencies(args)
         example_dependency: Path = self.example_inc_dir / "foo.h"
 
@@ -54,10 +56,14 @@ class TestClientUtils:
         example_out_file: Path = self.example_out_dir / f"example-{time_str}"
 
         # absolute paths of: "g++ main.cpp foo.cpp -Iinclude/ -o example-YYYYmmdd-HHMMSS"
-        args: List[str] = ["g++", str(self.example_main_cpp.absolute()),
-                           str(self.example_foo_cpp.absolute()),
-                           f"-I{str(self.example_inc_dir.absolute())}",
-                           "-o", str(example_out_file.absolute())]
+        args: List[str] = [
+            "g++",
+            str(self.example_main_cpp.absolute()),
+            str(self.example_foo_cpp.absolute()),
+            f"-I{str(self.example_inc_dir.absolute())}",
+            "-o",
+            str(example_out_file.absolute()),
+        ]
 
         assert not example_out_file.exists()
         assert local_compile(args) == os.EX_OK

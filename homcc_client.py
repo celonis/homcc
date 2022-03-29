@@ -11,17 +11,12 @@ from pathlib import Path
 from typing import Dict, List, Set
 
 from homcc.client.client import TCPClient, TCPClientError
-from homcc.client.client_utils import (
-    CompilerError,
-    calculate_dependency_dict,
-    find_dependencies,
-    local_compile
-)
+from homcc.client.client_utils import CompilerError, calculate_dependency_dict, find_dependencies, local_compile
 from homcc.messages import Message, MessageType, ObjectFile
 
 
 async def main() -> int:
-    """ client main function for parsing arguments and communicating with the homcc server """
+    """client main function for parsing arguments and communicating with the homcc server"""
     args: List[str] = sys.argv  # caller arguments
     compiler: str = "g++"  # supported C/C++ compilers: [gcc, g++, clang, clang++]
     cwd: str = os.getcwd()  # current working directory
@@ -56,18 +51,17 @@ async def main() -> int:
         server_response: Message = await client.receive(timeout=timeout)
 
         while server_response.message_type == MessageType.DependencyRequestMessage:
-            requested_dependency: str = dependency_dict[server_response.get_sha1sum()]
+            requested_dependency: str = dependency_dict[server_response.get_sha1sum()]  # type: ignore[attr-defined]
             await client.send_dependency_reply_message(requested_dependency)
 
             server_response = await client.receive(timeout=timeout)
 
         # 6.) compilation result expected
         if not server_response.message_type == MessageType.CompilationResultMessage:
-            logger.error("Unexpected message of type %s received!",
-                         str(server_response.message_type))
+            logger.error("Unexpected message of type %s received!", str(server_response.message_type))
             raise TCPClientError
 
-        object_files: List[ObjectFile] = server_response.get_object_files()
+        object_files: List[ObjectFile] = server_response.get_object_files()  # type: ignore[attr-defined]
 
         for object_file in object_files:
             Path(object_file.file_name).write_bytes(object_file.content)
@@ -86,7 +80,7 @@ async def main() -> int:
         return local_compile(args)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     # TODO(s.pirsch): make logging level configurable via caller or config file
     logging.basicConfig(level=logging.DEBUG)
     logger: logging.Logger = logging.getLogger(__name__)

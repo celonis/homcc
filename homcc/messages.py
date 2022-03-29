@@ -1,3 +1,4 @@
+"""Creation and parsing for messages transferred between the client and the server."""
 from __future__ import annotations
 from typing import List, Dict, Tuple, Optional
 from abc import ABC
@@ -9,6 +10,8 @@ import json
 class MessageType(Enum):
     """Lists all different types of messages."""
 
+    # pylint: disable=invalid-name
+    # justification: we want the enum values to be of the same name as the classes
     ArgumentMessage = auto()
     DependencyRequestMessage = auto()
     DependencyReplyMessage = auto()
@@ -56,9 +59,7 @@ class Message(ABC):
         json_bytes: bytearray = bytearray(self.get_json_str(), "utf-8")
 
         json_size: int = len(json_bytes)
-        json_size_bytes: bytearray = bytearray(
-            json_size.to_bytes(length=8, byteorder="little", signed=False)
-        )
+        json_size_bytes: bytearray = bytearray(json_size.to_bytes(length=8, byteorder="little", signed=False))
 
         payload: bytearray = json_size_bytes + json_bytes + self.get_further_payload()
         return payload
@@ -69,31 +70,23 @@ class Message(ABC):
         return {Message.MESSAGE_TYPE_FIELD_NAME: str(self.message_type)}
 
     @staticmethod
-    def _parse_json_size_field(bytes: bytearray) -> int:
+    def _parse_json_size_field(message_bytes: bytearray) -> int:
         return int.from_bytes(
-            bytes[Message.JSON_SIZE_OFFSET : Message.JSON_OFFSET],
+            message_bytes[Message.JSON_SIZE_OFFSET : Message.JSON_OFFSET],
             byteorder="little",
             signed=False,
         )
 
     @staticmethod
-    def _parse_json_field(bytes: bytearray, json_size: int) -> dict:
-        return json.loads(
-            bytes[Message.JSON_OFFSET : Message.JSON_OFFSET + json_size].decode(
-                encoding="utf-8"
-            )
-        )
+    def _parse_json_field(message_bytes: bytearray, json_size: int) -> dict:
+        return json.loads(message_bytes[Message.JSON_OFFSET : Message.JSON_OFFSET + json_size].decode(encoding="utf-8"))
 
     @staticmethod
     def _parse_message_json(json_dict: dict) -> Message:
         if Message.MESSAGE_TYPE_FIELD_NAME not in json_dict:
-            raise ValueError(
-                "No message_type field was given in JSON. Can not parse message."
-            )
+            raise ValueError("No message_type field was given in JSON. Can not parse message.")
 
-        message_type: MessageType = MessageType[
-            json_dict[Message.MESSAGE_TYPE_FIELD_NAME]
-        ]
+        message_type: MessageType = MessageType[json_dict[Message.MESSAGE_TYPE_FIELD_NAME]]
         if message_type == MessageType.ArgumentMessage:
             return ArgumentMessage.from_dict(json_dict)
         elif message_type == MessageType.DependencyRequestMessage:
@@ -103,12 +96,10 @@ class Message(ABC):
         elif message_type == MessageType.CompilationResultMessage:
             return CompilationResultMessage.from_dict(json_dict)
         else:
-            raise ValueError(
-                f"{message_type} is not a valid message type. Can not parse message."
-            )
+            raise ValueError(f"{message_type} is not a valid message type. Can not parse message.")
 
     @staticmethod
-    def from_bytes(bytes: bytearray) -> Tuple[int, Optional[Message]]:
+    def from_bytes(message_bytes: bytearray) -> Tuple[int, Optional[Message]]:
         """Deserializes the message from a bytearray.
         Returns a tuple where the first element indicates whether or not more bytes
         are needed to construct the message.
@@ -120,18 +111,18 @@ class Message(ABC):
 
         The second element of the tuple is the message and may be None, if the byte buffer supplied did not
         contain all necessary data for parsing the message."""
-        if len(bytes) < Message.MINIMUM_SIZE_BYTES:
+        if len(message_bytes) < Message.MINIMUM_SIZE_BYTES:
             # we need at least the json_size field to further parse
-            return (Message.MINIMUM_SIZE_BYTES - len(bytes), None)
+            return (Message.MINIMUM_SIZE_BYTES - len(message_bytes), None)
 
-        json_size: int = Message._parse_json_size_field(bytes)
+        json_size: int = Message._parse_json_size_field(message_bytes)
 
-        size_difference: int = Message.MINIMUM_SIZE_BYTES + json_size - len(bytes)
+        size_difference: int = Message.MINIMUM_SIZE_BYTES + json_size - len(message_bytes)
         if size_difference > 0:
             # we need more data to parse the message
             return (size_difference, None)
 
-        json_dict: dict = Message._parse_json_field(bytes, json_size)
+        json_dict: dict = Message._parse_json_field(message_bytes, json_size)
         message: Message = Message._parse_message_json(json_dict)
 
         further_payload_size: int = message.get_further_payload_size()
@@ -146,10 +137,7 @@ class Message(ABC):
             else:
                 message_payload_offset = Message.MINIMUM_SIZE_BYTES + json_size
                 message.set_further_payload(
-                    bytes[
-                        message_payload_offset : message_payload_offset
-                        + further_payload_size
-                    ]
+                    message_bytes[message_payload_offset : message_payload_offset + further_payload_size]
                 )
                 return (size_difference, message)
 
@@ -158,9 +146,7 @@ class ArgumentMessage(Message):
     """Initial message in the protocol. Client sends arguments, working directory and
     dependencies (key: SHA1SUM, value file paths)."""
 
-    def __init__(
-        self, arguments: List[str], cwd: str, dependencies: Dict[str, str]
-    ) -> None:
+    def __init__(self, arguments: List[str], cwd: str, dependencies: Dict[str, str]) -> None:
         self.arguments = arguments
         self.cwd = cwd
         self.dependencies = dependencies
@@ -169,13 +155,13 @@ class ArgumentMessage(Message):
 
     def _get_json_dict(self) -> Dict:
         """Gets the JSON dict of this object."""
-        dict: Dict = super()._get_json_dict()
+        json_dict: Dict = super()._get_json_dict()
 
-        dict["arguments"] = self.arguments
-        dict["cwd"] = self.cwd
-        dict["dependencies"] = self.dependencies
+        json_dict["arguments"] = self.arguments
+        json_dict["cwd"] = self.cwd
+        json_dict["dependencies"] = self.dependencies
 
-        return dict
+        return json_dict
 
     def get_arguments(self) -> List[str]:
         """Returns the arguments as a list of strings."""
@@ -200,9 +186,7 @@ class ArgumentMessage(Message):
 
     @staticmethod
     def from_dict(json_dict: dict) -> ArgumentMessage:
-        return ArgumentMessage(
-            json_dict["arguments"], json_dict["cwd"], json_dict["dependencies"]
-        )
+        return ArgumentMessage(json_dict["arguments"], json_dict["cwd"], json_dict["dependencies"])
 
 
 class DependencyRequestMessage(Message):
@@ -215,11 +199,11 @@ class DependencyRequestMessage(Message):
 
     def _get_json_dict(self) -> Dict:
         """Gets the JSON dict of this object."""
-        dict: Dict[str, str] = super()._get_json_dict()
+        json_dict: Dict[str, str] = super()._get_json_dict()
 
-        dict["sha1sum"] = self.sha1sum
+        json_dict["sha1sum"] = self.sha1sum
 
-        return dict
+        return json_dict
 
     def get_sha1sum(self) -> str:
         """Returns the SHA1SUM of the dependency."""
@@ -245,11 +229,11 @@ class DependencyReplyMessage(Message):
         super().__init__(MessageType.DependencyReplyMessage)
 
     def _get_json_dict(self) -> Dict:
-        dict: Dict = super()._get_json_dict()
+        json_dict: Dict = super()._get_json_dict()
 
-        dict["size"] = self.size
+        json_dict["size"] = self.size
 
-        return dict
+        return json_dict
 
     def get_content(self) -> bytearray:
         return self.content
@@ -272,10 +256,7 @@ class DependencyReplyMessage(Message):
 
     def __eq__(self, other):
         if isinstance(other, DependencyReplyMessage):
-            return (
-                self.get_size() == other.get_size()
-                and self.get_content() == other.get_content()
-            )
+            return self.get_size() == other.get_size() and self.get_content() == other.get_content()
 
         return False
 
@@ -307,9 +288,7 @@ class CompilationResultMessage(Message):
     A file contains the filename (valid on client side), the size of
     the file in bytes and the actual file bytes."""
 
-    def __init__(
-        self, object_files: List[ObjectFile], stdout: str, stderr: str, return_code: int
-    ) -> None:
+    def __init__(self, object_files: List[ObjectFile], stdout: str, stderr: str, return_code: int) -> None:
         self.object_files = object_files
         self.stdout = stdout
         self.stderr = stderr
@@ -324,6 +303,7 @@ class CompilationResultMessage(Message):
         for object_file in self.object_files:
             files.append({"filename": object_file.file_name, "size": object_file.size})
         json_dict["files"] = files
+
         json_dict["stdout"] = self.stdout
         json_dict["stderr"] = self.stderr
         json_dict["return_code"] = self.return_code
@@ -355,9 +335,7 @@ class CompilationResultMessage(Message):
         """Overwritten so that the dependencies' content can be set."""
         current_payload_offset: int = 0
         for file in self.object_files:
-            file.content = further_payload[
-                current_payload_offset : current_payload_offset + file.size
-            ]
+            file.content = further_payload[current_payload_offset : current_payload_offset + file.size]
             current_payload_offset += file.size
 
     def get_further_payload_size(self) -> int:
