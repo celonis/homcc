@@ -6,11 +6,11 @@ command line and the specified compiler
 import logging
 import subprocess
 
-from pathlib import Path
-from typing import Dict, Set
+from typing import Dict, Set, List
 
 from homcc.common.arguments import Arguments, ArgumentsExecutionResult
 from homcc.common.hashing import hash_file_with_path
+from homcc.common.messages import ObjectFile
 
 logger = logging.getLogger(__name__)
 
@@ -35,27 +35,43 @@ def find_dependencies(arguments: Arguments) -> Set[str]:
     if result.stdout:
         logger.debug("Preprocessor result:\n%s", result.stdout)
 
+    excluded_dependency_prefixes = ["/usr/include", "/usr/lib"]
     # create unique set of dependencies by filtering the preprocessor result
     def filter_preprocessor_target_and_line_break(dependency: str):
-        return dependency not in [f"{Arguments.preprocessor_target}:", "\\"]
+        if dependency in [f"{Arguments.preprocessor_target}:", "\\"]:
+            return False
+
+        for excluded_prefix in excluded_dependency_prefixes:
+            if dependency.startswith(excluded_prefix):
+                return False
+
+        return True
 
     return set(filter(filter_preprocessor_target_and_line_break, result.stdout.split()))
 
 
 def calculate_dependency_dict(dependencies: Set[str]) -> Dict[str, str]:
-    """calculate dependency file hashes mapping to their corresponding absolute filenames"""
-    return {hash_file_with_path(dependency): dependency for dependency in dependencies}
+    """calculate dependency file hashes mapped to their corresponding absolute filenames"""
+    return {dependency: hash_file_with_path(dependency) for dependency in dependencies}
 
 
-def link_object_files(arguments: Arguments) -> int:
+def invert_dict(to_invert: Dict):
+    return {v: k for k, v in to_invert.items()}
+
+
+def link_object_files(arguments: Arguments, object_files: List[ObjectFile]) -> int:
     """link all object files compiled by the server"""
-    source_file_to_object_file_map: Dict[str, str] = dict(
-        zip(
-            arguments.source_files, [str(Path(source_file).with_suffix(".o")) for source_file in arguments.source_files]
+    if len(arguments.source_files) != len(object_files):
+        logger.error(
+            "Wanted to build #%i source files, but only got #%i object files back from the server.",
+            len(arguments.source_files),
+            len(object_files),
         )
-    )
 
-    arguments.replace_source_files_with_object_files(source_file_to_object_file_map)
+    arguments.remove_source_file_args()
+
+    for object_file in object_files:
+        arguments.add_arg(object_file.file_name)
 
     try:
         # execute linking command, e.g.: "g++ foo.o bar.o -ofoobar"

@@ -6,7 +6,7 @@ import re
 import subprocess
 
 from dataclasses import dataclass
-from typing import Dict, Iterator, List, Optional
+from typing import Iterator, List, Optional
 
 logger = logging.getLogger(__name__)
 encoding: str = "utf-8"
@@ -188,11 +188,10 @@ class Arguments:
         self._args = args
         return self
 
-    def replace_source_files_with_object_files(self, source_file_to_object_file_map: Dict[str, str]) -> Arguments:
-        """returns modified Arguments with all source file paths replaced with their respective object file paths"""
-        for i, arg in enumerate(self.args[1:]):
-            if arg in source_file_to_object_file_map.keys():
-                self._args[i + 1] = source_file_to_object_file_map[arg]  # +1 offset due to skipping compiler arg
+    def remove_source_file_args(self) -> Arguments:
+        """removes source file args"""
+        for source_file in self.source_files:
+            self.remove_arg(source_file)
 
         return self
 

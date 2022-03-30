@@ -7,7 +7,6 @@ from homcc.server.environment import (
     map_arguments,
     map_cwd,
     unmap_path,
-    get_output_path,
     do_compilation,
 )
 
@@ -102,27 +101,6 @@ class TestServerEnvironment:
         unmapped = unmap_path(instance_path, mapped_path)
 
         assert unmapped == client_path
-
-    def test_get_output_path_separated(self):
-        arguments = ["gcc", "-Iabc.h", "-o", "cwd/test.o", "foo.c"]
-        source_file_name = "foo.c"
-
-        output_path = get_output_path("cwd", source_file_name, arguments)
-        assert output_path == "cwd/test.o"
-
-    def test_get_output_path_together(self):
-        arguments = ["gcc", "-Iabc.h", "-ocwd/another_test.o", "foo.c"]
-        source_file_name = "foo.c"
-
-        output_path = get_output_path("cwd", source_file_name, arguments)
-        assert output_path == "cwd/another_test.o"
-
-    def test_get_output_path_default(self):
-        arguments = ["gcc", "-Iabc.h", "-O2", "foo.c"]
-        source_file_name = "foo.c"
-
-        output_path = get_output_path("cwd", source_file_name, arguments)
-        assert output_path == "cwd/foo.o"
 
 
 class TestServerCompilation:

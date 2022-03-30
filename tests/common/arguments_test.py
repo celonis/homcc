@@ -1,7 +1,7 @@
 """Tests regarding the arguments module of homcc."""
 import pytest
 
-from typing import Dict, List, Optional
+from typing import List, Optional
 from homcc.common.arguments import Arguments, ArgumentsOutputError
 
 
@@ -106,21 +106,3 @@ class TestArguments:
         ] + source_file_args
 
         assert Arguments(args).source_files == source_file_args
-
-    def test_replace_source_with_object_files(self):
-        source_file_to_object_file: Dict[str, str] = {
-            "main.cpp": "main.o",
-            "relative/relative.cpp": "relative/relative.o",
-            "/opt/src/absolute.cpp": "/opt/src/absolute.o",
-        }
-        args: List[str] = [
-            "g++",
-            "-Irelative_path/relative.h",
-            "-I",
-            "/var/includes/absolute.h",
-        ]
-
-        arguments: Arguments = Arguments(args + list(source_file_to_object_file.keys()))
-        arguments.replace_source_files_with_object_files(source_file_to_object_file)
-
-        assert arguments == args + list(source_file_to_object_file.values())

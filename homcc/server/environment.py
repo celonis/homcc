@@ -111,32 +111,15 @@ def unmap_path(instance_path: str, server_path: str) -> str:
 def map_dependency_paths(instance_path: str, mapped_cwd: str, dependencies: Dict[str, str]) -> Dict[str, str]:
     """Maps dependency paths that the client sent to paths valid at the server."""
     mapped_dependencies = {}
-    for sha1sum, path in dependencies.items():
+    for path, sha1sum in dependencies.items():
         mapped_path = _map_path(instance_path, mapped_cwd, path)
-        mapped_dependencies[sha1sum] = mapped_path
+        mapped_dependencies[mapped_path] = sha1sum
 
     return mapped_dependencies
 
 
 def map_source_file_to_object_file(mapped_cwd: str, source_file: str) -> str:
     return os.path.join(mapped_cwd, f"{Path(source_file).stem}.o")
-
-
-def get_output_path(mapped_cwd: str, source_file_name: str, arguments: List[str]) -> str:
-    """Extracts the output path (-o argument) from the argument list.
-    If there is no output argument given by the user, returns the default output path."""
-    output_path = os.path.join(mapped_cwd, f"{Path(source_file_name).stem}.o")
-
-    for index, argument in enumerate(arguments):
-        if argument.startswith("-o"):
-            if argument == "-o":
-                output_path = arguments[index + 1]
-            else:
-                output_path = argument[2:]
-
-            break
-
-    return output_path
 
 
 @dataclass
