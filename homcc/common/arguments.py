@@ -6,6 +6,7 @@ import re
 import subprocess
 
 from dataclasses import dataclass
+from distutils.spawn import find_executable
 from typing import Dict, Iterator, List, Optional
 
 logger = logging.getLogger(__name__)
@@ -64,6 +65,47 @@ class Arguments:
 
     def __str__(self):
         return "[" + " ".join(self.args) + "]"
+
+    @staticmethod
+    def is_source_file(arg: str):
+        """check whether an argument looks like a source file"""
+        # if we enable remote assembly, additionally allow file extension ".s"
+        source_file_pattern: str = r"^\S+\.(i|ii|c|cc|cp|cpp|cxx|c\+\+|m|mm|mi|mii)$"  # e.g. "foo.cpp"
+        return re.match(source_file_pattern, arg.lower())
+
+    @staticmethod
+    def is_object_file(arg: str):
+        """check whether an argument looks like an object file"""
+        object_file_pattern: str = r"^\S+\.o$"  # e.g. "foo.o"
+        return re.match(object_file_pattern, arg.lower())
+
+    @staticmethod
+    def is_executable(arg: str):
+        """check whether an argument is executable with which we can determine if it's a viable compiler arg"""
+        return find_executable(arg) is not None
+
+    @staticmethod
+    def is_compiler(arg: str):
+        """check if an argument looks like a compiler"""
+        if not arg.startswith("-") and not Arguments.is_source_file(arg) and not Arguments.is_object_file(arg):
+            logger.debug("%s is used as compiler", arg)
+
+            if not Arguments.is_executable(arg):
+                logger.warning("Specified compiler %s is not an executable", arg)
+            return True
+        return False
+
+    @classmethod
+    def from_argv(cls, argv: List[str], compiler: Optional[str] = None) -> Arguments:
+        # compiler as explicit second argument, e.g.: homcc_client.py g++ -c foo.cpp
+        if Arguments.is_compiler(argv[1]):
+            return Arguments(argv[1:])
+
+        # unspecified compiler argument, e.g.: homcc_client.py -c foo.cpp
+        arguments: Arguments = Arguments(argv)
+        arguments.compiler = str(compiler or "cc")  # overwrite compiler with cc as fallback
+
+        return arguments
 
     def is_sendable(self) -> bool:
         """determine if the current Arguments lead to a meaningful compilation on the server"""
@@ -149,7 +191,6 @@ class Arguments:
     def source_files(self) -> List[str]:
         """extracts files to be compiled and returns their paths"""
         source_file_paths: List[str] = []
-        source_file_pattern: str = r"^\S+\.(c|cc|cp|cpp|cxx|c\+\+)$"  # e.g. foo.cpp
         other_open_arg: bool = False
 
         for arg in self.args[1:]:
@@ -163,7 +204,7 @@ class Arguments:
                     continue
 
             elif not other_open_arg:
-                if not re.match(source_file_pattern, arg.lower()):
+                if not self.is_source_file(arg):
                     logger.debug("Suspicious source file added: %s", arg)
                 source_file_paths.append(arg)
 
