@@ -48,7 +48,7 @@ class TestArguments:
         for compiler in compilers:
             assert Arguments.is_compiler(compiler)
 
-    def test_test_from_argv(self):
+    def test_from_argv(self):
         specified_compiler_args: List[str] = ["homcc_client.py", "g++", "-c", "foo.cpp"]
         assert Arguments.from_argv(specified_compiler_args) == specified_compiler_args[1:]
 
