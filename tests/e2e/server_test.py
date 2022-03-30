@@ -30,7 +30,7 @@ class TestEndToEnd:
         yield
         Path("e2e-test").unlink(missing_ok=True)
 
-    @pytest.mark.timeout(5)
+    @pytest.mark.timeout(15)
     def test_end_to_end(self):
         with self.start_server():
             client_stdout = self.start_client()
