@@ -30,7 +30,8 @@ class TestClientUtils:
         dependencies: Set[str] = find_dependencies(Arguments(args))
         example_dependency: Path = self.example_inc_dir / "foo.h"
 
-        assert len(dependencies) == 2
+        # TODO(o.layer): we have more dependencies now, as we're not using -MM, but -M.
+        # assert len(dependencies) == 2
         assert str(self.example_main_cpp.absolute()) in dependencies
         assert str(example_dependency.absolute()) in dependencies
 
@@ -45,7 +46,8 @@ class TestClientUtils:
         dependencies: Set[str] = find_dependencies(Arguments(args))
         example_dependency: Path = self.example_inc_dir / "foo.h"
 
-        assert len(dependencies) == 3
+        # TODO(o.layer): we have more dependencies now, as we're not using -MM, but -M.
+        # assert len(dependencies) == 3
         assert str(self.example_main_cpp.absolute()) in dependencies
         assert str(self.example_foo_cpp.absolute()) in dependencies
         assert str(example_dependency.absolute()) in dependencies
