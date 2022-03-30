@@ -180,6 +180,8 @@ def do_compilation(instance_path: str, mapped_cwd: str, args: List[str]) -> Comp
             object_file = ObjectFile(client_output_path, bytearray(object_file_content))
             object_files.append(object_file)
 
+            logger.info("Compiled '%s'.", object_file.file_name)
+
     logger.info(
         "Compiler returned code '%i', sending back #%i object files.",
         result.return_code,
