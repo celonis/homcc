@@ -1,7 +1,7 @@
 """Tests regarding the arguments module of homcc."""
 import pytest
+import shutil
 
-from shutil import which
 from typing import Dict, List, Optional
 
 from homcc.common.arguments import Arguments, ArgumentsOutputError
@@ -27,19 +27,9 @@ class TestArguments:
         for not_object_file in not_object_files:
             assert not Arguments.is_object_file(not_object_file)
 
-    def test_is_executable(self):
-        # these executables should be present on most platforms
-        executables: List[str] = list(filter(lambda exe: which(exe) is not None, ["cd", "echo", "time"]))
-
-        if not executables:
-            assert not "No executables to test"
-
-        for executable in executables:
-            assert Arguments.is_executable(executable)
-
     def test_is_compiler(self):
         compilers: List[str] = list(
-            filter(lambda _compiler: which(_compiler) is not None, ["cc", "gcc", "g++", "clang", "clang++"])
+            filter(lambda _compiler: shutil.which(_compiler) is not None, ["cc", "gcc", "g++", "clang", "clang++"])
         )
 
         if not compilers:

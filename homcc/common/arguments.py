@@ -2,12 +2,11 @@
 from __future__ import annotations
 
 import logging
-import os
 import re
+import shutil
 import subprocess
 
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Dict, Iterator, List, Optional
 
 logger = logging.getLogger(__name__)
@@ -82,31 +81,8 @@ class Arguments:
 
     @staticmethod
     def is_executable(arg: str) -> bool:
-        """check whether an argument is executable with which we can determine if it's a viable compiler arg"""
-        # code adapted from: https://github.com/python/cpython/blob/main/Lib/distutils/spawn.py#L95-L129
-        if os.path.isfile(arg):
-            return os.access(arg, os.X_OK)
-
-        path_var: Optional[str] = os.environ.get("PATH", None)
-        if path_var is None:
-            try:
-                path_var = os.confstr("CS_PATH")
-            except (AttributeError, ValueError):
-                path_var = os.defpath  # if os.confstr() or CS_PATH are not available
-
-        # PATH='' doesn't match, whereas PATH=':' looks in the current directory
-        if not path_var:
-            return False
-
-        paths: List[str] = path_var.split(os.pathsep)
-
-        for path in paths:
-            file: Path = Path(path) / arg
-
-            if file.is_file():
-                return os.access(file, os.X_OK)
-
-        return False
+        """check whether an argument is executable"""
+        return shutil.which(arg) is not None
 
     @staticmethod
     def is_compiler(arg: str) -> bool:
@@ -127,7 +103,7 @@ class Arguments:
 
         # unspecified compiler argument, e.g.: homcc_client.py -c foo.cpp
         arguments: Arguments = Arguments(argv)
-        arguments.compiler = str(compiler or "cc")  # overwrite compiler with cc as fallback
+        arguments.compiler = compiler or "cc"  # overwrite compiler with cc as fallback
 
         return arguments
 
