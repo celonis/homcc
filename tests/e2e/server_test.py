@@ -9,8 +9,8 @@ from pathlib import Path
 class TestEndToEnd:
     """End to end integration tests."""
 
-    def start_server(self):
-        subprocess.Popen(["./homcc_server.py"], stdout=subprocess.PIPE)
+    def start_server(self) -> subprocess.Popen:
+        return subprocess.Popen(["./homcc_server.py"], stdout=subprocess.PIPE)
 
     def start_client(self) -> str:
         return subprocess.check_output(
@@ -32,12 +32,12 @@ class TestEndToEnd:
 
     @pytest.mark.timeout(5)
     def test_end_to_end(self):
-        self.start_server()
-        client_stdout = self.start_client()
+        with self.start_server():
+            client_stdout = self.start_client()
 
-        # make sure we actually compiled at the server (and did not fall back to local compilation),
-        # i.e. look at the log messages if the compilation of the file on the server side was okay
-        assert '"return_code": 0' in client_stdout
+            # make sure we actually compiled at the server (and did not fall back to local compilation),
+            # i.e. look at the log messages if the compilation of the file on the server side was okay
+            assert '"return_code": 0' in client_stdout
 
-        binary_stdout = subprocess.check_output(["./e2e-test"]).decode("utf-8")
-        assert binary_stdout == "homcc\n"
+            binary_stdout = subprocess.check_output(["./e2e-test"]).decode("utf-8")
+            assert binary_stdout == "homcc\n"
