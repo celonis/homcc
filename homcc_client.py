@@ -25,9 +25,7 @@ from homcc.common.messages import Message, CompilationResultMessage, DependencyR
 
 async def main() -> int:
     """client main function for parsing arguments and communicating with the homcc server"""
-    # TODO(s.pirsch): look up how distcc handles compiler arg cases
-    arguments: Arguments = Arguments(sys.argv[1:])  # tmp solution to test the query-engine
-    # compiler: str = "g++"  # supported C/C++ compilers: [gcc, g++, clang, clang++]
+    arguments: Arguments = Arguments.from_argv(sys.argv)  # TODO(s.pirsch): provide compiler from config file (CPL-6419)
     cwd: str = os.getcwd()  # current working directory
 
     host: str = "localhost"
@@ -37,9 +35,6 @@ async def main() -> int:
     timeout: int = 180
 
     client: TCPClient = TCPClient(host, port)
-
-    # overwrite homcc call with specified compiler
-    # arguments.compiler = compiler
 
     try:
         # 1.) test whether arguments should be sent, prepare for communication with server

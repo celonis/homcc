@@ -44,7 +44,7 @@ class TCPServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
 class TCPRequestHandler(socketserver.BaseRequestHandler):
     """Handles all requests received from the client."""
 
-    BUFFER_SIZE = 4096
+    BUFFER_SIZE = 65536
 
     mapped_dependencies: Dict[str, str] = {}
     """All dependencies for the current compilation, mapped to server paths."""

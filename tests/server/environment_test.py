@@ -144,18 +144,3 @@ class TestServerCompilation:
 
         assert len(result_message.object_files) == 1
         assert result_message.object_files[0].file_name == "/home/user/cwd/this_is_a_source_file.o"
-
-    def test_single_file_output_argument(self):
-        instance_path = "/tmp/homcc/test-id"
-        mapped_cwd = "/tmp/homcc/test-id/home/user/cwd"
-        arguments = [
-            "gcc",
-            "-I../abc/include/foo.h",
-            f"-o{mapped_cwd}/output/out.o",
-            f"{mapped_cwd}/src/this_is_a_source_file.cpp",
-        ]
-
-        result_message = do_compilation(instance_path, mapped_cwd, arguments)
-
-        assert len(result_message.object_files) == 1
-        assert result_message.object_files[0].file_name == "/home/user/cwd/this_is_a_source_file.o"

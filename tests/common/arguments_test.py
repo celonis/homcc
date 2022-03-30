@@ -1,5 +1,6 @@
 """Tests regarding the arguments module of homcc."""
 import pytest
+import shutil
 
 from typing import List, Optional
 from homcc.common.arguments import Arguments, ArgumentsOutputError
@@ -7,6 +8,41 @@ from homcc.common.arguments import Arguments, ArgumentsOutputError
 
 class TestArguments:
     """Tests for common/arguments.py"""
+
+    def test_is_source_file(self):
+        source_files: List[str] = ["foo.c", "bar.cpp"]
+        for source_file in source_files:
+            assert Arguments.is_source_file(source_file)
+
+        not_source_files: List[str] = ["", ".", ".cpp", "foo.hpp"]
+        for not_source_file in not_source_files:
+            assert not Arguments.is_source_file(not_source_file)
+
+    def test_is_object_file(self):
+        object_file: str = "foo.o"
+        assert Arguments.is_object_file(object_file)
+
+        not_object_files: List[str] = ["", ".", ".o"]
+        for not_object_file in not_object_files:
+            assert not Arguments.is_object_file(not_object_file)
+
+    def test_is_compiler(self):
+        compilers: List[str] = list(
+            filter(lambda _compiler: shutil.which(_compiler) is not None, ["cc", "gcc", "g++", "clang", "clang++"])
+        )
+
+        if not compilers:
+            assert not "No compilers installed to test"
+
+        for compiler in compilers:
+            assert Arguments.is_compiler(compiler)
+
+    def test_from_argv(self):
+        specified_compiler_args: List[str] = ["homcc_client.py", "g++", "-c", "foo.cpp"]
+        assert Arguments.from_argv(specified_compiler_args) == specified_compiler_args[1:]
+
+        unspecified_compiler_args: List[str] = ["homcc_client.py", "-c", "foo.cpp"]
+        assert Arguments.from_argv(unspecified_compiler_args, "g++") == specified_compiler_args[1:]
 
     def test_is_sendable(self):
         sendable_args: List[str] = ["g++", "foo.cpp", "-ofoo"]
