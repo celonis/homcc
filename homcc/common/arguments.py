@@ -2,11 +2,12 @@
 from __future__ import annotations
 
 import logging
+import os
 import re
 import subprocess
 
 from dataclasses import dataclass
-from distutils.spawn import find_executable
+from pathlib import Path
 from typing import Dict, Iterator, List, Optional
 
 logger = logging.getLogger(__name__)
@@ -49,7 +50,7 @@ class Arguments:
     def __init__(self, args: List[str]):
         self._args: List[str] = args
 
-    def __eq__(self, other):
+    def __eq__(self, other) -> bool:
         if isinstance(other, Arguments):
             return self.args == other.args
         if isinstance(other, list):
@@ -60,32 +61,55 @@ class Arguments:
         for arg in self.args:
             yield arg
 
-    def __len__(self):
+    def __len__(self) -> int:
         return len(self.args)
 
-    def __str__(self):
+    def __str__(self) -> str:
         return "[" + " ".join(self.args) + "]"
 
     @staticmethod
-    def is_source_file(arg: str):
+    def is_source_file(arg: str) -> bool:
         """check whether an argument looks like a source file"""
         # if we enable remote assembly, additionally allow file extension ".s"
         source_file_pattern: str = r"^\S+\.(i|ii|c|cc|cp|cpp|cxx|c\+\+|m|mm|mi|mii)$"  # e.g. "foo.cpp"
-        return re.match(source_file_pattern, arg.lower())
+        return re.match(source_file_pattern, arg.lower()) is not None
 
     @staticmethod
-    def is_object_file(arg: str):
+    def is_object_file(arg: str) -> bool:
         """check whether an argument looks like an object file"""
         object_file_pattern: str = r"^\S+\.o$"  # e.g. "foo.o"
-        return re.match(object_file_pattern, arg.lower())
+        return re.match(object_file_pattern, arg.lower()) is not None
 
     @staticmethod
-    def is_executable(arg: str):
+    def is_executable(arg: str) -> bool:
         """check whether an argument is executable with which we can determine if it's a viable compiler arg"""
-        return find_executable(arg) is not None
+        # code adapted from: https://github.com/python/cpython/blob/main/Lib/distutils/spawn.py#L95-L129
+        if os.path.isfile(arg):
+            return os.access(arg, os.X_OK)
+
+        path_var: Optional[str] = os.environ.get("PATH", None)
+        if path_var is None:
+            try:
+                path_var = os.confstr("CS_PATH")
+            except (AttributeError, ValueError):
+                path_var = os.defpath  # if os.confstr() or CS_PATH are not available
+
+        # PATH='' doesn't match, whereas PATH=':' looks in the current directory
+        if not path_var:
+            return False
+
+        paths: List[str] = path_var.split(os.pathsep)
+
+        for path in paths:
+            file: Path = Path(path) / arg
+
+            if file.is_file():
+                return os.access(file, os.X_OK)
+
+        return False
 
     @staticmethod
-    def is_compiler(arg: str):
+    def is_compiler(arg: str) -> bool:
         """check if an argument looks like a compiler"""
         if not arg.startswith("-") and not Arguments.is_source_file(arg) and not Arguments.is_object_file(arg):
             logger.debug("%s is used as compiler", arg)
