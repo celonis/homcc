@@ -1,8 +1,8 @@
 """Executable that is used to start the server."""
-import logging
 import argparse
 import signal
 
+from homcc.common.logging import Formatter, FormatterConfig, FormatterDestination, setup_logging
 from homcc.server.server import start_server, stop_server
 
 
@@ -11,7 +11,11 @@ def signal_handler(*_):
 
 
 if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO)
+    setup_logging(
+        formatter=Formatter.SERVER,
+        config=FormatterConfig.COLORED,
+        destination=FormatterDestination.STREAM,
+    )
 
     parser = argparse.ArgumentParser(description="homcc server for compiling cpp files from home.")
     parser.add_argument(

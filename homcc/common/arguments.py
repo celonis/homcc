@@ -246,6 +246,6 @@ class Arguments:
         """
         logger.debug("Executing %s", self)
         result: subprocess.CompletedProcess = subprocess.run(
-            self.args, check=check, cwd=cwd, encoding=encoding, stdout=subprocess.PIPE, stderr=subprocess.PIPE
+            self.args, check=check, cwd=cwd, encoding=encoding, capture_output=True
         )
         return ArgumentsExecutionResult.from_process_result(result)
