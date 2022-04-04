@@ -1,5 +1,6 @@
 """Module containing methods to manage the server environment, mostly file and path manipulation."""
 from dataclasses import dataclass
+from threading import Lock
 import uuid
 import os
 import subprocess
@@ -47,11 +48,27 @@ def save_dependency(absolute_dependency_path: str, content: bytearray):
     logger.debug("Wrote file %s", absolute_dependency_path)
 
 
-def get_needed_dependencies(dependencies: Dict[str, str]) -> Dict[str, str]:
-    """Get the dependencies that are not cached and are
-    therefore required to be sent by the client."""
-    # TODO: Check here if dependency is already in cache. For now we assume we have no cache.
-    return dependencies.copy()
+def get_needed_dependencies(dependencies: Dict[str, str], cache: Dict[str, str], cache_mutex: Lock) -> Dict[str, str]:
+    """Get the dependencies that are not cached and are therefore required to be sent by the client.
+    Symlink cached dependencies so they can be used in the compilation process."""
+    needed_dependencies: Dict[str, str] = {}
+
+    for dependency_file, dependency_hash in dependencies.items():
+        if dependency_hash not in cache:
+            needed_dependencies[dependency_file] = dependency_hash
+        else:
+            # symlink the dependency to the cached file
+            # first create the folder structure (if needed), else symlinking won't work
+            dependency_folder = os.path.dirname(dependency_file)
+            Path(dependency_folder).mkdir(parents=True, exist_ok=True)
+
+            # then do the actual symlinking
+            cache_mutex.acquire()
+            os.symlink(cache[dependency_hash], dependency_file)
+            cache_mutex.release()
+            logger.debug("Symlinked '%s' to '%s'.", dependency_file, cache[dependency_hash])
+
+    return needed_dependencies
 
 
 def map_arguments(instance_path: str, mapped_cwd: str, arguments: List[str]) -> List[str]:
