@@ -4,7 +4,7 @@ import hashlib
 from pathlib import Path
 
 
-def hash_file_with_bytes(content: bytes):
+def hash_file_with_bytes(content: bytes) -> str:
     """Same as hash_file_with_path, but allows to supply the file content as parameter."""
     return hashlib.sha1(content).hexdigest()
 

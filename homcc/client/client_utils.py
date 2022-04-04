@@ -37,7 +37,7 @@ def find_dependencies(arguments: Arguments) -> Set[str]:
 
     excluded_dependency_prefixes = ["/usr/include", "/usr/lib"]
     # create unique set of dependencies by filtering the preprocessor result
-    def filter_preprocessor_target_and_line_break(dependency: str):
+    def is_sendable_dependency(dependency: str) -> bool:
         if dependency in [f"{Arguments.preprocessor_target}:", "\\"]:
             return False
 
@@ -47,7 +47,7 @@ def find_dependencies(arguments: Arguments) -> Set[str]:
 
         return True
 
-    return set(filter(filter_preprocessor_target_and_line_break, result.stdout.split()))
+    return set(filter(is_sendable_dependency, result.stdout.split()))
 
 
 def calculate_dependency_dict(dependencies: Set[str]) -> Dict[str, str]:

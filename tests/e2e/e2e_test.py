@@ -23,7 +23,8 @@ class TestEndToEnd:
                 "-oe2e-test",
             ],
             stderr=subprocess.STDOUT,
-        ).decode("utf-8")
+            encoding="utf-8",
+        )
 
     @pytest.fixture(autouse=True)
     def clean_up(self):
