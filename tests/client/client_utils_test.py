@@ -7,14 +7,13 @@ from typing import List, Set
 
 import pytest
 
-from homcc.client.client_utils import find_dependencies, local_compile
+from homcc.common.arguments import Arguments
+from homcc.client.client_utils import CompilerError, find_dependencies, local_compile
 
 
-# pylint: disable=missing-function-docstring
 class TestClientUtils:
     """Tests for client/client_utils.py"""
 
-    # pylint: disable=W0201
     @pytest.fixture(autouse=True)
     def _init(self):
         self.example_base_dir: Path = Path("example")
@@ -28,7 +27,7 @@ class TestClientUtils:
     def test_find_dependencies_without_class_impl(self):
         # absolute paths of: "g++ main.cpp -Iinclude/"
         args: List[str] = ["g++", str(self.example_main_cpp.absolute()), f"-I{str(self.example_inc_dir.absolute())}"]
-        dependencies: Set[str] = find_dependencies(args)
+        dependencies: Set[str] = find_dependencies(Arguments(args))
         example_dependency: Path = self.example_inc_dir / "foo.h"
 
         assert len(dependencies) == 2
@@ -43,13 +42,25 @@ class TestClientUtils:
             str(self.example_foo_cpp.absolute()),
             f"-I{str(self.example_inc_dir.absolute())}",
         ]
-        dependencies: Set[str] = find_dependencies(args)
+        dependencies: Set[str] = find_dependencies(Arguments(args))
         example_dependency: Path = self.example_inc_dir / "foo.h"
 
         assert len(dependencies) == 3
         assert str(self.example_main_cpp.absolute()) in dependencies
         assert str(self.example_foo_cpp.absolute()) in dependencies
         assert str(example_dependency.absolute()) in dependencies
+
+    def test_find_dependencies_error(self):
+        args: List[str] = [
+            "g++",
+            str(self.example_main_cpp.absolute()),
+            str(self.example_foo_cpp.absolute()),
+            f"-I{str(self.example_inc_dir.absolute())}",
+            "-OError",
+        ]
+
+        with pytest.raises(CompilerError):
+            _: Set[str] = find_dependencies(Arguments(args))
 
     def test_local_compilation(self):
         time_str: str = datetime.now().strftime("%Y%m%d-%H%M%S")
@@ -66,7 +77,10 @@ class TestClientUtils:
         ]
 
         assert not example_out_file.exists()
-        assert local_compile(args) == os.EX_OK
+        assert local_compile(Arguments(args)) == os.EX_OK
         assert example_out_file.exists()
 
         example_out_file.unlink()
+
+        # intentionally execute an erroneous call
+        assert local_compile(Arguments(args + ["-OError"])) != os.EX_OK

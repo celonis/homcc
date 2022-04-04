@@ -7,7 +7,7 @@ from tempfile import TemporaryDirectory
 from typing import List, Dict, Tuple
 from functools import singledispatchmethod
 
-from homcc.messages import (
+from homcc.common.messages import (
     ArgumentMessage,
     Message,
     DependencyReplyMessage,

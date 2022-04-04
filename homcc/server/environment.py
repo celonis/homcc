@@ -8,7 +8,8 @@ from tempfile import TemporaryDirectory
 from pathlib import Path
 from typing import Dict, List
 
-from homcc.messages import CompilationResultMessage, ObjectFile
+from homcc.common.arguments import Arguments
+from homcc.common.messages import CompilationResultMessage, ObjectFile
 
 logger = logging.getLogger(__name__)
 
@@ -117,28 +118,8 @@ def map_dependency_paths(instance_path: str, mapped_cwd: str, dependencies: Dict
     return mapped_dependencies
 
 
-def extract_source_files(arguments: List[str]) -> List[str]:
-    """Given arguments, extracts files to be compiled and returns their paths."""
-    source_file_paths: List[str] = []
-
-    other_open_arguments = False
-    # only consider real arguments (not the compiler, hence arguments[1:])
-    for argument in arguments[1:]:
-        if argument.startswith("-"):
-            for path_argument_prefix in _path_argument_prefixes:
-                if argument == path_argument_prefix:
-                    other_open_arguments = True
-                    break
-
-            if other_open_arguments:
-                continue
-        else:
-            if not other_open_arguments:
-                source_file_paths.append(argument)
-
-        other_open_arguments = False
-
-    return source_file_paths
+def map_source_file_to_object_file(mapped_cwd: str, source_file: str) -> str:
+    return os.path.join(mapped_cwd, f"{Path(source_file).stem}.o")
 
 
 def get_output_path(mapped_cwd: str, source_file_name: str, arguments: List[str]) -> str:
@@ -169,9 +150,6 @@ class CompilerResult:
 
 def invoke_compiler(mapped_cwd: str, arguments: List[str]) -> CompilerResult:
     """Actually invokes the compiler process."""
-    # -c says that we do not want to link
-    arguments.insert(1, "-c")
-
     logger.info("Compile arguments: %s", arguments)
 
     # pylint: disable=subprocess-run-check
@@ -196,28 +174,25 @@ def invoke_compiler(mapped_cwd: str, arguments: List[str]) -> CompilerResult:
     return CompilerResult(result.returncode, stdout, stderr)
 
 
-def do_compilation(instance_path: str, mapped_cwd: str, arguments: List[str]) -> CompilationResultMessage:
+def do_compilation(instance_path: str, mapped_cwd: str, args: List[str]) -> CompilationResultMessage:
     """Does the compilation and returns the filled result message."""
     logger.info("Compiling...")
 
-    result = invoke_compiler(mapped_cwd, arguments)
+    # create the mapped current working directory if it doesn't exist yet
+    Path(mapped_cwd).mkdir(parents=True, exist_ok=True)
+
+    arguments: Arguments = Arguments(args).no_linking()
+    source_files: List[str] = arguments.source_files
+
+    result = invoke_compiler(mapped_cwd, list(arguments))
 
     object_files: List[ObjectFile] = []
     if result.return_code == 0:
-        source_files: List[str] = extract_source_files(arguments)
-
         for source_file in source_files:
-            if len(source_files) == 1:
-                # with only one source file, the client could specify
-                # -o (not possible to set if there is more than one source file).
-                file_path = get_output_path(mapped_cwd, source_file, arguments)
-            else:
-                file_name = f"{Path(source_file).stem}.o"
-                file_path = os.path.join(mapped_cwd, file_name)
+            object_file_path: str = map_source_file_to_object_file(mapped_cwd, source_file)
+            object_file_content = Path.read_bytes(Path(object_file_path))
 
-            object_file_content = Path.read_bytes(Path(file_path))
-
-            client_output_path = _unmap_path(instance_path, file_path)
+            client_output_path = _unmap_path(instance_path, object_file_path)
 
             object_file = ObjectFile(client_output_path, bytearray(object_file_content))
             object_files.append(object_file)
