@@ -156,7 +156,7 @@ class Arguments:
             Arguments(self.args)
             .remove_arg(self.no_linking_arg)
             .remove_output_args()
-            .add_arg("-M")  # output dependencies without system headers
+            .add_arg("-M")  # output dependencies
             .add_arg("-MT")  # change target of the dependency generation
             .add_arg(self.preprocessor_target)
         )
