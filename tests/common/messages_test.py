@@ -1,7 +1,7 @@
 """Tests the messages module of homcc."""
 from typing import List, Dict
 import os
-from homcc.messages import (
+from homcc.common.messages import (
     ArgumentMessage,
     DependencyRequestMessage,
     DependencyReplyMessage,

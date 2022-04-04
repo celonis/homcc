@@ -18,12 +18,12 @@
 
 
 ### Linting
-- Analyze all python files with [`pylint`](https://github.com/PyCQA/pylint): `pylint -v --rcfile=.pylintrc *.py **/*.py`
-- Check static typing of all python files with [`mypy`](https://github.com/python/mypy): `mypy *.py **/*.py`
+- Analyze all python files with [`pylint`](https://github.com/PyCQA/pylint): `pylint -v --rcfile=.pylintrc *.py homcc tests`
+- Check static typing of all python files with [`mypy`](https://github.com/python/mypy): `mypy *.py homcc tests`
 
 
 ### Formatting
 - Formatting and format check are executed via [`black`](https://github.com/psf/black)
 - Check the formatting of all python files and list the required changes:<br/>
-  `black --check --color --diff --verbose *.py **/*.py`
+  `black --check --color --diff --verbose *.py homcc tests`
 - Format a specified python file: `black ./path/to/file.py`

@@ -5,6 +5,7 @@ from typing import Dict, List, Set
 
 import pytest
 
+from homcc.common.arguments import Arguments
 from homcc.client.client import TCPClient
 from homcc.client.client_utils import calculate_dependency_dict, find_dependencies
 from homcc.server.server import start_server, stop_server
@@ -44,9 +45,9 @@ class TestClient:
             str(self.example_out_file.absolute()),
         ]
         cwd: str = ""
-        dependencies: Set[str] = find_dependencies(args)
+        dependencies: Set[str] = find_dependencies(Arguments(args))
         dependency_dict: Dict[str, str] = calculate_dependency_dict(dependencies)
 
         await self.client.connect()
-        await self.client.send_argument_message(args, cwd, dependency_dict)
+        await self.client.send_argument_message(Arguments(args), cwd, dependency_dict)
         await self.client.close()
