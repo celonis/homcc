@@ -16,6 +16,7 @@ from homcc.client.client_utils import (
     CompilerError,
     calculate_dependency_dict,
     find_dependencies,
+    invert_dict,
     local_compile,
     link_object_files,
 )
@@ -31,7 +32,7 @@ async def main() -> int:
     port: int = 3633
 
     # timeout window in seconds for receiving messages
-    timeout: int = 1
+    timeout: int = 180
 
     client: TCPClient = TCPClient(host, port)
 
@@ -43,6 +44,10 @@ async def main() -> int:
         dependencies: Set[str] = find_dependencies(arguments)
         logger.debug("Dependency list:\n%s", dependencies)
         dependency_dict: Dict[str, str] = calculate_dependency_dict(dependencies)
+
+        # invert this so we can easily search by the hash later on when dependencies are requested
+        inverted_dependency_dict = invert_dict(dependency_dict)
+
         logger.debug("Dependency dict:\n%s", dependency_dict)
 
         await client.connect()
@@ -53,7 +58,7 @@ async def main() -> int:
         server_response: Message = await client.receive(timeout=timeout)
 
         while isinstance(server_response, DependencyRequestMessage):
-            requested_dependency: str = dependency_dict[server_response.get_sha1sum()]
+            requested_dependency: str = inverted_dependency_dict[server_response.get_sha1sum()]
             await client.send_dependency_reply_message(requested_dependency)
 
             server_response = await client.receive(timeout=timeout)
@@ -93,7 +98,7 @@ async def main() -> int:
 
         # 5.) link and delete object files if required
         if arguments.is_linking():
-            linker_return_code: int = link_object_files(arguments)
+            linker_return_code: int = link_object_files(arguments, server_response.get_object_files())
 
             for object_file in server_response.get_object_files():
                 logger.debug("Deleting file %s", object_file.file_name)
