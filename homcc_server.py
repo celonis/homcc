@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """Executable that is used to start the server."""
 import logging
 import argparse
