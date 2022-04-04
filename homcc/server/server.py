@@ -32,6 +32,8 @@ logger = logging.getLogger(__name__)
 
 
 class TCPServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
+    """TCP Server instance, holding data relevant across compilations."""
+
     root_temp_folder: TemporaryDirectory
     cache: Dict[str, str]
     """'Hash' -> 'File path' on server map for holding paths to cached files."""
