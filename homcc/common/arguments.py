@@ -7,7 +7,7 @@ import shutil
 import subprocess
 
 from dataclasses import dataclass
-from typing import Dict, Iterator, List, Optional
+from typing import Iterator, List, Optional
 
 logger = logging.getLogger(__name__)
 encoding: str = "utf-8"
@@ -113,6 +113,11 @@ class Arguments:
         for arg in self.args[1:]:
             if arg in [self.no_assembly_arg] + self.preprocessor_args:
                 return False
+
+        if not self.source_files:
+            logger.info("No source files given, can not distribute to server.")
+            return False
+
         return True
 
     def is_linking(self) -> bool:
@@ -151,18 +156,13 @@ class Arguments:
             Arguments(self.args)
             .remove_arg(self.no_linking_arg)
             .remove_output_args()
-            .add_arg("-MM")  # output dependencies without system headers
+            .add_arg("-M")  # output dependencies
             .add_arg("-MT")  # change target of the dependency generation
             .add_arg(self.preprocessor_target)
         )
 
     def no_linking(self) -> Arguments:
         """return copy of Arguments with no linking argument added"""
-        # with only one source file, both -o and -c arguments can be specified
-        if len(self.source_files) == 1:
-            return Arguments(self.args).add_arg(self.no_linking_arg)
-
-        # remove -o arguments if multiple source files are provided
         return Arguments(self.args).remove_output_args().add_arg(self.no_linking_arg)
 
     @property
@@ -204,9 +204,10 @@ class Arguments:
                     continue
 
             elif not other_open_arg:
-                if not self.is_source_file(arg):
-                    logger.debug("Suspicious source file added: %s", arg)
-                source_file_paths.append(arg)
+                if self.is_source_file(arg):
+                    source_file_paths.append(arg)
+                else:
+                    logger.debug("Not adding '%s' as source file, as it doesn't match source file regex.", arg)
 
             other_open_arg = False
 
@@ -228,11 +229,10 @@ class Arguments:
         self._args = args
         return self
 
-    def replace_source_files_with_object_files(self, source_file_to_object_file_map: Dict[str, str]) -> Arguments:
-        """returns modified Arguments with all source file paths replaced with their respective object file paths"""
-        for i, arg in enumerate(self.args[1:]):
-            if arg in source_file_to_object_file_map.keys():
-                self._args[i + 1] = source_file_to_object_file_map[arg]  # +1 offset due to skipping compiler arg
+    def remove_source_file_args(self) -> Arguments:
+        """removes source file args"""
+        for source_file in self.source_files:
+            self.remove_arg(source_file)
 
         return self
 

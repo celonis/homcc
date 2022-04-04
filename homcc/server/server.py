@@ -1,7 +1,6 @@
 """Main logic for the homcc server."""
 import threading
 import socketserver
-import hashlib
 import logging
 from tempfile import TemporaryDirectory
 from typing import List, Dict, Tuple
@@ -14,6 +13,8 @@ from homcc.common.messages import (
     DependencyRequestMessage,
     CompilationResultMessage,
 )
+
+from homcc.common.hashing import hash_file_with_bytes
 
 from homcc.server.environment import (
     create_root_temp_folder,
@@ -43,7 +44,7 @@ class TCPServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
 class TCPRequestHandler(socketserver.BaseRequestHandler):
     """Handles all requests received from the client."""
 
-    BUFFER_SIZE = 4096
+    BUFFER_SIZE = 65536
 
     mapped_dependencies: Dict[str, str] = {}
     """All dependencies for the current compilation, mapped to server paths."""
@@ -88,13 +89,13 @@ class TCPRequestHandler(socketserver.BaseRequestHandler):
 
     @_handle_message.register
     def _handle_dependency_reply_message(self, message: DependencyReplyMessage):
-        logger.info("Handling DependencyReplyMessage...")
+        logger.debug("Handling DependencyReplyMessage...")
         logger.debug("Len of dependency reply payload is %i", message.get_further_payload_size())
 
         dependency_content = message.get_content()
-        dependency_hash, dependency_path = next(iter(self.needed_dependencies.items()))
+        dependency_path, dependency_hash = next(iter(self.needed_dependencies.items()))
 
-        retrieved_dependency_hash = hashlib.sha1(dependency_content).hexdigest()
+        retrieved_dependency_hash = hash_file_with_bytes(dependency_content)
 
         # verify that the hashes match
         if dependency_hash != retrieved_dependency_hash:
@@ -104,7 +105,7 @@ class TCPRequestHandler(socketserver.BaseRequestHandler):
                 dependency_path,
             )
         else:
-            del self.needed_dependencies[dependency_hash]
+            del self.needed_dependencies[dependency_path]
             save_dependency(dependency_path, dependency_content)
 
         if not self._request_next_dependency():
@@ -121,11 +122,11 @@ class TCPRequestHandler(socketserver.BaseRequestHandler):
         """Requests a dependency with the given sha1sum from the client.
         Returns False if there is nothing to request any more."""
         if len(self.needed_dependencies) > 0:
-            next_needed_hash = next(iter(self.needed_dependencies.keys()))
+            next_needed_hash = next(iter(self.needed_dependencies.values()))
 
             request_message = DependencyRequestMessage(next_needed_hash)
 
-            logger.info("Sending request for dependency with hash %s", str(request_message.get_sha1sum()))
+            logger.debug("Sending request for dependency with hash %s", str(request_message.get_sha1sum()))
             self.request.sendall(request_message.to_bytes())
 
         return len(self.needed_dependencies) > 0
