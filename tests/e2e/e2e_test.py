@@ -26,6 +26,7 @@ class TestEndToEnd:
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             encoding="utf-8",
+            # TODO(s.pirsch): add --DEBUG flag when external client configuration is implemented (CPL-6419)
         )
 
     @pytest.fixture(autouse=True)
