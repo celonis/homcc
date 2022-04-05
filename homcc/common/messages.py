@@ -18,6 +18,7 @@ class MessageType(Enum):
     DependencyRequestMessage = auto()
     DependencyReplyMessage = auto()
     CompilationResultMessage = auto()
+    ConnectionRefusedMessage = auto()
 
     def __str__(self):
         return str(self.name)
@@ -97,6 +98,8 @@ class Message(ABC):
             return DependencyReplyMessage.from_dict(json_dict)
         elif message_type == MessageType.CompilationResultMessage:
             return CompilationResultMessage.from_dict(json_dict)
+        elif message_type == MessageType.ConnectionRefusedMessage:
+            return ConnectionRefusedMessage()
         else:
             raise ValueError(f"{message_type} is not a valid message type. Can not parse message.")
 
@@ -380,3 +383,10 @@ class CompilationResultMessage(Message):
         return_code = json_dict["return_code"]
 
         return CompilationResultMessage(object_files, stdout, stderr, return_code)
+
+
+class ConnectionRefusedMessage(Message):
+    """Message that indicates that the server has declined a connection."""
+
+    def __init__(self) -> None:
+        super().__init__(MessageType.ConnectionRefusedMessage)

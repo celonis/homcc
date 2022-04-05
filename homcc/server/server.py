@@ -5,9 +5,11 @@ import logging
 from tempfile import TemporaryDirectory
 from typing import List, Dict, Tuple
 from functools import singledispatchmethod
+from socket import SHUT_RD
 
 from homcc.common.messages import (
     ArgumentMessage,
+    ConnectionRefusedMessage,
     Message,
     DependencyReplyMessage,
     DependencyRequestMessage,
@@ -31,11 +33,31 @@ logger = logging.getLogger(__name__)
 
 
 class TCPServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
+    MAX_AMOUNT_CONNECTIONS = 48
+
     root_temp_folder: TemporaryDirectory
+    current_amount_connections: int
 
     def __init__(self, server_address, RequestHandlerClass) -> None:
         super().__init__(server_address, RequestHandlerClass)
         self.root_temp_folder = create_root_temp_folder()
+        self.current_amount_connections = 0
+
+    def verify_request(self, request, _) -> bool:
+        accept_connection = self.current_amount_connections < self.MAX_AMOUNT_CONNECTIONS
+
+        if not accept_connection:
+            logger.info(
+                "Not accepting new connection, as max limit of #%i connections is already reached.",
+                self.MAX_AMOUNT_CONNECTIONS,
+            )
+
+            connection_refused_message = ConnectionRefusedMessage()
+            request.sendall(connection_refused_message.to_bytes())
+            request.shutdown(SHUT_RD)
+            request.close()
+
+        return accept_connection
 
     def __del__(self) -> None:
         self.root_temp_folder.cleanup()
@@ -156,11 +178,13 @@ class TCPRequestHandler(socketserver.BaseRequestHandler):
     def handle(self):
         """Handles incoming requests. Returning from this functions means
         that the connection will be closed from the server side."""
+        self.server.current_amount_connections += 1
         while True:
             recv_bytes: bytearray = self.recv()
 
             if len(recv_bytes) == 0:
                 logger.info("Connection closed gracefully.")
+                self.server.current_amount_connections -= 1
                 return
 
             bytes_needed: int = Message.MINIMUM_SIZE_BYTES
@@ -177,6 +201,7 @@ class TCPRequestHandler(socketserver.BaseRequestHandler):
 
                     if len(further_recv_bytes) == 0:
                         logger.error("Connection closed while only partly received a message. Ungraceful disconnect.")
+                        self.server.current_amount_connections -= 1
                         return
 
                     recv_bytes += further_recv_bytes
