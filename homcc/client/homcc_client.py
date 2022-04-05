@@ -7,6 +7,8 @@ import logging
 import sys
 import os
 
+sys.path.append(os.path.join(os.path.dirname(__file__), "../.."))
+
 from pathlib import Path
 from typing import Dict, Set
 
@@ -21,6 +23,8 @@ from homcc.client.client_utils import (
     link_object_files,
 )
 from homcc.common.messages import Message, CompilationResultMessage, DependencyRequestMessage
+
+logger: logging.Logger = logging.getLogger(__name__)
 
 
 async def main() -> int:
@@ -117,8 +121,11 @@ async def main() -> int:
         return local_compile(arguments)
 
 
-if __name__ == "__main__":
+def init():
     # TODO(s.pirsch): make logging level configurable via caller or config file
     logging.basicConfig(level=logging.DEBUG)
-    logger: logging.Logger = logging.getLogger(__name__)
     sys.exit(asyncio.run(main()))
+
+
+if __name__ == "__main__":
+    init()
