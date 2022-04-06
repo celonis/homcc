@@ -29,7 +29,7 @@ def find_dependencies(arguments: Arguments) -> Set[str]:
         # execute preprocessor command, e.g.: "g++ main.cpp -MM"
         result: ArgumentsExecutionResult = arguments.dependency_finding().execute(check=True)
     except subprocess.CalledProcessError as err:
-        logger.error("Preprocessor error:\n%s", err.stderr)  # TODO(s.pirsch): fix doubled stderr message
+        logger.error("Preprocessor error:\n%s", err.stderr)
         raise CompilerError(err) from err
 
     if result.stdout:
