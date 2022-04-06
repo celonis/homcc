@@ -19,7 +19,7 @@
 
 ### Linting
 - Analyze all python files with [`pylint`](https://github.com/PyCQA/pylint): `pylint -v --rcfile=.pylintrc *.py homcc tests`
-- Check static typing of all python files with [`mypy`](https://github.com/python/mypy): `mypy *.py homcc tests`
+- Check static typing of all python files with [`mypy`](https://github.com/python/mypy): `mypy --pretty *.py homcc tests`
 
 
 ### Formatting

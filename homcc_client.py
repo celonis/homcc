@@ -20,6 +20,7 @@ from homcc.client.client_utils import (
     local_compile,
     link_object_files,
 )
+from homcc.common.logging import Formatter, FormatterConfig, FormatterDestination, setup_logging
 from homcc.common.messages import Message, CompilationResultMessage, DependencyRequestMessage
 
 
@@ -119,6 +120,10 @@ async def main() -> int:
 
 if __name__ == "__main__":
     # TODO(s.pirsch): make logging level configurable via caller or config file
-    logging.basicConfig(level=logging.DEBUG)
+    setup_logging(
+        formatter=Formatter.CLIENT,
+        config=FormatterConfig.COLORED,
+        destination=FormatterDestination.STREAM,
+    )
     logger: logging.Logger = logging.getLogger(__name__)
     sys.exit(asyncio.run(main()))
