@@ -1,7 +1,9 @@
 """End to end integration tests, testing both the client and the server."""
 
-import subprocess
 import pytest
+
+import os
+import subprocess
 
 from pathlib import Path
 
@@ -9,19 +11,23 @@ from pathlib import Path
 class TestEndToEnd:
     """End to end integration tests."""
 
-    def start_server(self) -> subprocess.Popen:
-        return subprocess.Popen(["./homcc_server.py"], stdout=subprocess.PIPE)
+    def start_server(self, _unused_tcp_port: int) -> subprocess.Popen:
+        return subprocess.Popen(["./homcc_server.py"], stdout=subprocess.PIPE) # TODO: f"--port={unused_tcp_port}"
 
-    def start_client(self) -> str:
-        return subprocess.check_output(
+    def start_client(self, _unused_tcp_port: int) -> subprocess.CompletedProcess:
+        return subprocess.run(
             [
                 "./homcc_client.py",
                 "g++",
+                # f"--port={unused_tcp_port}",
+                # "--DEBUG",
                 "-Iexample/include",
                 "example/src/foo.cpp",
                 "example/src/main.cpp",
                 "-oe2e-test",
             ],
+            check=True,
+            stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             encoding="utf-8",
         )
@@ -32,17 +38,18 @@ class TestEndToEnd:
         Path("e2e-test").unlink(missing_ok=True)
 
     @pytest.mark.timeout(10)
-    def test_end_to_end(self):
+    def test_end_to_end(self, unused_tcp_port: int):
+        with self.start_server(unused_tcp_port) as server_process:
+            result = self.start_client(unused_tcp_port)
 
-        with self.start_server() as server_process:
-            client_stdout = self.start_client()
-
-            # make sure we actually compiled at the server (and did not fall back to local compilation),
+            # make sure we actually compile at the server (and did not fall back to local compilation),
             # i.e. look at the log messages if the compilation of the file on the server side was okay
-            assert '"return_code": 0' in client_stdout
-            assert "Compiling locally instead" not in client_stdout
+            assert result.returncode == os.EX_OK
+            assert '"return_code": 0' in result.stdout
+            assert "Compiling locally instead" not in result.stdout
+            assert result.stdout
 
-            binary_stdout = subprocess.check_output(["./e2e-test"]).decode("utf-8")
-            assert binary_stdout == "homcc\n"
+            executable_stdout = subprocess.check_output(["./e2e-test"], encoding="utf-8")
+            assert executable_stdout == "homcc\n"
 
             server_process.kill()

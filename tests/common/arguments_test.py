@@ -2,7 +2,7 @@
 import pytest
 import shutil
 
-from typing import List, Optional
+from typing import Dict, List, Optional, Union
 from homcc.common.arguments import Arguments, ArgumentsOutputError
 
 
@@ -37,22 +37,52 @@ class TestArguments:
         for compiler in compilers:
             assert Arguments.is_compiler(compiler)
 
-    def test_from_argv(self):
-        specified_compiler_args: List[str] = ["homcc_client.py", "g++", "-c", "foo.cpp"]
-        assert Arguments.from_argv(specified_compiler_args) == specified_compiler_args[1:]
+    def test_from_args(self):
+        with pytest.raises(ValueError):
+            _: Arguments = Arguments([])
 
-        unspecified_compiler_args: List[str] = ["homcc_client.py", "-c", "foo.cpp"]
-        assert Arguments.from_argv(unspecified_compiler_args, "g++") == specified_compiler_args[1:]
+        specified_compiler_args: List[str] = ["g++", "-c", "foo.cpp"]
+        assert Arguments.from_args(specified_compiler_args[0], specified_compiler_args[1:]) == specified_compiler_args
+
+        unspecified_compiler_args: List[str] = specified_compiler_args[1:]
+        assert Arguments.from_args(unspecified_compiler_args[0], unspecified_compiler_args[1:]) == [Arguments.default_compiler] + unspecified_compiler_args
 
     def test_is_sendable(self):
-        sendable_args: List[str] = ["g++", "foo.cpp", "-ofoo"]
+        args: List[str] = ["g++", "foo.cpp"]
+        assert Arguments(args).is_sendable()
+
+        sendable_args: List[str] = args + ["-c", "-ofoo"]
         assert Arguments(sendable_args).is_sendable()
 
-        preprocessor_args: List[str] = ["g++", "foo.cpp", "-E"]
-        assert not Arguments(preprocessor_args).is_sendable()
+        # unsendability
+        unsendable_args_dict: Dict[str, Union[str, List[str]]] = {
+            # extract all relevant argument fields from Argument.Unsendable
+            k: v
+            for k, v in vars(Arguments.Unsendable).items()
+            if not (k.startswith("__") and k.endswith("__"))
+        }
 
-        no_assembly_args: List[str] = ["g++", "foo.cpp", "-S"]
-        assert not Arguments(no_assembly_args).is_sendable()
+        # unsendable prefix args: naming ends on "_prefix"
+        unsendable_prefix_args: List[str] = [v for k, v in unsendable_args_dict.items() if k.endswith("_prefix")]
+
+        for prefix_arg in unsendable_prefix_args:
+            unsendable_args: List[str] = args + [f"{prefix_arg}dummy_suffix"]
+            assert not Arguments(unsendable_args).is_sendable()
+
+        # unsendable single args: naming ends on "_arg"
+        unsendable_single_args: List[str] = [v for k, v in unsendable_args_dict.items() if k.endswith("_arg")]
+
+        for single_arg in unsendable_single_args:
+            unsendable_args: List[str] = args + [single_arg]
+            assert not Arguments(unsendable_args).is_sendable()
+
+        # unsendable arg families: naming ends on "_args"
+        unsendable_arg_families: List[List[str]] = [v for k, v in unsendable_args_dict.items() if k.endswith("_args")]
+
+        for arg_family in unsendable_arg_families:
+            for arg in arg_family:
+                unsendable_args: List[str] = args + [arg]
+                assert not Arguments(unsendable_args).is_sendable()
 
     def test_is_linking(self):
         linking_args: List[str] = ["g++", "foo.cpp", "-ofoo"]
@@ -84,7 +114,6 @@ class TestArguments:
         with pytest.raises(ArgumentsOutputError):
             ill_formed_output_args: List[str] = args + ["-ofoo", "-o"]
             _: Optional[str] = Arguments(ill_formed_output_args).output
-            assert False
 
     def test_add_output_arg(self):
         output: str = "foo"

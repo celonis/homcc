@@ -2,11 +2,14 @@
 fundamental utility functions and Exception class for the homcc client to interact with the linux
 command line and the specified compiler
 """
-
 import logging
+import os
 import subprocess
+import sys
 
-from typing import Dict, Set, List
+from abc import ABC, abstractmethod
+from argparse import ArgumentParser, Action, Namespace
+from typing import Dict, List, Optional, Set, Tuple
 
 from homcc.common.arguments import Arguments, ArgumentsExecutionResult
 from homcc.common.hashing import hash_file_with_path
@@ -23,6 +26,132 @@ class CompilerError(subprocess.CalledProcessError):
         super().__init__(err.returncode, err.cmd, err.output, err.stderr)
 
 
+class ShowAction(ABC, Action):
+    """
+    Abstract base class to ensure correct initialization of flag arguments that have the behavior of "show and exit"
+    for argparse
+    """
+
+    def __init__(self, **kwargs):
+        # ensure that the argument acts as a flag
+        nargs: int = kwargs.pop("nargs", 0)
+
+        if nargs != 0:
+            raise ValueError(f"nargs is {nargs}, but {self.__class__.__name__} requires nargs to be 0")
+
+        # use class docstring as help description if none is provided
+        help_: str = kwargs.pop("help", self.__doc__)
+
+        super().__init__(nargs=nargs, help=help_, **kwargs)
+
+    @abstractmethod
+    def __call__(self, *_):
+        pass
+
+
+class ShowVersion(ShowAction):
+    """show version and exit"""
+
+    def __call__(self, *_):
+        print("homcc 0.0.1")
+        sys.exit(os.EX_OK)
+
+
+class ShowHosts(ShowAction):
+    """show host list and exit"""
+
+    def __call__(self, *_):
+        print("localhost/12")
+        sys.exit(os.EX_OK)
+
+
+class ShowConcurrencyLevel(ShowAction):
+    """show the concurrency level, as calculated from the host list, and exit"""
+
+    def __call__(self, *_):
+        print("12")
+        sys.exit(os.EX_OK)
+
+
+class ShowDependencies(ShowAction):
+    """show the dependencies that would be sent to the server, as calculated from the given arguments, and exit"""
+
+    def __call__(self, parser: ArgumentParser, namespace: Namespace, values, option_string: Optional[str] = None):
+        # TODO
+        namespace.dependencies = True
+
+
+# class ClientArgumentParser(ArgumentParser):
+#    def __init__(self):
+#        pass
+
+
+def parse_args(argv: List[str]) -> Tuple[Namespace, List[str]]:
+    parser: ArgumentParser = ArgumentParser(
+        description="homcc - Home-Office friendly distcc replacement",
+        allow_abbrev=False,
+        add_help=False,
+    )
+
+    group = parser.add_mutually_exclusive_group()
+    group.add_argument("--help", "-h", action="help", help="show this help message and exit")
+    group.add_argument("--version", "-v", action=ShowVersion)
+    group.add_argument("--hosts", "--show-hosts", action=ShowHosts)
+    group.add_argument("-j", action=ShowConcurrencyLevel)
+    group.add_argument("--dependencies", "--scan--includes", action=ShowDependencies)
+
+    # subparsers = parser.add_subparsers()
+    # subparsers.add_parser("COMPILER OPTIONS")
+
+    # parser.add_argument("--randomize", action="store_true", help="randomize the server list before execution")
+
+    parser.add_argument(
+        "--host",
+        required=False,
+        type=str,
+        help="address of the remote compilation server",
+    )
+
+    parser.add_argument(
+        "--port",
+        required=False,
+        type=int,
+        help="port for connecting to remote compilation server",
+    )
+
+    parser.add_argument(
+        "--timeout",
+        required=False,
+        type=float,
+        help="timeout in seconds to wait for a response from the remote compilation server",
+    )
+
+    parser.add_argument(
+        "--DEBUG",
+        required=False,
+        action="store_true",
+        help="enables the DEBUG mode which prints detailed, colored logging messages to the terminal",
+    )
+
+    # capturing all remaining arguments via nargs=argparse.REMAINDER is sadly not working as intended here, so we use
+    # the dummy "COMPILER_OR_ARGUMENT" argument for the automatically generated usage string instead and handle the
+    # remaining, unknown arguments separately in the callee
+    parser.add_argument(
+        "COMPILER_OR_ARGUMENT",
+        type=str,
+        metavar="[COMPILER] ARGUMENTS",
+        help=f"COMPILER, if not specified explicitly, is either read from the config file or defaults to "
+        f'"{Arguments.default_compiler}", remaining ARGUMENTS will be forwarded to the COMPILER',
+    )
+
+    return parser.parse_known_args(argv)
+
+
+# TODO
+def load_config_file() -> str:
+    return str()
+
+
 def find_dependencies(arguments: Arguments) -> Set[str]:
     """get unique set of dependencies by calling the preprocessor and filtering the result"""
     try:
@@ -36,6 +165,7 @@ def find_dependencies(arguments: Arguments) -> Set[str]:
         logger.debug("Preprocessor result:\n%s", result.stdout)
 
     excluded_dependency_prefixes = ["/usr/include", "/usr/lib"]
+
     # create unique set of dependencies by filtering the preprocessor result
     def is_sendable_dependency(dependency: str) -> bool:
         if dependency in [f"{Arguments.preprocessor_target}:", "\\"]:
@@ -86,7 +216,7 @@ def link_object_files(arguments: Arguments, object_files: List[ObjectFile]) -> i
     return result.return_code
 
 
-def local_compile(arguments: Arguments) -> int:
+def compile_locally(arguments: Arguments) -> int:
     """execute local compilation"""
     logger.warning("Compiling locally instead!")
     try:

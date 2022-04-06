@@ -79,7 +79,7 @@ class TCPClient:
         content: bytearray = bytearray(Path(dependency).read_bytes())
         await self._send(DependencyReplyMessage(content))
 
-    async def receive(self, timeout: Optional[int]) -> Message:
+    async def receive(self, timeout: Optional[float]) -> Message:
         """receive data from homcc server with timeout limit and convert to message"""
         try:
             return await asyncio.wait_for(self._timed_receive(), timeout=timeout)

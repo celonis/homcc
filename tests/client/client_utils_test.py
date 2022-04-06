@@ -1,6 +1,8 @@
 """ Tests for client/client_utils.py"""
 import os
+import sys
 
+from argparse import Namespace
 from datetime import datetime
 from pathlib import Path
 from typing import List, Set
@@ -8,7 +10,7 @@ from typing import List, Set
 import pytest
 
 from homcc.common.arguments import Arguments
-from homcc.client.client_utils import CompilerError, find_dependencies, local_compile
+from homcc.client.client_utils import CompilerError, find_dependencies, compile_locally, parse_args
 
 
 class TestClientUtils:
@@ -23,6 +25,22 @@ class TestClientUtils:
 
         self.example_out_dir: Path = self.example_base_dir / "build"
         self.example_out_dir.mkdir(exist_ok=True)
+
+    def test_parse_args(self):
+        sys.argv[0] = "homcc_client.py"
+        #optional_info_args: List[str] = ["-h", "-v", "--hosts", "-j", "--dependencies"]
+
+        #sys.argv[1] = ["-h"]
+        #_: Namespace = parse_args(["-h"])
+        assert True
+
+        #for optional_info_arg in optional_info_args:
+        #    _: Namespace = parse_args([optional_info_arg])  # run every arg to ensure that no ArgumentError was raised
+
+        # with pytest.raises(ArgumentError):
+        #    parse_args(["foobar"])
+
+        #compiler_args: List[str] = ["g++", "-Iexample/include", "example/src/*.cpp"]
 
     def test_find_dependencies_without_class_impl(self):
         # absolute paths of: "g++ main.cpp -Iinclude/"
@@ -77,10 +95,10 @@ class TestClientUtils:
         ]
 
         assert not example_out_file.exists()
-        assert local_compile(Arguments(args)) == os.EX_OK
+        assert compile_locally(Arguments(args)) == os.EX_OK
         assert example_out_file.exists()
 
         example_out_file.unlink()
 
         # intentionally execute an erroneous call
-        assert local_compile(Arguments(args + ["-OError"])) != os.EX_OK
+        assert compile_locally(Arguments(args + ["-OError"])) != os.EX_OK
