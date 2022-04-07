@@ -80,7 +80,7 @@ class Arguments:
         ]
 
     def __init__(self, args: List[str]):
-        if len(args) <= 1:
+        if len(args) == 0:
             raise ValueError("Not enough arguments supplied to construct Arguments")
 
         self._args: List[str] = args
@@ -107,13 +107,13 @@ class Arguments:
         """check whether an argument looks like a source file"""
         # if we enable remote assembly, additionally allow file extension ".s"
         source_file_pattern: str = r"^\S+\.(i|ii|c|cc|cp|cpp|cxx|c\+\+|m|mm|mi|mii)$"  # e.g. "foo.cpp"
-        return re.match(source_file_pattern, arg.lower()) is not None
+        return re.match(source_file_pattern, arg, re.IGNORECASE) is not None
 
     @staticmethod
     def is_object_file(arg: str) -> bool:
         """check whether an argument looks like an object file"""
         object_file_pattern: str = r"^\S+\.o$"  # e.g. "foo.o"
-        return re.match(object_file_pattern, arg.lower()) is not None
+        return re.match(object_file_pattern, arg, re.IGNORECASE) is not None
 
     @staticmethod
     def is_executable(arg: str) -> bool:
@@ -267,6 +267,9 @@ class Arguments:
         check: bool = kwargs.pop("check", False)
         encoding_: str = kwargs.pop("encoding", encoding)
         capture_output: bool = kwargs.pop("capture_output", True)
+
+        if "stdout" in kwargs or "stderr" in kwargs:
+            capture_output = False
 
         if "shell" in kwargs:
             logger.error("Arguments does currently not support shell execution!")

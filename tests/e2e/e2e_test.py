@@ -11,15 +11,15 @@ from pathlib import Path
 class TestEndToEnd:
     """End to end integration tests."""
 
-    def start_server(self, _unused_tcp_port: int) -> subprocess.Popen:
-        return subprocess.Popen(["./homcc_server.py"], stdout=subprocess.PIPE) # TODO: f"--port={unused_tcp_port}"
+    def start_server(self, unused_tcp_port: int) -> subprocess.Popen:
+        return subprocess.Popen(["./homcc_server.py", f"--port={unused_tcp_port}"], stdout=subprocess.PIPE)
 
-    def start_client(self, _unused_tcp_port: int) -> subprocess.CompletedProcess:
+    def start_client(self, unused_tcp_port: int) -> subprocess.CompletedProcess:
         return subprocess.run(
             [
                 "./homcc_client.py",
                 "g++",
-                # f"--port={unused_tcp_port}",
+                f"--destination=localhost:{unused_tcp_port}",
                 # "--DEBUG",
                 "-Iexample/include",
                 "example/src/foo.cpp",

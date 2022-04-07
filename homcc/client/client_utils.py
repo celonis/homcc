@@ -4,12 +4,14 @@ command line and the specified compiler
 """
 import logging
 import os
+import re
 import subprocess
 import sys
 
 from abc import ABC, abstractmethod
-from argparse import ArgumentParser, Action, Namespace
-from typing import Dict, List, Optional, Set, Tuple
+from argparse import ArgumentParser, Action, Namespace, RawTextHelpFormatter
+from enum import Enum, auto
+from typing import Any, Dict, List, Optional, Set, Sequence, Tuple, Union
 
 from homcc.common.arguments import Arguments, ArgumentsExecutionResult
 from homcc.common.hashing import hash_file_with_path
@@ -45,7 +47,13 @@ class ShowAction(ABC, Action):
         super().__init__(nargs=nargs, help=help_, **kwargs)
 
     @abstractmethod
-    def __call__(self, *_):
+    def __call__(
+        self,
+        parser: ArgumentParser,
+        namespace: Namespace,
+        values: Union[str, Sequence[Any], None],
+        option_string: Optional[str] = None,
+    ):
         pass
 
 
@@ -91,14 +99,15 @@ def parse_args(argv: List[str]) -> Tuple[Namespace, List[str]]:
         description="homcc - Home-Office friendly distcc replacement",
         allow_abbrev=False,
         add_help=False,
+        formatter_class=RawTextHelpFormatter,
     )
 
-    group = parser.add_mutually_exclusive_group()
-    group.add_argument("--help", "-h", action="help", help="show this help message and exit")
-    group.add_argument("--version", "-v", action=ShowVersion)
-    group.add_argument("--hosts", "--show-hosts", action=ShowHosts)
-    group.add_argument("-j", action=ShowConcurrencyLevel)
-    group.add_argument("--dependencies", "--scan--includes", action=ShowDependencies)
+    show_and_exit = parser.add_mutually_exclusive_group()
+    show_and_exit.add_argument("--help", "-h", action="help", help="show this help message and exit")
+    show_and_exit.add_argument("--version", action=ShowVersion)
+    show_and_exit.add_argument("--hosts", "--show-hosts", action=ShowHosts)
+    show_and_exit.add_argument("-j", action=ShowConcurrencyLevel)
+    show_and_exit.add_argument("--dependencies", "--scan-includes", action=ShowDependencies)
 
     # subparsers = parser.add_subparsers()
     # subparsers.add_parser("COMPILER OPTIONS")
@@ -106,17 +115,17 @@ def parse_args(argv: List[str]) -> Tuple[Namespace, List[str]]:
     # parser.add_argument("--randomize", action="store_true", help="randomize the server list before execution")
 
     parser.add_argument(
-        "--host",
+        "--destination",
+        "--dest",
         required=False,
         type=str,
-        help="address of the remote compilation server",
-    )
-
-    parser.add_argument(
-        "--port",
-        required=False,
-        type=int,
-        help="port for connecting to remote compilation server",
+        help="DESTINATION defining a TCP connection to the HOST:\n"
+        "\tHOST\t\tTCP connection to specified HOST with PORT either from config file or default port 3633\n"
+        "\tHOST:PORT\tTCP connection to specified HOST with specified PORT\n"
+        # "\t@HOST\t\tSSH connection to specified HOST\n"
+        # "\tUSER@HOST\tSSH connection to specified USER at HOST\n"
+        "\tDESTINATION,COMPRESSION defines any DESTINATION option with additional COMPRESSION information\n"
+        "\t\tlzo: Lempel–Ziv–Oberhumer compression",
     )
 
     parser.add_argument(
@@ -147,7 +156,83 @@ def parse_args(argv: List[str]) -> Tuple[Namespace, List[str]]:
     return parser.parse_known_args(argv)
 
 
-# TODO
+class DestinationParser:
+    """Helper class to parse DESTINATION arguments provided via the CLI"""
+
+    class Destination(Enum):
+        NONE = auto()
+        TCP = auto()
+        SSH = auto()
+
+    def __init__(self, destination: str):
+        self.destination: DestinationParser.Destination = self.Destination.NONE
+        self._dict: Dict[str, str] = {}
+
+        # host_pattern: str = r"^$"  # either name, ipv4 or ipv6 address
+
+        # DESTINATION,COMPRESSION
+        match: Optional[re.Match] = re.match(r"^(\S+),(\S+)$", destination)
+
+        if match:
+            destination, compression = match.groups()
+            self["compression"] = compression
+
+        # HOST:PORT
+        match = re.match(r"^([\w.]+):(\d+)$", destination)  # dummy IPv4 test; TODO: IPv6?
+
+        if match:
+            host, port = match.groups()
+            self["host"] = host
+            self["port"] = port
+            self.destination = self.Destination.TCP
+            return
+
+        # USER@HOST
+        match = re.match(r"^(\w+)@(\w+)$", destination)
+
+        if match:
+            user, host = match.groups()
+            self["user"] = user
+            self["host"] = host
+            self.destination = self.Destination.SSH
+            return
+
+        # @HOST
+        match = re.match(r"^@(\w+)$", destination)
+
+        if match:
+            host = match.group(1)
+            self["host"] = host
+            self.destination = self.Destination.SSH
+            return
+
+        # HOST
+        # this is a pretty generous pattern, but we'll use it as a fallback and fail on connection if provided faultily
+        match = re.match(r"^(\S+)$", destination)
+
+        if match:
+            self.destination = self.Destination.TCP
+            self["host"] = destination
+            return
+
+        raise ValueError(
+            f"Destination {destination} could not be parsed correctly, please provide it in the correct format!"
+        )
+
+    def __getitem__(self, item: str) -> Optional[str]:
+        return self._dict.get(item, None)
+
+    def __setitem__(self, key, value):
+        self._dict[key] = value
+
+    def is_tcp(self) -> bool:
+        return self.destination == self.Destination.TCP
+
+    def is_ssh(self) -> bool:
+        return self.destination == self.Destination.SSH
+
+
+# TODO: load config file
 def load_config_file() -> str:
     return str()
 

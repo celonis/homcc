@@ -45,7 +45,10 @@ class TestArguments:
         assert Arguments.from_args(specified_compiler_args[0], specified_compiler_args[1:]) == specified_compiler_args
 
         unspecified_compiler_args: List[str] = specified_compiler_args[1:]
-        assert Arguments.from_args(unspecified_compiler_args[0], unspecified_compiler_args[1:]) == [Arguments.default_compiler] + unspecified_compiler_args
+        assert (
+            Arguments.from_args(unspecified_compiler_args[0], unspecified_compiler_args[1:])
+            == [Arguments.default_compiler] + unspecified_compiler_args
+        )
 
     def test_is_sendable(self):
         args: List[str] = ["g++", "foo.cpp"]

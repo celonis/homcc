@@ -14,6 +14,7 @@ from homcc.common.arguments import Arguments, ArgumentsExecutionResult
 from homcc.client.client import TCPClient, TCPClientError, UnexpectedMessageTypeError
 from homcc.client.client_utils import (
     CompilerError,
+    DestinationParser,
     calculate_dependency_dict,
     compile_locally,
     find_dependencies,
@@ -106,23 +107,16 @@ def main():
     homcc_args, compiler_args = parse_args(sys.argv[1:])
     homcc_args_dict: Dict[str, Any] = vars(homcc_args)
 
-    #print(vargs)
-    #print(unknown)
-
-    #print("homcc_client.py:\t", vargs)
+    print(f"homcc_client.py:\t{homcc_args_dict}\n\t\t\t{compiler_args}")
 
     show_dependencies: bool = homcc_args_dict.get("dependencies")
 
-    host: Optional[str] = homcc_args_dict.get("host", None)
-    port: Optional[int] = homcc_args_dict.get("port", None)
-    timeout: Optional[float] = homcc_args_dict.get("timeout", None)
-    # "COMPILER_OPTIONS" is either the compiler or the very first option
-    compiler_or_argument: Optional[str] = homcc_args_dict.get("COMPILER_OR_ARGUMENT")
+    destination: Optional[str] = homcc_args_dict.pop("destination")
+    timeout: Optional[float] = homcc_args_dict.pop("timeout")
+    compiler_or_argument: str = homcc_args_dict.pop("COMPILER_OR_ARGUMENT")  # either compiler or very first argument
 
     # TODO: load config file and/or host file here
     # overwrite compiler with default specified in the config file
-
-    arguments: Arguments = Arguments.from_args(compiler_or_argument, compiler_args)
 
     if homcc_args_dict["DEBUG"]:
         print("DEBUG")
@@ -132,6 +126,8 @@ def main():
         homcc_args_dict["DEBUG"] = True
 
     logging.basicConfig(level=logging.DEBUG)
+
+    arguments: Arguments = Arguments.from_args(compiler_or_argument, compiler_args)
 
     if show_dependencies:
         try:
@@ -148,13 +144,25 @@ def main():
 
         sys.exit(os.EX_OK)
 
-    if not host:
+    if not destination:
         host = "localhost"
         # TODO: get host address(es) from config file, no default
 
-    if not port:
-        port = 3633
-        # TODO: get port from config file, default: 3633
+    parsed_destination = DestinationParser(destination)
+
+    if parsed_destination.is_tcp():
+        host = parsed_destination["host"]
+        port = parsed_destination["port"]
+        if not port:
+            port = 3633
+    elif parsed_destination.is_ssh():
+        # host = parsed_destination["host"]
+        # user = parsed_destination["user"]
+        raise NotImplementedError
+    else:
+        raise ValueError(
+            f"Destination type of {destination} could not be parsed correctly, please provide it in the correct format!"
+        )
 
     if not timeout:
         timeout = 10
