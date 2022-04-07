@@ -8,19 +8,20 @@ import sys
 import os
 
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set
+from typing import Dict, Optional, Set
 
 from homcc.common.arguments import Arguments, ArgumentsExecutionResult
 from homcc.client.client import TCPClient, TCPClientError, UnexpectedMessageTypeError
 from homcc.client.client_utils import (
     CompilerError,
-    DestinationParser,
+    ConnectionType,
     calculate_dependency_dict,
     compile_locally,
     find_dependencies,
     invert_dict,
     link_object_files,
     parse_args,
+    parse_destination,
 )
 from homcc.common.messages import Message, CompilationResultMessage, DependencyRequestMessage
 
@@ -104,16 +105,12 @@ async def try_remote_compilation(host: str, port: int, timeout: float, arguments
 
 
 def main():
-    homcc_args, compiler_args = parse_args(sys.argv[1:])
-    homcc_args_dict: Dict[str, Any] = vars(homcc_args)
+    homcc_args_dict, compiler_arguments = parse_args(sys.argv[1:])
 
-    print(f"homcc_client.py:\t{homcc_args_dict}\n\t\t\t{compiler_args}")
+    print(f"homcc_client.py:\t{homcc_args_dict}\n\t\t\t{compiler_arguments}")
 
-    show_dependencies: bool = homcc_args_dict.get("dependencies")
-
-    destination: Optional[str] = homcc_args_dict.pop("destination")
+    destination: Optional[str] = homcc_args_dict.pop("dest")
     timeout: Optional[float] = homcc_args_dict.pop("timeout")
-    compiler_or_argument: str = homcc_args_dict.pop("COMPILER_OR_ARGUMENT")  # either compiler or very first argument
 
     # TODO: load config file and/or host file here
     # overwrite compiler with default specified in the config file
@@ -127,46 +124,28 @@ def main():
 
     logging.basicConfig(level=logging.DEBUG)
 
-    arguments: Arguments = Arguments.from_args(compiler_or_argument, compiler_args)
-
-    if show_dependencies:
-        try:
-            dependencies = find_dependencies(arguments)
-        except CompilerError as err:
-            sys.exit(err.returncode)
-
-        source_files: List[str] = arguments.source_files
-
-        print("Dependencies:")
-        for dependency in dependencies:
-            if dependency not in source_files:
-                print(dependency)
-
-        sys.exit(os.EX_OK)
-
     if not destination:
-        host = "localhost"
-        # TODO: get host address(es) from config file, no default
+        destination = "localhost:3633"
+        # TODO: read destination from config file
+        # raise NotImplementedError
 
-    parsed_destination = DestinationParser(destination)
+    parsed_destination_dict = parse_destination(destination)
 
-    if parsed_destination.is_tcp():
-        host = parsed_destination["host"]
-        port = parsed_destination["port"]
+    if parsed_destination_dict["type"] == ConnectionType.TCP:
+        host = parsed_destination_dict["host"]
+        port = parsed_destination_dict["port"]
         if not port:
             port = 3633
-    elif parsed_destination.is_ssh():
-        # host = parsed_destination["host"]
-        # user = parsed_destination["user"]
+    elif parsed_destination_dict["type"] == ConnectionType.SSH:
+        # host = parsed_destination_dict.get("host")
+        # user = parsed_destination_dict.get("user", None)
         raise NotImplementedError
     else:
-        raise ValueError(
-            f"Destination type of {destination} could not be parsed correctly, please provide it in the correct format!"
-        )
+        raise NotImplementedError  # unreachable
 
     if not timeout:
+        # TODO: get timeout from config file
         timeout = 10
-        # TODO: get timeout from config file, default: 180
 
     # $DISTCC_HOSTS
     # config_file_paths: List[str] = ["$HOMCC_DIR/homcc.yaml", "~/.homcc/homcc.yaml", "/etc/homcc/homcc.yaml"]
@@ -176,7 +155,7 @@ def main():
     #        config_data = yaml.load(config_file, Loader=yaml.Fu)
 
     try:
-        sys.exit(asyncio.run(try_remote_compilation(host, port, timeout, arguments)))
+        sys.exit(asyncio.run(try_remote_compilation(host, port, timeout, compiler_arguments)))
 
     # unrecoverable errors
     except CompilerError as err:
@@ -184,7 +163,7 @@ def main():
 
     # recoverable errors
     except TCPClientError:
-        sys.exit(compile_locally(arguments))
+        sys.exit(compile_locally(compiler_arguments))
 
 
 if __name__ == "__main__":

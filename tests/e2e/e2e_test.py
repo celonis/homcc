@@ -19,7 +19,7 @@ class TestEndToEnd:
             [
                 "./homcc_client.py",
                 "g++",
-                f"--destination=localhost:{unused_tcp_port}",
+                f"--dest=localhost:{unused_tcp_port}",
                 # "--DEBUG",
                 "-Iexample/include",
                 "example/src/foo.cpp",

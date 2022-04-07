@@ -10,7 +10,7 @@ import sys
 
 from abc import ABC, abstractmethod
 from argparse import ArgumentParser, Action, Namespace, RawTextHelpFormatter
-from enum import Enum, auto
+from enum import Enum
 from typing import Any, Dict, List, Optional, Set, Sequence, Tuple, Union
 
 from homcc.common.arguments import Arguments, ArgumentsExecutionResult
@@ -28,10 +28,10 @@ class CompilerError(subprocess.CalledProcessError):
         super().__init__(err.returncode, err.cmd, err.output, err.stderr)
 
 
-class ShowAction(ABC, Action):
+class ShowAndExitAction(ABC, Action):
     """
     Abstract base class to ensure correct initialization of flag arguments that have the behavior of "show and exit"
-    for argparse
+    and enable automatic help documentation for the CLI
     """
 
     def __init__(self, **kwargs):
@@ -57,7 +57,7 @@ class ShowAction(ABC, Action):
         pass
 
 
-class ShowVersion(ShowAction):
+class ShowVersion(ShowAndExitAction):
     """show version and exit"""
 
     def __call__(self, *_):
@@ -65,7 +65,7 @@ class ShowVersion(ShowAction):
         sys.exit(os.EX_OK)
 
 
-class ShowHosts(ShowAction):
+class ShowHosts(ShowAndExitAction):
     """show host list and exit"""
 
     def __call__(self, *_):
@@ -73,7 +73,7 @@ class ShowHosts(ShowAction):
         sys.exit(os.EX_OK)
 
 
-class ShowConcurrencyLevel(ShowAction):
+class ShowConcurrencyLevel(ShowAndExitAction):
     """show the concurrency level, as calculated from the host list, and exit"""
 
     def __call__(self, *_):
@@ -81,20 +81,16 @@ class ShowConcurrencyLevel(ShowAction):
         sys.exit(os.EX_OK)
 
 
-class ShowDependencies(ShowAction):
+class ShowDependencies(ShowAndExitAction):
     """show the dependencies that would be sent to the server, as calculated from the given arguments, and exit"""
 
     def __call__(self, parser: ArgumentParser, namespace: Namespace, values, option_string: Optional[str] = None):
-        # TODO
+        # this action requires unknown arguments (compiler arguments) and can not be accessed here
+        # the functionality of this action is provided in show_dependencies and called by parse_and_handle_args
         namespace.dependencies = True
 
 
-# class ClientArgumentParser(ArgumentParser):
-#    def __init__(self):
-#        pass
-
-
-def parse_args(argv: List[str]) -> Tuple[Namespace, List[str]]:
+def parse_args(args: List[str]) -> Tuple[Dict[str, Any], Arguments]:
     parser: ArgumentParser = ArgumentParser(
         description="homcc - Home-Office friendly distcc replacement",
         allow_abbrev=False,
@@ -115,17 +111,17 @@ def parse_args(argv: List[str]) -> Tuple[Namespace, List[str]]:
     # parser.add_argument("--randomize", action="store_true", help="randomize the server list before execution")
 
     parser.add_argument(
-        "--destination",
         "--dest",
         required=False,
+        metavar="DESTINATION",
         type=str,
-        help="DESTINATION defining a TCP connection to the HOST:\n"
+        help="DESTINATION defines the connection to the remote compilation server:\n"
         "\tHOST\t\tTCP connection to specified HOST with PORT either from config file or default port 3633\n"
         "\tHOST:PORT\tTCP connection to specified HOST with specified PORT\n"
         # "\t@HOST\t\tSSH connection to specified HOST\n"
         # "\tUSER@HOST\tSSH connection to specified USER at HOST\n"
-        "\tDESTINATION,COMPRESSION defines any DESTINATION option with additional COMPRESSION information\n"
-        "\t\tlzo: Lempel–Ziv–Oberhumer compression",
+        "DESTINATION,COMPRESSION defines any DESTINATION option from above with additional COMPRESSION information\n"
+        "\tlzo: Lempel–Ziv–Oberhumer compression",
     )
 
     parser.add_argument(
@@ -142,9 +138,9 @@ def parse_args(argv: List[str]) -> Tuple[Namespace, List[str]]:
         help="enables the DEBUG mode which prints detailed, colored logging messages to the terminal",
     )
 
-    # capturing all remaining arguments via nargs=argparse.REMAINDER is sadly not working as intended here, so we use
-    # the dummy "COMPILER_OR_ARGUMENT" argument for the automatically generated usage string instead and handle the
-    # remaining, unknown arguments separately in the callee
+    # capturing all remaining arguments which represent compiler arguments via nargs=argparse.REMAINDER is sadly not
+    # working as intended here, so we use the dummy "COMPILER_OR_ARGUMENT" argument for the automatically generated
+    # usage string instead and handle the remaining, unknown arguments separately when accessing this argument
     parser.add_argument(
         "COMPILER_OR_ARGUMENT",
         type=str,
@@ -153,83 +149,97 @@ def parse_args(argv: List[str]) -> Tuple[Namespace, List[str]]:
         f'"{Arguments.default_compiler}", remaining ARGUMENTS will be forwarded to the COMPILER',
     )
 
-    return parser.parse_known_args(argv)
+    homcc_args_namespace, compiler_args = parser.parse_known_args(args)
+    homcc_args_dict = vars(homcc_args_namespace)
+
+    show_dependencies_: Optional[bool] = homcc_args_dict.get("dependencies")
+
+    compiler_or_argument: str = homcc_args_dict.pop("COMPILER_OR_ARGUMENT")  # either compiler or very first argument
+    compiler_arguments: Arguments = Arguments.from_args(compiler_or_argument, compiler_args)
+
+    # all remaining "show and exit" actions should be handled here:
+    if show_dependencies_:
+        show_dependencies(compiler_arguments)
+
+    return homcc_args_dict, compiler_arguments
 
 
-class DestinationParser:
-    """Helper class to parse DESTINATION arguments provided via the CLI"""
+class ConnectionType(str, Enum):
+    """Helper class to distinguish between different destination connection types"""
 
-    class Destination(Enum):
-        NONE = auto()
-        TCP = auto()
-        SSH = auto()
+    TCP = "TCP"
+    SSH = "SSH"
 
-    def __init__(self, destination: str):
-        self.destination: DestinationParser.Destination = self.Destination.NONE
-        self._dict: Dict[str, str] = {}
 
-        # host_pattern: str = r"^$"  # either name, ipv4 or ipv6 address
+def parse_destination(destination: str) -> Dict[str, Optional[str]]:
+    destination_dict: Dict[str, Optional[str]] = dict.fromkeys(["type", "host", "port", "user", "compression"], None)
 
-        # DESTINATION,COMPRESSION
-        match: Optional[re.Match] = re.match(r"^(\S+),(\S+)$", destination)
+    # host_pattern: str = r"^$"  # either name, ipv4 or ipv6 address
 
-        if match:
-            destination, compression = match.groups()
-            self["compression"] = compression
+    # DESTINATION,COMPRESSION
+    match: Optional[re.Match] = re.match(r"^(\S+),(\S+)$", destination)
 
-        # HOST:PORT
-        match = re.match(r"^([\w.]+):(\d+)$", destination)  # dummy IPv4 test; TODO: IPv6?
+    if match:
+        destination, compression = match.groups()
+        destination_dict["compression"] = compression
 
-        if match:
-            host, port = match.groups()
-            self["host"] = host
-            self["port"] = port
-            self.destination = self.Destination.TCP
-            return
+    # USER@HOST
+    match = re.match(r"^(\w+)@(\w+)$", destination)
 
-        # USER@HOST
-        match = re.match(r"^(\w+)@(\w+)$", destination)
+    if match:
+        user, host = match.groups()
+        destination_dict["type"] = ConnectionType.SSH
+        destination_dict["user"] = user
+        destination_dict["host"] = host
+        return destination_dict
 
-        if match:
-            user, host = match.groups()
-            self["user"] = user
-            self["host"] = host
-            self.destination = self.Destination.SSH
-            return
+    # @HOST
+    match = re.match(r"^@(\w+)$", destination)
 
-        # @HOST
-        match = re.match(r"^@(\w+)$", destination)
+    if match:
+        destination_dict["type"] = ConnectionType.SSH
+        host = match.group(1)
+        destination_dict["host"] = host
+        return destination_dict
 
-        if match:
-            host = match.group(1)
-            self["host"] = host
-            self.destination = self.Destination.SSH
-            return
+    # HOST:PORT
+    match = re.match(r"^([\w.]+):(\d+)$", destination)  # dummy IPv4 test; TODO: IPv6?
 
-        # HOST
-        # this is a pretty generous pattern, but we'll use it as a fallback and fail on connection if provided faultily
-        match = re.match(r"^(\S+)$", destination)
+    if match:
+        destination_dict["type"] = ConnectionType.TCP
+        host, port = match.groups()
+        destination_dict["host"] = host
+        destination_dict["port"] = port
+        return destination_dict
 
-        if match:
-            self.destination = self.Destination.TCP
-            self["host"] = destination
-            return
+    # HOST
+    # this is a pretty generous pattern, but we'll use it as a fallback and fail on connecting if provided faultily
+    match = re.match(r"^(\S+)$", destination)
 
-        raise ValueError(
-            f"Destination {destination} could not be parsed correctly, please provide it in the correct format!"
-        )
+    if match:
+        destination_dict["type"] = ConnectionType.TCP
+        destination_dict["host"] = destination
+        return destination_dict
 
-    def __getitem__(self, item: str) -> Optional[str]:
-        return self._dict.get(item, None)
+    raise ValueError(
+        f'Destination "{destination}" could not be parsed correctly, please provide it in the correct format!'
+    )
 
-    def __setitem__(self, key, value):
-        self._dict[key] = value
 
-    def is_tcp(self) -> bool:
-        return self.destination == self.Destination.TCP
+def show_dependencies(arguments: Arguments):
+    try:
+        dependencies = find_dependencies(arguments)
+    except CompilerError as err:
+        sys.exit(err.returncode)
 
-    def is_ssh(self) -> bool:
-        return self.destination == self.Destination.SSH
+    source_files: List[str] = arguments.source_files
+
+    print("Dependencies:")
+    for dependency in dependencies:
+        if dependency not in source_files:
+            print(dependency)
+
+    sys.exit(os.EX_OK)
 
 
 # TODO: load config file
