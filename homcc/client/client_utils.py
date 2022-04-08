@@ -11,6 +11,7 @@ import sys
 from abc import ABC, abstractmethod
 from argparse import ArgumentParser, Action, Namespace, RawTextHelpFormatter
 from enum import Enum
+from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Sequence, Tuple, Union
 
 from homcc.common.arguments import Arguments, ArgumentsExecutionResult
@@ -19,10 +20,15 @@ from homcc.common.messages import ObjectFile
 
 logger = logging.getLogger(__name__)
 
+HOMCC_HOSTS_ENV_VAR = "$HOMCC_HOSTS"
+HOMCC_DIR_ENV_VAR = "$HOMCC_DIR"
+
 
 class CompilerError(subprocess.CalledProcessError):
-    """Error class to indicate unrecoverability for the client main function and provide error information that occurred
-    during execution of compiler commands"""
+    """
+    Error class to indicate unrecoverability for the client main function and provide error information that occurred
+    during execution of compiler commands
+    """
 
     def __init__(self, err: subprocess.CalledProcessError):
         super().__init__(err.returncode, err.cmd, err.output, err.stderr)
@@ -82,11 +88,11 @@ class ShowConcurrencyLevel(ShowAndExitAction):
 
 
 class ShowDependencies(ShowAndExitAction):
-    """show the dependencies that would be sent to the server, as calculated from the given arguments, and exit"""
+    """show all dependencies that would be sent to the server, as calculated from the given arguments, and exit"""
 
-    def __call__(self, parser: ArgumentParser, namespace: Namespace, values, option_string: Optional[str] = None):
-        # this action requires unknown arguments (compiler arguments) and can not be accessed here
-        # the functionality of this action is provided in show_dependencies and called by parse_and_handle_args
+    def __call__(self, _parser: ArgumentParser, namespace: Namespace, _values, _option_string: Optional[str] = None):
+        # this action requires unknown arguments (COMPILER ARGUMENTS) which cannot be accessed here, the functionality
+        # of this action is provided in show_dependencies
         namespace.dependencies = True
 
 
@@ -111,16 +117,17 @@ def parse_args(args: List[str]) -> Tuple[Dict[str, Any], Arguments]:
     # parser.add_argument("--randomize", action="store_true", help="randomize the server list before execution")
 
     parser.add_argument(
-        "--dest",
+        "--host",
         required=False,
-        metavar="DESTINATION",
+        metavar="HOST",
         type=str,
-        help="DESTINATION defines the connection to the remote compilation server:\n"
+        help="HOST defines the connection to the remote compilation server:\n"
         "\tHOST\t\tTCP connection to specified HOST with PORT either from config file or default port 3633\n"
         "\tHOST:PORT\tTCP connection to specified HOST with specified PORT\n"
         # "\t@HOST\t\tSSH connection to specified HOST\n"
         # "\tUSER@HOST\tSSH connection to specified USER at HOST\n"
-        "DESTINATION,COMPRESSION defines any DESTINATION option from above with additional COMPRESSION information\n"
+        "HOST,COMPRESSION defines any of the above HOST option and additionally specifies which "
+        "COMPRESSION algorithm will be chosen\n"
         "\tlzo: Lempel–Ziv–Oberhumer compression",
     )
 
@@ -128,7 +135,7 @@ def parse_args(args: List[str]) -> Tuple[Dict[str, Any], Arguments]:
         "--timeout",
         required=False,
         type=float,
-        help="timeout in seconds to wait for a response from the remote compilation server",
+        help="TIMEOUT in seconds to wait for a response from the remote compilation server",
     )
 
     parser.add_argument(
@@ -138,17 +145,19 @@ def parse_args(args: List[str]) -> Tuple[Dict[str, Any], Arguments]:
         help="enables the DEBUG mode which prints detailed, colored logging messages to the terminal",
     )
 
-    # capturing all remaining arguments which represent compiler arguments via nargs=argparse.REMAINDER is sadly not
-    # working as intended here, so we use the dummy "COMPILER_OR_ARGUMENT" argument for the automatically generated
-    # usage string instead and handle the remaining, unknown arguments separately when accessing this argument
+    # capturing all remaining arguments which represent compiler arguments via nargs=argparse.REMAINDER and
+    # argparse.parse_args() is sadly not working as intended here, so we use the dummy "COMPILER_OR_ARGUMENT" argument
+    # for the automatically generated usage string instead and handle the remaining, unknown arguments separately
     parser.add_argument(
         "COMPILER_OR_ARGUMENT",
         type=str,
-        metavar="[COMPILER] ARGUMENTS",
+        metavar="[COMPILER] ARGUMENTS ...",
         help=f"COMPILER, if not specified explicitly, is either read from the config file or defaults to "
-        f'"{Arguments.default_compiler}", remaining ARGUMENTS will be forwarded to the COMPILER',
+        f'"{Arguments.default_compiler}"\n'
+        f"all remaining ARGUMENTS will be directly forwarded to the COMPILER",
     )
 
+    # known args (used for homcc), unknown args (forwarded to compiler)
     homcc_args_namespace, compiler_args = parser.parse_known_args(args)
     homcc_args_dict = vars(homcc_args_namespace)
 
@@ -165,65 +174,64 @@ def parse_args(args: List[str]) -> Tuple[Dict[str, Any], Arguments]:
 
 
 class ConnectionType(str, Enum):
-    """Helper class to distinguish between different destination connection types"""
+    """Helper class to distinguish between different host connection types"""
 
     TCP = "TCP"
     SSH = "SSH"
 
 
-def parse_destination(destination: str) -> Dict[str, Optional[str]]:
-    destination_dict: Dict[str, Optional[str]] = dict.fromkeys(["type", "host", "port", "user", "compression"], None)
+def parse_host(host: str) -> Dict[str, Union[int, str]]:
+    # the following regexes are intentional simple and contain a lot of false positives for IPv4 and IPv6 addresses,
+    # matches are however merely used for rough categorization and don't test the validity of the actual host values,
+    # meaningful failures on erroneous values will arise later on when the client tries to connect to the specified host
 
-    # host_pattern: str = r"^$"  # either name, ipv4 or ipv6 address
+    host_dict: Dict[str, Union[int, str]] = {}
 
-    # DESTINATION,COMPRESSION
-    match: Optional[re.Match] = re.match(r"^(\S+),(\S+)$", destination)
+    # HOST,COMPRESSION
+    match: Optional[re.Match] = re.match(r"^(\S+),(\S+)$", host)
 
     if match:
-        destination, compression = match.groups()
-        destination_dict["compression"] = compression
+        host, compression = match.groups()
+        host_dict["compression"] = compression
 
     # USER@HOST
-    match = re.match(r"^(\w+)@(\w+)$", destination)
+    match = re.match(r"^(\w+)@([\w.:]+)$", host)
 
     if match:
         user, host = match.groups()
-        destination_dict["type"] = ConnectionType.SSH
-        destination_dict["user"] = user
-        destination_dict["host"] = host
-        return destination_dict
+        host_dict["type"] = ConnectionType.SSH
+        host_dict["user"] = user
+        host_dict["host"] = host
+        return host_dict
 
     # @HOST
-    match = re.match(r"^@(\w+)$", destination)
+    match = re.match(r"^@([\w.:]+)$", host)
 
     if match:
-        destination_dict["type"] = ConnectionType.SSH
+        host_dict["type"] = ConnectionType.SSH
         host = match.group(1)
-        destination_dict["host"] = host
-        return destination_dict
+        host_dict["host"] = host
+        return host_dict
 
     # HOST:PORT
-    match = re.match(r"^([\w.]+):(\d+)$", destination)  # dummy IPv4 test; TODO: IPv6?
+    match = re.match(r"^(([\w.]+)|\[(\S+)]):(\d+)$", host)
 
     if match:
-        destination_dict["type"] = ConnectionType.TCP
-        host, port = match.groups()
-        destination_dict["host"] = host
-        destination_dict["port"] = port
-        return destination_dict
+        host_dict["type"] = ConnectionType.TCP
+        _, name_or_ipv4, ipv6, port = match.groups()
+        host_dict["host"] = name_or_ipv4 or ipv6
+        host_dict["port"] = port
+        return host_dict
 
     # HOST
-    # this is a pretty generous pattern, but we'll use it as a fallback and fail on connecting if provided faultily
-    match = re.match(r"^(\S+)$", destination)
+    match = re.match(r"^([\w.:]+)$", host)
 
     if match:
-        destination_dict["type"] = ConnectionType.TCP
-        destination_dict["host"] = destination
-        return destination_dict
+        host_dict["type"] = ConnectionType.TCP
+        host_dict["host"] = host
+        return host_dict
 
-    raise ValueError(
-        f'Destination "{destination}" could not be parsed correctly, please provide it in the correct format!'
-    )
+    raise ValueError(f'Host "{host}" could not be parsed correctly, please provide it in the correct format!')
 
 
 def show_dependencies(arguments: Arguments):
@@ -242,9 +250,52 @@ def show_dependencies(arguments: Arguments):
     sys.exit(os.EX_OK)
 
 
+def load_hosts() -> List[str]:
+    """
+    Load homcc hosts from one of the following locations:
+    - Environment Variable: $HOMCC_HOSTS
+    - File: $HOMCC_DIR/hosts
+    - File: ~/.homcc/hosts
+    - File: /etc/homcc/hosts
+    """
+
+    def filter_and_rstrip_whitespace(data: str) -> List[str]:
+        return [line.rstrip() for line in data.splitlines() if not line.isspace()]
+
+    # $HOMCC_HOSTS
+    homcc_hosts_env_var = os.getenv(HOMCC_HOSTS_ENV_VAR)
+    if homcc_hosts_env_var:
+        return filter_and_rstrip_whitespace(homcc_hosts_env_var)
+
+    # HOSTS File
+    hosts_file_name: str = "hosts"
+    homcc_dir_env_var = os.getenv(HOMCC_DIR_ENV_VAR)
+    home_dir_homcc_hosts = Path("~/.homcc") / hosts_file_name
+    etc_dir_homcc_hosts = Path("/etc/homcc") / hosts_file_name
+
+    hosts_file_path: Optional[Path] = None
+
+    if homcc_dir_env_var:
+        homcc_dir_hosts = Path(homcc_dir_env_var) / hosts_file_name
+        if homcc_dir_hosts.exists():  # $HOMCC_DIR/hosts
+            hosts_file_path = homcc_dir_hosts
+    elif home_dir_homcc_hosts.exists():  # ~/.homcc/hosts
+        hosts_file_path = home_dir_homcc_hosts
+    elif etc_dir_homcc_hosts.exists():  # /etc/homcc/hosts
+        hosts_file_path = etc_dir_homcc_hosts
+
+    if hosts_file_path:
+        if hosts_file_path.stat().st_size == 0:
+            logger.warning('Hosts file "%s" appears to be empty.', hosts_file_path)
+        return filter_and_rstrip_whitespace(hosts_file_path.read_text(encoding="utf-8"))
+
+    # return empty list if no hosts information is available
+    return []
+
+
 # TODO: load config file
-def load_config_file() -> str:
-    return str()
+def load_config_file() -> Dict:
+    raise NotImplementedError
 
 
 def find_dependencies(arguments: Arguments) -> Set[str]:
@@ -253,7 +304,7 @@ def find_dependencies(arguments: Arguments) -> Set[str]:
         # execute preprocessor command, e.g.: "g++ main.cpp -MM"
         result: ArgumentsExecutionResult = arguments.dependency_finding().execute(check=True)
     except subprocess.CalledProcessError as err:
-        logger.error("Preprocessor error:\n%s", err.stderr)  # TODO(s.pirsch): fix doubled stderr message
+        logger.error("Preprocessor error:\n%s", err.stderr)
         raise CompilerError(err) from err
 
     if result.stdout:

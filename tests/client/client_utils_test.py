@@ -9,12 +9,15 @@ from typing import List, Set
 
 from homcc.common.arguments import Arguments
 from homcc.client.client_utils import (
+    HOMCC_DIR_ENV_VAR,
+    HOMCC_HOSTS_ENV_VAR,
     CompilerError,
     ConnectionType,
     compile_locally,
     find_dependencies,
+    load_hosts,
     parse_args,
-    parse_destination,
+    parse_host,
     show_dependencies,
 )
 
@@ -46,134 +49,232 @@ class TestClientUtilsParseArgs:
         assert dependencies_exit.value.code == os.EX_OK
 
 
-class TestClientUtilsParseDestination:
-    """Tests for client.client_utils.parse_destination"""
+class TestClientUtilsParseHost:
+    """
+    Tests for client.client_utils.parse_host
+
+    Note: We currently only test for passing host formats for categorization, since more meaningful failing will usually
+    occur later on when the client tries to connect to the specified host
+    """
 
     def test_host(self):
         # HOST
-        localhost: str = "localhost"
-        parsed_destination_dict = parse_destination(localhost)
-        assert parsed_destination_dict["type"] == ConnectionType.TCP
-        assert parsed_destination_dict["host"] == "localhost"
-        assert parsed_destination_dict["port"] is None
-        assert parsed_destination_dict["user"] is None
-        assert parsed_destination_dict["compression"] is None
+        named_host: str = "localhost"
+        parsed_host_dict = parse_host(named_host)
+        assert parsed_host_dict.get("type") == ConnectionType.TCP
+        assert parsed_host_dict.get("host") == "localhost"
+        assert parsed_host_dict.get("port") is None
+        assert parsed_host_dict.get("user") is None
+        assert parsed_host_dict.get("compression") is None
 
         ipv4_host: str = "127.0.0.1"
-        parsed_destination_dict = parse_destination(ipv4_host)
-        assert parsed_destination_dict["type"] == ConnectionType.TCP
-        assert parsed_destination_dict["host"] == "127.0.0.1"
-        assert parsed_destination_dict["port"] is None
-        assert parsed_destination_dict["user"] is None
-        assert parsed_destination_dict["compression"] is None
+        parsed_host_dict = parse_host(ipv4_host)
+        assert parsed_host_dict.get("type") == ConnectionType.TCP
+        assert parsed_host_dict.get("host") == "127.0.0.1"
+        assert parsed_host_dict.get("port") is None
+        assert parsed_host_dict.get("user") is None
+        assert parsed_host_dict.get("compression") is None
 
-        # ipv6_host: str = "::1"
-        # parsed_destination_dict = parse_destination(ipv6_host)
-        # assert parsed_destination_dict == parse_destination.TCP
-        # assert not parsed_destination_dict == parse_destination.SSH
-        # assert parsed_destination_dict["host"] == "::1"
-        # assert parsed_destination_dict["port"] is None
-        # assert parsed_destination_dict["user"] is None
-        # assert parsed_destination_dict["compression"] is None
+        ipv6_host: str = "::1"
+        parsed_host_dict = parse_host(ipv6_host)
+        assert parsed_host_dict.get("type") == ConnectionType.TCP
+        assert parsed_host_dict.get("host") == "::1"
+        assert parsed_host_dict.get("port") is None
+        assert parsed_host_dict.get("user") is None
+        assert parsed_host_dict.get("compression") is None
 
         # HOST,COMPRESSION
-        localhost_comp: str = "localhost,lzo"
-        parsed_destination_dict = parse_destination(localhost_comp)
-        assert parsed_destination_dict["type"] == ConnectionType.TCP
-        assert parsed_destination_dict["host"] == "localhost"
-        assert parsed_destination_dict["port"] is None
-        assert parsed_destination_dict["user"] is None
-        assert parsed_destination_dict["compression"] == "lzo"
+        named_host_comp: str = "localhost,lzo"
+        parsed_host_dict = parse_host(named_host_comp)
+        assert parsed_host_dict.get("type") == ConnectionType.TCP
+        assert parsed_host_dict.get("host") == "localhost"
+        assert parsed_host_dict.get("port") is None
+        assert parsed_host_dict.get("user") is None
+        assert parsed_host_dict.get("compression") == "lzo"
 
         ipv4_host_comp: str = "127.0.0.1,lzo"
-        parsed_destination_dict = parse_destination(ipv4_host_comp)
-        assert parsed_destination_dict["type"] == ConnectionType.TCP
-        assert parsed_destination_dict["host"] == "127.0.0.1"
-        assert parsed_destination_dict["port"] is None
-        assert parsed_destination_dict["user"] is None
-        assert parsed_destination_dict["compression"] == "lzo"
+        parsed_host_dict = parse_host(ipv4_host_comp)
+        assert parsed_host_dict.get("type") == ConnectionType.TCP
+        assert parsed_host_dict.get("host") == "127.0.0.1"
+        assert parsed_host_dict.get("port") is None
+        assert parsed_host_dict.get("user") is None
+        assert parsed_host_dict.get("compression") == "lzo"
 
-        # ipv6_host_comp: str = "::1,lzo"
-        # parsed_destination_dict = parse_destination(ipv6_host_comp)
-        # assert parsed_destination_dict == parse_destination.TCP
-        # assert not parsed_destination_dict == parse_destination.SSH
-        # assert parsed_destination_dict["host"] == "::1"
-        # assert parsed_destination_dict["port"] is None
-        # assert parsed_destination_dict["user"] is None
-        # assert parsed_destination_dict["compression"] == "lzo"
+        ipv6_host_comp: str = "::1,lzo"
+        parsed_host_dict = parse_host(ipv6_host_comp)
+        assert parsed_host_dict.get("type") == ConnectionType.TCP
+        assert parsed_host_dict.get("host") == "::1"
+        assert parsed_host_dict.get("port") is None
+        assert parsed_host_dict.get("user") is None
+        assert parsed_host_dict.get("compression") == "lzo"
 
     def test_host_port(self):
         # HOST:PORT
-        localhost_port: str = "localhost:3633"
-        parsed_destination_dict = parse_destination(localhost_port)
-        assert parsed_destination_dict["type"] == ConnectionType.TCP
-        assert parsed_destination_dict["host"] == "localhost"
-        assert parsed_destination_dict["port"] == "3633"
-        assert parsed_destination_dict["user"] is None
-        assert parsed_destination_dict["compression"] is None
+        named_host_port: str = "localhost:3633"
+        parsed_host_dict = parse_host(named_host_port)
+        assert parsed_host_dict.get("type") == ConnectionType.TCP
+        assert parsed_host_dict.get("host") == "localhost"
+        assert parsed_host_dict.get("port") == "3633"
+        assert parsed_host_dict.get("user") is None
+        assert parsed_host_dict.get("compression") is None
 
-        ipv4host_port: str = "127.0.0.1:3633"
-        parsed_destination_dict = parse_destination(ipv4host_port)
-        assert parsed_destination_dict["type"] == ConnectionType.TCP
-        assert parsed_destination_dict["host"] == "127.0.0.1"
-        assert parsed_destination_dict["port"] == "3633"
-        assert parsed_destination_dict["user"] is None
-        assert parsed_destination_dict["compression"] is None
+        ipv4_host_port: str = "127.0.0.1:3633"
+        parsed_host_dict = parse_host(ipv4_host_port)
+        assert parsed_host_dict.get("type") == ConnectionType.TCP
+        assert parsed_host_dict.get("host") == "127.0.0.1"
+        assert parsed_host_dict.get("port") == "3633"
+        assert parsed_host_dict.get("user") is None
+        assert parsed_host_dict.get("compression") is None
+
+        ipv6_host_port: str = "[::1]:3633"
+        parsed_host_dict = parse_host(ipv6_host_port)
+        assert parsed_host_dict.get("type") == ConnectionType.TCP
+        assert parsed_host_dict.get("host") == "::1"
+        assert parsed_host_dict.get("port") == "3633"
+        assert parsed_host_dict.get("user") is None
+        assert parsed_host_dict.get("compression") is None
 
         # HOST:PORT,COMPRESSION
-        localhost_port_comp: str = "localhost:3633,lzo"
-        parsed_destination_dict = parse_destination(localhost_port_comp)
-        assert parsed_destination_dict["type"] == ConnectionType.TCP
-        assert parsed_destination_dict["host"] == "localhost"
-        assert parsed_destination_dict["port"] == "3633"
-        assert parsed_destination_dict["user"] is None
-        assert parsed_destination_dict["compression"] == "lzo"
+        named_host_port_comp: str = "localhost:3633,lzo"
+        parsed_host_dict = parse_host(named_host_port_comp)
+        assert parsed_host_dict.get("type") == ConnectionType.TCP
+        assert parsed_host_dict.get("host") == "localhost"
+        assert parsed_host_dict.get("port") == "3633"
+        assert parsed_host_dict.get("user") is None
+        assert parsed_host_dict.get("compression") == "lzo"
 
-        ipv4host_port_comp: str = "127.0.0.1:3633,lzo"
-        parsed_destination_dict = parse_destination(ipv4host_port_comp)
-        assert parsed_destination_dict["type"] == ConnectionType.TCP
-        assert parsed_destination_dict["host"] == "127.0.0.1"
-        assert parsed_destination_dict["port"] == "3633"
-        assert parsed_destination_dict["user"] is None
-        assert parsed_destination_dict["compression"] == "lzo"
+        ipv4_host_port_comp: str = "127.0.0.1:3633,lzo"
+        parsed_host_dict = parse_host(ipv4_host_port_comp)
+        assert parsed_host_dict.get("type") == ConnectionType.TCP
+        assert parsed_host_dict.get("host") == "127.0.0.1"
+        assert parsed_host_dict.get("port") == "3633"
+        assert parsed_host_dict.get("user") is None
+        assert parsed_host_dict.get("compression") == "lzo"
+
+        ipv6_host_port_comp: str = "[::1]:3633,lzo"
+        parsed_host_dict = parse_host(ipv6_host_port_comp)
+        assert parsed_host_dict.get("type") == ConnectionType.TCP
+        assert parsed_host_dict.get("host") == "::1"
+        assert parsed_host_dict.get("port") == "3633"
+        assert parsed_host_dict.get("user") is None
+        assert parsed_host_dict.get("compression") == "lzo"
 
     def test_at_host(self):
         # @HOST
-        at_host: str = "@host"
-        parsed_destination_dict = parse_destination(at_host)
-        assert parsed_destination_dict["type"] == ConnectionType.SSH
-        assert parsed_destination_dict["host"] == "host"
-        assert parsed_destination_dict["port"] is None
-        assert parsed_destination_dict["user"] is None
-        assert parsed_destination_dict["compression"] is None
+        at_named_host: str = "@localhost"
+        parsed_host_dict = parse_host(at_named_host)
+        assert parsed_host_dict.get("type") == ConnectionType.SSH
+        assert parsed_host_dict.get("host") == "localhost"
+        assert parsed_host_dict.get("port") is None
+        assert parsed_host_dict.get("user") is None
+        assert parsed_host_dict.get("compression") is None
+
+        at_ipv4_host: str = "@127.0.0.1"
+        parsed_host_dict = parse_host(at_ipv4_host)
+        assert parsed_host_dict.get("type") == ConnectionType.SSH
+        assert parsed_host_dict.get("host") == "127.0.0.1"
+        assert parsed_host_dict.get("port") is None
+        assert parsed_host_dict.get("user") is None
+        assert parsed_host_dict.get("compression") is None
+
+        at_ipv6_host: str = "@::1"
+        parsed_host_dict = parse_host(at_ipv6_host)
+        assert parsed_host_dict.get("type") == ConnectionType.SSH
+        assert parsed_host_dict.get("host") == "::1"
+        assert parsed_host_dict.get("port") is None
+        assert parsed_host_dict.get("user") is None
+        assert parsed_host_dict.get("compression") is None
 
         # @HOST,COMPRESSION
-        at_host_comp: str = "@host,lzo"
-        parsed_destination_dict = parse_destination(at_host_comp)
-        assert parsed_destination_dict["type"] == ConnectionType.SSH
-        assert parsed_destination_dict["host"] == "host"
-        assert parsed_destination_dict["port"] is None
-        assert parsed_destination_dict["user"] is None
-        assert parsed_destination_dict["compression"] == "lzo"
+        at_named_host_comp: str = "@localhost,lzo"
+        parsed_host_dict = parse_host(at_named_host_comp)
+        assert parsed_host_dict.get("type") == ConnectionType.SSH
+        assert parsed_host_dict.get("host") == "localhost"
+        assert parsed_host_dict.get("port") is None
+        assert parsed_host_dict.get("user") is None
+        assert parsed_host_dict.get("compression") == "lzo"
+
+        at_ipv4_host_comp: str = "@127.0.0.1,lzo"
+        parsed_host_dict = parse_host(at_ipv4_host_comp)
+        assert parsed_host_dict.get("type") == ConnectionType.SSH
+        assert parsed_host_dict.get("host") == "127.0.0.1"
+        assert parsed_host_dict.get("port") is None
+        assert parsed_host_dict.get("user") is None
+        assert parsed_host_dict.get("compression") == "lzo"
+
+        at_ipv6_host_comp: str = "@::1,lzo"
+        parsed_host_dict = parse_host(at_ipv6_host_comp)
+        assert parsed_host_dict.get("type") == ConnectionType.SSH
+        assert parsed_host_dict.get("host") == "::1"
+        assert parsed_host_dict.get("port") is None
+        assert parsed_host_dict.get("user") is None
+        assert parsed_host_dict.get("compression") == "lzo"
 
     def test_user_at_host(self):
         # USER@HOST
-        user_at_host: str = "user@host"
-        parsed_destination_dict = parse_destination(user_at_host)
-        assert parsed_destination_dict["type"] == ConnectionType.SSH
-        assert parsed_destination_dict["host"] == "host"
-        assert parsed_destination_dict["port"] is None
-        assert parsed_destination_dict["user"] == "user"
-        assert parsed_destination_dict["compression"] is None
+        user_at_named_host: str = "user@localhost"
+        parsed_host_dict = parse_host(user_at_named_host)
+        assert parsed_host_dict.get("type") == ConnectionType.SSH
+        assert parsed_host_dict.get("host") == "localhost"
+        assert parsed_host_dict.get("port") is None
+        assert parsed_host_dict.get("user") == "user"
+        assert parsed_host_dict.get("compression") is None
+
+        user_at_ipv4_host: str = "user@127.0.0.1"
+        parsed_host_dict = parse_host(user_at_ipv4_host)
+        assert parsed_host_dict.get("type") == ConnectionType.SSH
+        assert parsed_host_dict.get("host") == "127.0.0.1"
+        assert parsed_host_dict.get("port") is None
+        assert parsed_host_dict.get("user") == "user"
+        assert parsed_host_dict.get("compression") is None
+
+        user_at_ipv6_host: str = "user@::1"
+        parsed_host_dict = parse_host(user_at_ipv6_host)
+        assert parsed_host_dict.get("type") == ConnectionType.SSH
+        assert parsed_host_dict.get("host") == "::1"
+        assert parsed_host_dict.get("port") is None
+        assert parsed_host_dict.get("user") == "user"
+        assert parsed_host_dict.get("compression") is None
 
         # USER@HOST,COMPRESSION
-        user_at_host_comp: str = "user@host,lzo"
-        parsed_destination_dict = parse_destination(user_at_host_comp)
-        assert parsed_destination_dict["type"] == ConnectionType.SSH
-        assert parsed_destination_dict["host"] == "host"
-        assert parsed_destination_dict["port"] is None
-        assert parsed_destination_dict["user"] == "user"
-        assert parsed_destination_dict["compression"] == "lzo"
+        user_at_named_host_comp: str = "user@localhost,lzo"
+        parsed_host_dict = parse_host(user_at_named_host_comp)
+        assert parsed_host_dict.get("type") == ConnectionType.SSH
+        assert parsed_host_dict.get("host") == "localhost"
+        assert parsed_host_dict.get("port") is None
+        assert parsed_host_dict.get("user") == "user"
+        assert parsed_host_dict.get("compression") == "lzo"
+
+        user_at_ipv4_host_comp: str = "user@127.0.0.1,lzo"
+        parsed_host_dict = parse_host(user_at_ipv4_host_comp)
+        assert parsed_host_dict.get("type") == ConnectionType.SSH
+        assert parsed_host_dict.get("host") == "127.0.0.1"
+        assert parsed_host_dict.get("port") is None
+        assert parsed_host_dict.get("user") == "user"
+        assert parsed_host_dict.get("compression") == "lzo"
+
+        user_at_ipv6_host_comp: str = "user@::1,lzo"
+        parsed_host_dict = parse_host(user_at_ipv6_host_comp)
+        assert parsed_host_dict.get("type") == ConnectionType.SSH
+        assert parsed_host_dict.get("host") == "::1"
+        assert parsed_host_dict.get("port") is None
+        assert parsed_host_dict.get("user") == "user"
+        assert parsed_host_dict.get("compression") == "lzo"
+
+
+class TestClientUtilsLoadHosts:
+    """Tests for client.client_utils.load_hosts"""
+
+    def test_load_hosts(self, monkeypatch):
+        hosts = ["localhost", "localhost:3633 ", "localhost:3633,lzo\t", " ", ""]
+        hosts_no_whitespace = ["localhost", "localhost:3633", "localhost:3633,lzo"]
+
+        # $HOMCC_HOSTS
+        monkeypatch.setenv(HOMCC_HOSTS_ENV_VAR, "\n".join(hosts))
+        assert load_hosts() == hosts_no_whitespace
+
+        # $HOMCC_DIR/hosts
+        assert HOMCC_DIR_ENV_VAR
 
 
 class TestClientUtilsFunctions:

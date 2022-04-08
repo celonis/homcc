@@ -16,10 +16,9 @@ class TestClient:
 
     @pytest.fixture(autouse=True)
     def _init(self, unused_tcp_port: int):
-        host: str = "localhost"
         server, server_thread = start_server(port=unused_tcp_port)
 
-        self.client: TCPClient = TCPClient(host, unused_tcp_port)
+        self.client: TCPClient = TCPClient({"type": "TCP", "host": "localhost", "port": unused_tcp_port})
 
         self.example_base_dir: Path = Path("example")
         self.example_main_cpp: Path = self.example_base_dir / "src" / "main.cpp"

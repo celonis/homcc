@@ -5,9 +5,11 @@ TCPClient class and related Exception classes for the homcc client
 import asyncio
 import logging
 
+from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Dict, Optional, Union
 
+from homcc.client.client_utils import ConnectionType
 from homcc.common.arguments import Arguments
 from homcc.common.messages import ArgumentMessage, DependencyReplyMessage, Message
 
@@ -38,15 +40,33 @@ class UnexpectedMessageTypeError(TCPClientError):
     """Exception for receiving a message with an unexpected type"""
 
 
-class TCPClient:
-    """Wrapper class to exchange homcc protocol messages"""
+class Client(ABC):
+    """Abstract base class to exchange homcc protocol messages"""
 
-    def __init__(self, host: str, port: int, buffer_limit: Optional[int] = None):
-        self.host: str = host
-        self.port: int = port
+    @abstractmethod
+    async def connect(self):
+        pass
+
+    # TODO(s.pirsch): more methods
+
+
+# TODO(s.pirsch): class SSHClient(Client)
+
+
+class TCPClient(Client):
+    """Wrapper class to exchange homcc protocol messages via TCP"""
+
+    def __init__(self, host_dict: Dict[str, Union[int, str]], buffer_limit: Optional[int] = None):
+        connection_type = host_dict["type"]
+
+        if connection_type != ConnectionType.TCP:
+            raise ValueError(f"TCPClient cannot be initialized with {connection_type} information")
+
+        self.host = host_dict["host"]
+        self.port = host_dict.get("port", 3633)
 
         # default buffer size limit of StreamReader is 64 KiB
-        self.buffer_limit: int = buffer_limit if buffer_limit else 65536
+        self.buffer_limit: int = buffer_limit or 65536
 
         self._data: bytes = bytes()
         self._reader: Optional[asyncio.StreamReader] = None

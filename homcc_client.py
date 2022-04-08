@@ -8,29 +8,32 @@ import sys
 import os
 
 from pathlib import Path
-from typing import Dict, Optional, Set
+from typing import Dict, Optional, Set, Union
 
 from homcc.common.arguments import Arguments, ArgumentsExecutionResult
 from homcc.client.client import TCPClient, TCPClientError, UnexpectedMessageTypeError
 from homcc.client.client_utils import (
     CompilerError,
-    ConnectionType,
     calculate_dependency_dict,
     compile_locally,
     find_dependencies,
     invert_dict,
     link_object_files,
     parse_args,
-    parse_destination,
+    parse_host,
 )
 from homcc.common.messages import Message, CompilationResultMessage, DependencyRequestMessage
 
 logger: logging.Logger = logging.getLogger(__name__)
 
 
-async def try_remote_compilation(host: str, port: int, timeout: float, arguments: Arguments) -> int:
-    """client main function for communicating with the homcc server"""
-    client: TCPClient = TCPClient(host, port)
+async def try_remote_compilation(
+    host_dict: Dict[str, Union[int, str]], _: Optional[str], timeout: float, arguments: Arguments
+) -> int:
+    """main function for the communication between client and the remote compilation server"""
+
+    # TODO(s.pirsch): use compression parameter
+    client: TCPClient = TCPClient(host_dict)
 
     # 1.) test whether arguments should be sent, prepare for communication with server
     if not arguments.is_sendable():
@@ -40,7 +43,7 @@ async def try_remote_compilation(host: str, port: int, timeout: float, arguments
     logger.debug("Dependency list:\n%s", dependencies)
     dependency_dict: Dict[str, str] = calculate_dependency_dict(dependencies)
 
-    # invert this so we can easily search by the hash later on when dependencies are requested
+    # invert this so that we can easily search by the hash later on when dependencies are requested
     inverted_dependency_dict = invert_dict(dependency_dict)
 
     logger.debug("Dependency dict:\n%s", dependency_dict)
@@ -109,8 +112,8 @@ def main():
 
     print(f"homcc_client.py:\t{homcc_args_dict}\n\t\t\t{compiler_arguments}")
 
-    destination: Optional[str] = homcc_args_dict.pop("dest")
-    timeout: Optional[float] = homcc_args_dict.pop("timeout")
+    host_arg: Optional[str] = homcc_args_dict.get("host")
+    timeout: Optional[float] = homcc_args_dict.get("timeout")
 
     # TODO: load config file and/or host file here
     # overwrite compiler with default specified in the config file
@@ -124,24 +127,16 @@ def main():
 
     logging.basicConfig(level=logging.DEBUG)
 
-    if not destination:
-        destination = "localhost:3633"
-        # TODO: read destination from config file
+    if host_arg:
+        host = host_arg
+    else:
+        host = "localhost:3633"
+        # TODO: read host from config file
         # raise NotImplementedError
 
-    parsed_destination_dict = parse_destination(destination)
+    parsed_host_dict = parse_host(host)
 
-    if parsed_destination_dict["type"] == ConnectionType.TCP:
-        host = parsed_destination_dict["host"]
-        port = parsed_destination_dict["port"]
-        if not port:
-            port = 3633
-    elif parsed_destination_dict["type"] == ConnectionType.SSH:
-        # host = parsed_destination_dict.get("host")
-        # user = parsed_destination_dict.get("user", None)
-        raise NotImplementedError
-    else:
-        raise NotImplementedError  # unreachable
+    compression: Optional[str] = parsed_host_dict.pop("compression", None)
 
     if not timeout:
         # TODO: get timeout from config file
@@ -155,7 +150,7 @@ def main():
     #        config_data = yaml.load(config_file, Loader=yaml.Fu)
 
     try:
-        sys.exit(asyncio.run(try_remote_compilation(host, port, timeout, compiler_arguments)))
+        sys.exit(asyncio.run(try_remote_compilation(parsed_host_dict, compression, timeout, compiler_arguments)))
 
     # unrecoverable errors
     except CompilerError as err:
