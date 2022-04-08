@@ -18,7 +18,8 @@ from homcc.client.client_utils import (
     load_hosts,
     parse_args,
     parse_host,
-    show_dependencies,
+    parse_config,
+    scan_includes,
 )
 
 
@@ -27,7 +28,7 @@ class TestClientUtilsParseArgs:
 
     def test_parse_optional_info_args(self):
         # optional info args exit early and do not require compiler args
-        optional_info_args: List[str] = ["-h", "--version", "--hosts", "-j"]
+        optional_info_args: List[str] = ["--help", "--version", "--hosts", "-j"]
 
         for optional_info_arg in optional_info_args:
             with pytest.raises(SystemExit) as info_exit:
@@ -36,17 +37,13 @@ class TestClientUtilsParseArgs:
             assert info_exit.type == SystemExit
             assert info_exit.value.code == os.EX_OK
 
-    def test_parse_args_dependencies(self):
+    def test_parse_args_scan_includes(self):
         compiler_args = ["g++", "-Iexample/include", "example/src/main.cpp", "example/src/foo.cpp"]
 
         # dependency arg exits early and requires compiler args
-        with pytest.raises(SystemExit) as dependencies_exit:
-            _, compiler_arguments = parse_args(["--dependencies"] + compiler_args)
-            assert compiler_arguments == Arguments(compiler_args)
-            show_dependencies(compiler_arguments)  # sys.exit happens here
-            # TODO: capture stdout and assert
-        assert dependencies_exit.type == SystemExit
-        assert dependencies_exit.value.code == os.EX_OK
+        _, compiler_arguments = parse_args(["--scan-includes"] + compiler_args)
+        assert compiler_arguments == Arguments(compiler_args)
+        assert scan_includes(compiler_arguments) == os.EX_OK
 
 
 class TestClientUtilsParseHost:
@@ -275,6 +272,16 @@ class TestClientUtilsLoadHosts:
 
         # $HOMCC_DIR/hosts
         assert HOMCC_DIR_ENV_VAR
+
+
+class TestClientUtilsParseLoadConfig:
+    def test_parse_config(self):
+        config: List[str] = ["# HOMCC TEST CONFIG", "DEBUG=TRUE", " TIMEOUT = 180 ", "\tCoMpReSsIoN=lZo"]
+        parsed_config = parse_config("\n".join(config))
+
+        assert parsed_config["DEBUG"] == "true"
+        assert parsed_config["TIMEOUT"] == "180"
+        assert parsed_config["COMPRESSION"] == "lzo"
 
 
 class TestClientUtilsFunctions:

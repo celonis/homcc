@@ -8,7 +8,7 @@ import sys
 import os
 
 from pathlib import Path
-from typing import Dict, Optional, Set, Union
+from typing import Dict, List, Optional
 
 from homcc.common.arguments import Arguments, ArgumentsExecutionResult
 from homcc.client.client import TCPClient, TCPClientError, UnexpectedMessageTypeError
@@ -19,17 +19,18 @@ from homcc.client.client_utils import (
     find_dependencies,
     invert_dict,
     link_object_files,
+    load_config_file,
+    load_hosts,
     parse_args,
     parse_host,
+    scan_includes,
 )
 from homcc.common.messages import Message, CompilationResultMessage, DependencyRequestMessage
 
 logger: logging.Logger = logging.getLogger(__name__)
 
 
-async def try_remote_compilation(
-    host_dict: Dict[str, Union[int, str]], _: Optional[str], timeout: float, arguments: Arguments
-) -> int:
+async def remote_compilation(host_dict: Dict[str, str], _: Optional[str], timeout: float, arguments: Arguments) -> int:
     """main function for the communication between client and the remote compilation server"""
 
     # TODO(s.pirsch): use compression parameter
@@ -39,24 +40,19 @@ async def try_remote_compilation(
     if not arguments.is_sendable():
         return compile_locally(arguments)
 
-    dependencies: Set[str] = find_dependencies(arguments)
-    logger.debug("Dependency list:\n%s", dependencies)
-    dependency_dict: Dict[str, str] = calculate_dependency_dict(dependencies)
-
-    # invert this so that we can easily search by the hash later on when dependencies are requested
-    inverted_dependency_dict = invert_dict(dependency_dict)
-
-    logger.debug("Dependency dict:\n%s", dependency_dict)
+    dependency_dict: Dict[str, str] = calculate_dependency_dict(find_dependencies(arguments))
 
     await client.connect()
 
     # 2.) send arguments and dependency information to server and provide requested dependencies
     await client.send_argument_message(arguments, os.getcwd(), dependency_dict)
 
+    dependency_dict = invert_dict(dependency_dict)  # invert dependency dictionary so that we can easily search by hash
+
     server_response: Message = await client.receive(timeout)
 
     while isinstance(server_response, DependencyRequestMessage):
-        requested_dependency: str = inverted_dependency_dict[server_response.get_sha1sum()]
+        requested_dependency: str = dependency_dict[server_response.get_sha1sum()]
         await client.send_dependency_reply_message(requested_dependency)
 
         server_response = await client.receive(timeout)
@@ -112,45 +108,36 @@ def main():
 
     print(f"homcc_client.py:\t{homcc_args_dict}\n\t\t\t{compiler_arguments}")
 
-    host_arg: Optional[str] = homcc_args_dict.get("host")
+    config_file = load_config_file()
+
+    # DEBUG
+    if homcc_args_dict["DEBUG"] or config_file.get("DEBUG"):
+        logging.basicConfig(level=logging.DEBUG)
+
+    # SCAN-INCLUDES
+    if homcc_args_dict.get("scan_includes"):
+        sys.exit(scan_includes(compiler_arguments))
+
+    # HOST
+    host: Optional[str] = homcc_args_dict.get("host")
+
+    if not host:
+        _: List[str] = load_hosts()  # TODO: use hosts list properly
+        host = "localhost:3633"
+
+    host_dict: Dict[str, str] = parse_host(host)
+
+    # TIMEOUT
     timeout: Optional[float] = homcc_args_dict.get("timeout")
 
-    # TODO: load config file and/or host file here
-    # overwrite compiler with default specified in the config file
-
-    if homcc_args_dict["DEBUG"]:
-        print("DEBUG")
-        homcc_args_dict["DEBUG"] = True
-    else:
-        # check if config file wants DEBUG mode enabled
-        homcc_args_dict["DEBUG"] = True
-
-    logging.basicConfig(level=logging.DEBUG)
-
-    if host_arg:
-        host = host_arg
-    else:
-        host = "localhost:3633"
-        # TODO: read host from config file
-        # raise NotImplementedError
-
-    parsed_host_dict = parse_host(host)
-
-    compression: Optional[str] = parsed_host_dict.pop("compression", None)
-
     if not timeout:
-        # TODO: get timeout from config file
         timeout = 10
+        # TODO: get timeout from config file
 
-    # $DISTCC_HOSTS
-    # config_file_paths: List[str] = ["$HOMCC_DIR/homcc.yaml", "~/.homcc/homcc.yaml", "/etc/homcc/homcc.yaml"]
-
-    # for config_file_path in config_file_paths:
-    #    with open(config_file_path) as config_file:
-    #        config_data = yaml.load(config_file, Loader=yaml.Fu)
+    compression: Optional[str] = host_dict.pop("compression", None)
 
     try:
-        sys.exit(asyncio.run(try_remote_compilation(parsed_host_dict, compression, timeout, compiler_arguments)))
+        sys.exit(asyncio.run(remote_compilation(host_dict, compression, timeout, compiler_arguments)))
 
     # unrecoverable errors
     except CompilerError as err:

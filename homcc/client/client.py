@@ -7,7 +7,7 @@ import logging
 
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Dict, Optional, Union
+from typing import Dict, Optional
 
 from homcc.client.client_utils import ConnectionType
 from homcc.common.arguments import Arguments
@@ -56,14 +56,14 @@ class Client(ABC):
 class TCPClient(Client):
     """Wrapper class to exchange homcc protocol messages via TCP"""
 
-    def __init__(self, host_dict: Dict[str, Union[int, str]], buffer_limit: Optional[int] = None):
+    def __init__(self, host_dict: Dict[str, str], buffer_limit: Optional[int] = None):
         connection_type = host_dict["type"]
 
         if connection_type != ConnectionType.TCP:
             raise ValueError(f"TCPClient cannot be initialized with {connection_type} information")
 
-        self.host = host_dict["host"]
-        self.port = host_dict.get("port", 3633)
+        self.host: str = host_dict["host"]
+        self.port: str = host_dict.get("port", str(3633))
 
         # default buffer size limit of StreamReader is 64 KiB
         self.buffer_limit: int = buffer_limit or 65536
@@ -74,7 +74,7 @@ class TCPClient(Client):
 
     async def connect(self):
         """connect to specified server at host:port"""
-        logger.debug("Connecting to %s:%i", self.host, self.port)
+        logger.debug("Connecting to %s:%s", self.host, self.port)
 
         try:
             self._reader, self._writer = await asyncio.open_connection(
@@ -86,7 +86,7 @@ class TCPClient(Client):
 
     async def _send(self, message: Message):
         """send a message to homcc server"""
-        logger.debug("Sending %s to %s:%i:\n%s", message.message_type, self.host, self.port, message.get_json_str())
+        logger.debug("Sending %s to %s:%s:\n%s", message.message_type, self.host, self.port, message.get_json_str())
         self._writer.write(message.to_bytes())  # type: ignore[union-attr]
         await self._writer.drain()  # type: ignore[union-attr]
 
@@ -134,7 +134,7 @@ class TCPClient(Client):
             raise ClientParsingError
 
         logger.debug(
-            "Received %s message from %s:%i:\n%s",
+            "Received %s message from %s:%s:\n%s",
             parsed_message.message_type,
             self.host,
             self.port,
@@ -144,6 +144,6 @@ class TCPClient(Client):
 
     async def close(self):
         """disconnect from server and close client socket"""
-        logger.debug("Disconnecting from %s:%i", self.host, self.port)
+        logger.debug("Disconnecting from %s:%s", self.host, self.port)
         self._writer.close()
         await self._writer.wait_closed()

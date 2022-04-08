@@ -87,15 +87,6 @@ class ShowConcurrencyLevel(ShowAndExitAction):
         sys.exit(os.EX_OK)
 
 
-class ShowDependencies(ShowAndExitAction):
-    """show all dependencies that would be sent to the server, as calculated from the given arguments, and exit"""
-
-    def __call__(self, _parser: ArgumentParser, namespace: Namespace, _values, _option_string: Optional[str] = None):
-        # this action requires unknown arguments (COMPILER ARGUMENTS) which cannot be accessed here, the functionality
-        # of this action is provided in show_dependencies
-        namespace.dependencies = True
-
-
 def parse_args(args: List[str]) -> Tuple[Dict[str, Any], Arguments]:
     parser: ArgumentParser = ArgumentParser(
         description="homcc - Home-Office friendly distcc replacement",
@@ -105,20 +96,27 @@ def parse_args(args: List[str]) -> Tuple[Dict[str, Any], Arguments]:
     )
 
     show_and_exit = parser.add_mutually_exclusive_group()
-    show_and_exit.add_argument("--help", "-h", action="help", help="show this help message and exit")
+    show_and_exit.add_argument("--help", action="help", help="show this help message and exit")
     show_and_exit.add_argument("--version", action=ShowVersion)
     show_and_exit.add_argument("--hosts", "--show-hosts", action=ShowHosts)
     show_and_exit.add_argument("-j", action=ShowConcurrencyLevel)
-    show_and_exit.add_argument("--dependencies", "--scan-includes", action=ShowDependencies)
 
-    # subparsers = parser.add_subparsers()
-    # subparsers.add_parser("COMPILER OPTIONS")
+    parser.add_argument(
+        "--DEBUG",
+        action="store_true",
+        help="enables a verbose DEBUG mode which prints detailed, colored logging messages to the terminal",
+    )
+
+    parser.add_argument(
+        "--scan-includes",
+        action="store_true",
+        help="show all dependencies that would be sent to the server, as calculated from the given arguments, and exit",
+    )
 
     # parser.add_argument("--randomize", action="store_true", help="randomize the server list before execution")
 
     parser.add_argument(
         "--host",
-        required=False,
         metavar="HOST",
         type=str,
         help="HOST defines the connection to the remote compilation server:\n"
@@ -133,16 +131,8 @@ def parse_args(args: List[str]) -> Tuple[Dict[str, Any], Arguments]:
 
     parser.add_argument(
         "--timeout",
-        required=False,
         type=float,
         help="TIMEOUT in seconds to wait for a response from the remote compilation server",
-    )
-
-    parser.add_argument(
-        "--DEBUG",
-        required=False,
-        action="store_true",
-        help="enables the DEBUG mode which prints detailed, colored logging messages to the terminal",
     )
 
     # capturing all remaining arguments which represent compiler arguments via nargs=argparse.REMAINDER and
@@ -161,14 +151,8 @@ def parse_args(args: List[str]) -> Tuple[Dict[str, Any], Arguments]:
     homcc_args_namespace, compiler_args = parser.parse_known_args(args)
     homcc_args_dict = vars(homcc_args_namespace)
 
-    show_dependencies_: Optional[bool] = homcc_args_dict.get("dependencies")
-
     compiler_or_argument: str = homcc_args_dict.pop("COMPILER_OR_ARGUMENT")  # either compiler or very first argument
     compiler_arguments: Arguments = Arguments.from_args(compiler_or_argument, compiler_args)
-
-    # all remaining "show and exit" actions should be handled here:
-    if show_dependencies_:
-        show_dependencies(compiler_arguments)
 
     return homcc_args_dict, compiler_arguments
 
@@ -180,12 +164,12 @@ class ConnectionType(str, Enum):
     SSH = "SSH"
 
 
-def parse_host(host: str) -> Dict[str, Union[int, str]]:
+def parse_host(host: str) -> Dict[str, str]:
     # the following regexes are intentional simple and contain a lot of false positives for IPv4 and IPv6 addresses,
     # matches are however merely used for rough categorization and don't test the validity of the actual host values,
     # meaningful failures on erroneous values will arise later on when the client tries to connect to the specified host
 
-    host_dict: Dict[str, Union[int, str]] = {}
+    host_dict: Dict[str, str] = {}
 
     # HOST,COMPRESSION
     match: Optional[re.Match] = re.match(r"^(\S+),(\S+)$", host)
@@ -234,20 +218,19 @@ def parse_host(host: str) -> Dict[str, Union[int, str]]:
     raise ValueError(f'Host "{host}" could not be parsed correctly, please provide it in the correct format!')
 
 
-def show_dependencies(arguments: Arguments):
+def scan_includes(arguments: Arguments) -> int:
     try:
         dependencies = find_dependencies(arguments)
     except CompilerError as err:
-        sys.exit(err.returncode)
+        return err.returncode
 
     source_files: List[str] = arguments.source_files
 
-    print("Dependencies:")
     for dependency in dependencies:
         if dependency not in source_files:
             print(dependency)
 
-    sys.exit(os.EX_OK)
+    return os.EX_OK
 
 
 def load_hosts() -> List[str]:
@@ -293,9 +276,67 @@ def load_hosts() -> List[str]:
     return []
 
 
-# TODO: load config file
+def parse_config(config: str) -> Dict:
+    config_info: List[str] = ["DEBUG", "TIMEOUT", "COMPRESSION"]
+    # TODO: capture trailing comments as third group?
+    config_pattern: str = f"^({'|'.join(config_info)})=(\\S+)$"
+    parsed_config = {}
+
+    for line in config.splitlines():
+        # remove leading and trailing whitespace as well as in-between space chars
+        stripped_line = line.strip().replace(" ", "")
+
+        # ignore comment lines
+        if stripped_line.startswith("#"):
+            continue
+
+        match = re.match(config_pattern, stripped_line, re.IGNORECASE)
+        if match:
+            key, value = match.groups()
+            parsed_config[key.upper()] = value.lower()
+        else:
+            logger.warning(
+                'Config line "%s" ignored\nTo disable this warning, please comment out the corresponding line!', line
+            )
+
+    return parsed_config
+
+
 def load_config_file() -> Dict:
-    raise NotImplementedError
+    """
+    Load homcc config from one of the following locations:
+    - File: $HOMCC_DIR/config
+    - File: ~/.homcc/config
+    - File: ~/config/homcc/config
+    - File: /etc/homcc/config
+    """
+
+    # Config File
+    config_file_name: str = "config"
+    homcc_dir_env_var = os.getenv(HOMCC_DIR_ENV_VAR)
+    home_dir_homcc_config = Path("~/.homcc") / config_file_name
+    home_config_dir_homcc_config = Path("~/config/homcc") / config_file_name
+    etc_dir_homcc_config = Path("/etc/homcc") / config_file_name
+
+    config_file_path: Optional[Path] = None
+
+    if homcc_dir_env_var:
+        homcc_dir_config = Path(homcc_dir_env_var) / config_file_name
+        if homcc_dir_config.exists():  # $HOMCC_DIR/config
+            config_file_path = homcc_dir_config
+    elif home_dir_homcc_config.exists():  # ~/.homcc/config
+        config_file_path = home_dir_homcc_config
+    elif home_config_dir_homcc_config.exists():  # ~/config/homcc/config
+        config_file_path = home_config_dir_homcc_config
+    elif etc_dir_homcc_config.exists():  # /etc/homcc/config
+        config_file_path = etc_dir_homcc_config
+
+    if config_file_path:
+        if config_file_path.stat().st_size == 0:
+            logger.info('Config file "%s" appears to be empty.', config_file_path)
+        return parse_config(config_file_path.read_text(encoding="utf-8"))
+
+    return {}
 
 
 def find_dependencies(arguments: Arguments) -> Set[str]:
