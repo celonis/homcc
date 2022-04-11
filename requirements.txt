@@ -7,4 +7,4 @@ pytest-cov
 pytest-timeout
 pytest-mock
 stdeb>=0.10.0
-setuptools==59.8.0
+#setuptools==59.8.0 # see https://github.com/astraw/stdeb/issues/175
