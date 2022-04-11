@@ -79,28 +79,52 @@ class Arguments:
             "-fprofile-correction",
         ]
 
-    def __init__(self, args: List[str]):
-        if len(args) == 0:
-            raise ValueError("Not enough arguments supplied to construct Arguments")
-
+    def __init__(self, compiler: Optional[str], args: List[str]):
+        self._compiler: Optional[str] = compiler
         self._args: List[str] = args
 
     def __eq__(self, other: Any) -> bool:
-        if isinstance(other, Arguments):
-            return self.args == other.args
-        if isinstance(other, list):
-            return self.args == other
+        if isinstance(other, Arguments) and len(self) == len(other):
+            return self.compiler == other.compiler and self.args == other.args
+        if isinstance(other, list) and len(self) == len(other):
+            return self.compiler == other[0] and self.args == other[1:]
         return False
 
     def __iter__(self) -> Iterator:
+        yield self.compiler
+
         for arg in self.args:
             yield arg
 
     def __len__(self) -> int:
-        return len(self.args)
+        return len(self.args) + 1
 
     def __str__(self) -> str:
-        return "[" + " ".join(self.args) + "]"
+        return f'[{self.compiler} {" ".join(self.args[1:])}]'
+
+    def __repr__(self) -> str:
+        return f"{self.__class__}({str(self)})"
+
+    @classmethod
+    def from_args(cls, args: List[str]) -> Arguments:
+        if len(args) == 0:
+            raise ValueError("Not enough arguments supplied to construct Arguments")
+
+        # compiler without arguments, e.g. ["g++"]
+        if len(args) == 1:
+            return cls(args[0], [])
+
+        # compiler with arguments, e.g. ["g++", "foo.cpp", "-c"]
+        return cls(args[0], args[1:])
+
+    @classmethod
+    def from_cli(cls, compiler_or_argument: str, args: List[str]) -> Arguments:
+        # explicit compiler argument, e.g.: "homcc_client.py [OPTIONAL ARGUMENTS] g++ -c foo.cpp"
+        if cls.is_compiler(compiler_or_argument):
+            return cls(compiler_or_argument, args)
+
+        # missing compiler argument, e.g.: "homcc_client.py [OPTIONAL ARGUMENTS] -c foo.cpp"
+        return cls(None, [compiler_or_argument] + args)
 
     @staticmethod
     def is_source_file(arg: str) -> bool:
@@ -131,15 +155,6 @@ class Arguments:
             return True
         return False
 
-    @classmethod
-    def from_args(cls, compiler_or_argument: str, args: List[str]) -> Arguments:
-        # explicit compiler argument, e.g.: homcc_client.py [OPTIONAL ARGUMENTS] g++ -c foo.cpp
-        if Arguments.is_compiler(compiler_or_argument):
-            return Arguments([compiler_or_argument] + args)
-
-        # missing compiler argument, e.g.: homcc_client.py [OPTIONAL ARGUMENTS] -c foo.cpp
-        return Arguments([Arguments.default_compiler, compiler_or_argument] + args)
-
     def is_sendable(self) -> bool:
         """determine if the Arguments lead to a meaningful remote compilation"""
         return _is_sendable(self)
@@ -167,13 +182,17 @@ class Arguments:
         return self
 
     @property
-    def compiler(self) -> str:
-        return self.args[0]
+    def compiler(self) -> Optional[str]:
+        return self._compiler
+
+    @compiler.setter
+    def compiler(self, compiler: str):
+        self._compiler = compiler
 
     def dependency_finding(self) -> Arguments:
         """return Arguments with which to find dependencies via the preprocessor"""
         return (
-            Arguments(self.args)
+            Arguments(self.compiler, self.args)
             .remove_arg(self.no_linking_arg)
             .remove_output_args()
             .add_arg("-M")  # output dependencies
@@ -183,14 +202,14 @@ class Arguments:
 
     def no_linking(self) -> Arguments:
         """return copy of Arguments with output arguments removed and no linking argument added"""
-        return Arguments(self.args).remove_output_args().add_arg(self.no_linking_arg)
+        return Arguments(self.compiler, self.args).remove_output_args().add_arg(self.no_linking_arg)
 
     @property
     def output(self) -> Optional[str]:
         """if present, return the last specified output target"""
         output: Optional[str] = None
 
-        it: Iterator[str] = iter(self.args[1:])
+        it: Iterator[str] = iter(self.args)
         for arg in it:
             if arg.startswith("-o"):
                 if arg == "-o":  # output argument with output target following: e.g.: -o out
@@ -213,7 +232,7 @@ class Arguments:
         source_file_paths: List[str] = []
         other_open_arg: bool = False
 
-        for arg in self.args[1:]:
+        for arg in self.args:
             if arg.startswith("-"):
                 for arg_prefix in [self.output_arg] + self.include_args:
                     if arg == arg_prefix:
@@ -235,18 +254,18 @@ class Arguments:
 
     def remove_output_args(self) -> Arguments:
         """return modified Arguments with all output related arguments removed"""
-        args: List[str] = [self.args[0]]
+        arguments: Arguments = Arguments(self.compiler, [])
 
-        it: Iterator[str] = iter(self.args[1:])
+        it: Iterator[str] = iter(self.args)
         for arg in it:
             if arg.startswith("-o"):
                 # skip output related args
                 if arg == "-o":
                     next(it, None)  # skip output target argument without raising an exception
             else:
-                args.append(arg)
+                arguments.add_arg(arg)
 
-        self._args = args
+        self._args = arguments.args
         return self
 
     def remove_source_file_args(self) -> Arguments:
@@ -275,7 +294,7 @@ class Arguments:
             logger.error("Arguments does currently not support shell execution!")
 
         result: subprocess.CompletedProcess = subprocess.run(
-            self.args, check=check, encoding=encoding_, capture_output=capture_output, **kwargs
+            list(self), check=check, encoding=encoding_, capture_output=capture_output, **kwargs
         )
         return ArgumentsExecutionResult.from_process_result(result)
 
@@ -289,7 +308,7 @@ def _is_sendable(arguments: Arguments) -> bool:
         log_unsendable("no source files given")
         return False
 
-    for arg in arguments.args[1:]:
+    for arg in arguments.args:
         # prefix args
         if arg.startswith(Arguments.Unsendable.assembler_options_prefix):
             log_unsendable(f"[{arg}] TODO")  # TODO

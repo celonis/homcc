@@ -44,9 +44,9 @@ class TestClient:
             str(self.example_out_file.absolute()),
         ]
         cwd: str = ""
-        dependencies: Set[str] = find_dependencies(Arguments(args))
+        dependencies: Set[str] = find_dependencies(Arguments.from_args(args))
         dependency_dict: Dict[str, str] = calculate_dependency_dict(dependencies)
 
         await self.client.connect()
-        await self.client.send_argument_message(Arguments(args), cwd, dependency_dict)
+        await self.client.send_argument_message(Arguments.from_args(args), cwd, dependency_dict)
         await self.client.close()

@@ -11,10 +11,12 @@ from pathlib import Path
 class TestEndToEnd:
     """End to end integration tests."""
 
-    def start_server(self, unused_tcp_port: int) -> subprocess.Popen:
+    @staticmethod
+    def start_server(unused_tcp_port: int) -> subprocess.Popen:
         return subprocess.Popen(["./homcc_server.py", f"--port={unused_tcp_port}"], stdout=subprocess.PIPE)
 
-    def start_client(self, unused_tcp_port: int) -> subprocess.CompletedProcess:
+    @staticmethod
+    def start_client(unused_tcp_port: int) -> subprocess.CompletedProcess:
         return subprocess.run(
             [
                 "./homcc_client.py",

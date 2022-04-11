@@ -9,7 +9,7 @@ from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Dict, Optional
 
-from homcc.client.client_utils import ConnectionType
+from homcc.client.parsing import ConnectionType
 from homcc.common.arguments import Arguments
 from homcc.common.messages import ArgumentMessage, DependencyReplyMessage, Message
 
