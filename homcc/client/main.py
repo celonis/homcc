@@ -17,7 +17,7 @@ from homcc.client.client import (  # pylint: disable=wrong-import-position
     TCPClient,
     TCPClientError,
     UnexpectedMessageTypeError,
-)  # pylint: disable=wrong-import-position
+)
 from homcc.client.client_utils import (  # pylint: disable=wrong-import-position
     CompilerError,
     calculate_dependency_dict,

@@ -6,7 +6,7 @@ server:
 	echo "Building the homcc server .deb"
 
 	cp setup_server.py setup.py
-	python3 setup.py --command-packages=stdeb.command sdist_dsc --with-dh-systemd --package homcc-server
+	python3 setup.py --command-packages=stdeb.command sdist_dsc --with-dh-systemd
 
 	echo "-- Copying service file"
 	# we need to copy the systemd service file to the generated package
