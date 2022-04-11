@@ -35,7 +35,7 @@ from homcc.common.messages import (  # pylint: disable=wrong-import-position
 logger: logging.Logger = logging.getLogger(__name__)
 
 
-async def main() -> int:
+async def run() -> int:
     """client main function for parsing arguments and communicating with the homcc server"""
     arguments: Arguments = Arguments.from_argv(sys.argv)  # TODO(s.pirsch): provide compiler from config file (CPL-6419)
     cwd: str = os.getcwd()  # current working directory
@@ -129,11 +129,11 @@ async def main() -> int:
         return local_compile(arguments)
 
 
-def init():
+def main():
     # TODO(s.pirsch): make logging level configurable via caller or config file
     logging.basicConfig(level=logging.DEBUG)
-    sys.exit(asyncio.run(main()))
+    sys.exit(asyncio.run(run()))
 
 
 if __name__ == "__main__":
-    init()
+    main()

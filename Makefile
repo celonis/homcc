@@ -31,7 +31,7 @@ client:
 	python3 setup.py --command-packages=stdeb.command bdist_deb
 
 	echo "-- Copying client .deb into target"
-	cp deb_dist/*.deb target/homcc_client.deb
+	cp deb_dist/*.deb target/homcc.deb
 
 	rm setup.py
 	rm -rf deb_dist

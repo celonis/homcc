@@ -3,7 +3,7 @@ from setuptools import setup  # type: ignore
 
 if __name__ == "__main__":
     setup(
-        name="homcc-client",
+        name="homcc",
         version="0.0.1",
         description=("Home-Office friendly distcc replacement - Client"),
         license="GPL-3.0",
@@ -11,6 +11,6 @@ if __name__ == "__main__":
         packages=["homcc.client", "homcc.common"],
         entry_points="""
             [console_scripts]
-            homcc-client=homcc.client.homcc_client:init
+            homcc=homcc.client.main:main
         """,
     )

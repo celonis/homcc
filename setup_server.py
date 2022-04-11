@@ -11,6 +11,6 @@ if __name__ == "__main__":
         packages=["homcc.server", "homcc.common"],
         entry_points="""
             [console_scripts]
-            homcc-server=homcc.server.homcc_server:main
+            homcc-server=homcc.server.main:main
         """,
     )
