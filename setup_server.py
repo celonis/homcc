@@ -1,3 +1,4 @@
+"""Setuptools for the homcc server."""
 from setuptools import setup  # type: ignore
 
 if __name__ == "__main__":

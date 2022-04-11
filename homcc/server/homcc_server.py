@@ -3,13 +3,13 @@
 import sys
 import os
 
-sys.path.append(os.path.join(os.path.dirname(__file__), "../.."))
-
 import logging
 import argparse
 import signal
 
-from homcc.server.server import start_server, stop_server
+sys.path.append(os.path.join(os.path.dirname(__file__), "../.."))
+
+from homcc.server.server import start_server, stop_server  # pylint: disable=wrong-import-position
 
 
 def main():

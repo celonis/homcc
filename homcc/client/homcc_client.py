@@ -7,14 +7,18 @@ import logging
 import sys
 import os
 
-sys.path.append(os.path.join(os.path.dirname(__file__), "../.."))
-
 from pathlib import Path
 from typing import Dict, Set
 
-from homcc.common.arguments import Arguments, ArgumentsExecutionResult
-from homcc.client.client import TCPClient, TCPClientError, UnexpectedMessageTypeError
-from homcc.client.client_utils import (
+sys.path.append(os.path.join(os.path.dirname(__file__), "../.."))
+
+from homcc.common.arguments import Arguments, ArgumentsExecutionResult  # pylint: disable=wrong-import-position
+from homcc.client.client import (  # pylint: disable=wrong-import-position
+    TCPClient,
+    TCPClientError,
+    UnexpectedMessageTypeError,
+)  # pylint: disable=wrong-import-position
+from homcc.client.client_utils import (  # pylint: disable=wrong-import-position
     CompilerError,
     calculate_dependency_dict,
     find_dependencies,
@@ -22,7 +26,11 @@ from homcc.client.client_utils import (
     local_compile,
     link_object_files,
 )
-from homcc.common.messages import Message, CompilationResultMessage, DependencyRequestMessage
+from homcc.common.messages import (
+    Message,
+    CompilationResultMessage,
+    DependencyRequestMessage,
+)  # pylint: disable=wrong-import-position
 
 logger: logging.Logger = logging.getLogger(__name__)
 
