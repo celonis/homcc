@@ -21,6 +21,7 @@ from homcc.client.client_utils import (
     link_object_files,
 )
 from homcc.common.messages import ConnectionRefusedMessage, Message, CompilationResultMessage, DependencyRequestMessage
+from homcc.common.logging import Formatter, FormatterConfig, FormatterDestination, setup_logging
 
 
 async def remote_compile(host: str, port: int, arguments: Arguments) -> int:
@@ -133,6 +134,10 @@ async def main() -> int:
 
 if __name__ == "__main__":
     # TODO(s.pirsch): make logging level configurable via caller or config file
-    logging.basicConfig(level=logging.DEBUG)
+    setup_logging(
+        formatter=Formatter.CLIENT,
+        config=FormatterConfig.COLORED,
+        destination=FormatterDestination.STREAM,
+    )
     logger: logging.Logger = logging.getLogger(__name__)
     sys.exit(asyncio.run(main()))

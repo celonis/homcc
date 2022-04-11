@@ -2,8 +2,10 @@
 import threading
 import socketserver
 import logging
+import random
 from tempfile import TemporaryDirectory
 from typing import List, Dict, Tuple
+from threading import Lock
 from functools import singledispatchmethod
 from socket import SHUT_RD
 
@@ -27,6 +29,7 @@ from homcc.server.environment import (
     map_dependency_paths,
     save_dependency,
     do_compilation,
+    symlink_dependency_to_cache,
 )
 
 logger = logging.getLogger(__name__)
@@ -35,13 +38,19 @@ logger = logging.getLogger(__name__)
 class TCPServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
     MAX_AMOUNT_CONNECTIONS = 48
 
-    root_temp_folder: TemporaryDirectory
     current_amount_connections: int
+    """TCP Server instance, holding data relevant across compilations."""
+    root_temp_folder: TemporaryDirectory
+    cache: Dict[str, str]
+    """'Hash' -> 'File path' on server map for holding paths to cached files."""
+    cache_mutex: Lock
 
     def __init__(self, server_address, RequestHandlerClass) -> None:
         super().__init__(server_address, RequestHandlerClass)
         self.root_temp_folder = create_root_temp_folder()
         self.current_amount_connections = 0
+        self.cache = {}
+        self.cache_mutex = Lock()
 
     def verify_request(self, request, _) -> bool:
         accept_connection = self.current_amount_connections < self.MAX_AMOUNT_CONNECTIONS
@@ -72,6 +81,8 @@ class TCPRequestHandler(socketserver.BaseRequestHandler):
     """All dependencies for the current compilation, mapped to server paths."""
     needed_dependencies: Dict[str, str] = {}
     """Further dependencies needed from the client."""
+    needed_dependency_keys: List[str] = []
+    """Shuffled list of keys for the needed dependencies dict."""
     compiler_arguments: List[str] = []
     """List of compiler arguments."""
     instance_path: str = ""
@@ -100,10 +111,23 @@ class TCPRequestHandler(socketserver.BaseRequestHandler):
         self.mapped_dependencies = map_dependency_paths(self.instance_path, self.mapped_cwd, message.get_dependencies())
         logger.debug("Mapped dependencies: %s", self.mapped_dependencies)
 
-        self.needed_dependencies = get_needed_dependencies(self.mapped_dependencies)
+        self.needed_dependencies = get_needed_dependencies(
+            self.mapped_dependencies, self.server.cache, self.server.cache_mutex
+        )
         logger.debug("Needed dependencies: %s", self.needed_dependencies)
 
-        self._request_next_dependency()
+        # shuffle the keys so we request them at a different order later to avoid
+        # transmitting the same files for simultaneous requests
+        self.needed_dependency_keys = list(self.needed_dependencies.keys())
+        random.shuffle(self.needed_dependency_keys)
+
+        logger.info(
+            "#%i cached dependencies, #%i missing dependencies.",
+            len(self.mapped_dependencies) - len(self.needed_dependencies),
+            len(self.needed_dependencies),
+        )
+
+        self.check_dependencies_exist()
 
     @_handle_message.register
     def _handle_dependency_request_message(self, _: DependencyRequestMessage):
@@ -115,7 +139,8 @@ class TCPRequestHandler(socketserver.BaseRequestHandler):
         logger.debug("Len of dependency reply payload is %i", message.get_further_payload_size())
 
         dependency_content = message.get_content()
-        dependency_path, dependency_hash = next(iter(self.needed_dependencies.items()))
+        dependency_path = next(iter(self.needed_dependency_keys))
+        dependency_hash = self.needed_dependencies[dependency_path]
 
         retrieved_dependency_hash = hash_file_with_bytes(dependency_content)
 
@@ -128,13 +153,14 @@ class TCPRequestHandler(socketserver.BaseRequestHandler):
             )
         else:
             del self.needed_dependencies[dependency_path]
+            self.needed_dependency_keys.pop(0)
+
             save_dependency(dependency_path, dependency_content)
 
-        if not self._request_next_dependency():
-            # no further dependencies needed, compile now
-            result_message = do_compilation(self.instance_path, self.mapped_cwd, self.compiler_arguments)
+            with self.server.cache_mutex:
+                self.server.cache[dependency_hash] = dependency_path
 
-            self.request.sendall(result_message.to_bytes())
+        self.check_dependencies_exist()
 
     @_handle_message.register
     def _handle_compilation_result_message(self, _: CompilationResultMessage):
@@ -142,16 +168,38 @@ class TCPRequestHandler(socketserver.BaseRequestHandler):
 
     def _request_next_dependency(self) -> bool:
         """Requests a dependency with the given sha1sum from the client.
-        Returns False if there is nothing to request any more."""
-        if len(self.needed_dependencies) > 0:
-            next_needed_hash = next(iter(self.needed_dependencies.values()))
+        Returns False if there was nothing to request any more."""
+        request_sent = False
+        while not request_sent and len(self.needed_dependencies) > 0:
+            next_needed_file = next(iter(self.needed_dependency_keys))
+            next_needed_hash = self.needed_dependencies[next_needed_file]
 
-            request_message = DependencyRequestMessage(next_needed_hash)
+            with self.server.cache_mutex:
+                already_cached = next_needed_hash in self.server.cache
 
-            logger.debug("Sending request for dependency with hash %s", str(request_message.get_sha1sum()))
-            self.request.sendall(request_message.to_bytes())
+            if already_cached:
+                symlink_dependency_to_cache(
+                    next_needed_file, next_needed_hash, self.server.cache, self.server.cache_mutex
+                )
+
+                del self.needed_dependencies[next_needed_file]
+                self.needed_dependency_keys.pop(0)
+            else:
+                request_message = DependencyRequestMessage(next_needed_hash)
+
+                logger.debug("Sending request for dependency with hash %s", str(request_message.get_sha1sum()))
+                self.request.sendall(request_message.to_bytes())
+                request_sent = True
 
         return len(self.needed_dependencies) > 0
+
+    def check_dependencies_exist(self) -> None:
+        """Checks if all dependencies exist. If yes, starts compiling. If no, requests missing dependencies."""
+        if not self._request_next_dependency():
+            # no further dependencies needed, compile now
+            result_message = do_compilation(self.instance_path, self.mapped_cwd, self.compiler_arguments)
+
+            self.request.sendall(result_message.to_bytes())
 
     def _try_parse_message(self, message_bytes: bytearray) -> int:
         bytes_needed, parsed_message = Message.from_bytes(message_bytes)
