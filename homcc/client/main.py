@@ -142,7 +142,7 @@ def main():
         config=FormatterConfig.COLORED,
         destination=FormatterDestination.STREAM,
     )
-    sys.exit(asyncio.run(main()))
+    sys.exit(asyncio.run(run()))
 
 
 if __name__ == "__main__":

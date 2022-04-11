@@ -8,12 +8,12 @@ import signal
 
 sys.path.append(os.path.join(os.path.dirname(__file__), "../.."))
 
-from homcc.common.logging import (
+from homcc.common.logging import (  # pylint: disable=wrong-import-position
     Formatter,
     FormatterConfig,
     FormatterDestination,
     setup_logging,
-)  # pylint: disable=wrong-import-position
+)
 from homcc.server.server import start_server, stop_server  # pylint: disable=wrong-import-position
 
 
