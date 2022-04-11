@@ -27,7 +27,7 @@ jobs:
       - name: Execute linters
         run: |
           pylint -v --rcfile=.pylintrc *.py homcc tests
-          mypy -v *.py homcc
+          mypy -v --pretty *.py homcc
   format-check:
     runs-on: ubuntu-latest
     steps:

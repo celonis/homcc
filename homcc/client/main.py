@@ -31,6 +31,13 @@ from homcc.common.messages import (  # pylint: disable=wrong-import-position
     CompilationResultMessage,
     DependencyRequestMessage,
 )
+from homcc.common.logging import (  # pylint: disable=wrong-import-position
+    Formatter,
+    FormatterConfig,
+    FormatterDestination,
+    setup_logging,
+)
+
 
 logger: logging.Logger = logging.getLogger(__name__)
 
@@ -130,9 +137,12 @@ async def run() -> int:
 
 
 def main():
-    # TODO(s.pirsch): make logging level configurable via caller or config file
-    logging.basicConfig(level=logging.DEBUG)
-    sys.exit(asyncio.run(run()))
+    setup_logging(
+        formatter=Formatter.CLIENT,
+        config=FormatterConfig.COLORED,
+        destination=FormatterDestination.STREAM,
+    )
+    sys.exit(asyncio.run(main()))
 
 
 if __name__ == "__main__":
