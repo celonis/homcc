@@ -1,4 +1,4 @@
-name: Build Branch
+name: Build artifacts on main
 
 on:
   push:
