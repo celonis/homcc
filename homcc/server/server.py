@@ -36,6 +36,8 @@ logger = logging.getLogger(__name__)
 
 
 class TCPServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
+    """TCP Server instance, holding data relevant across compilations."""
+
     MAX_AMOUNT_CONNECTIONS = 48
 
     current_amount_connections: int
