@@ -7,4 +7,3 @@ pytest-cov
 pytest-timeout
 pytest-mock
 stdeb>=0.10.0
-debhelper>=0.3.0

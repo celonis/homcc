@@ -76,7 +76,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-          sudo apt-get install -y python3-all debhelper
+          sudo apt-get install -y python3-all debhelper dh-python
       - name: Build
         run: |
           make all
@@ -85,3 +85,4 @@ jobs:
         with: 
           name: Debian packages
           path: target/
+          if-no-files-found: error
