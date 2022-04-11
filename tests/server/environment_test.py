@@ -109,7 +109,11 @@ class TestServerEnvironment:
         mocker.patch(
             "os.symlink",
         )
+
+        # mock the locks
         lock_mock = mocker.Mock()
+        lock_mock.__enter__ = mocker.Mock(return_value=(mocker.Mock(), None))
+        lock_mock.__exit__ = mocker.Mock(return_value=None)
 
         needed_dependencies = get_needed_dependencies(dependencies, cache, lock_mock)
 

@@ -63,10 +63,9 @@ def get_needed_dependencies(dependencies: Dict[str, str], cache: Dict[str, str],
             Path(dependency_folder).mkdir(parents=True, exist_ok=True)
 
             # then do the actual symlinking
-            cache_mutex.acquire()
-            os.symlink(cache[dependency_hash], dependency_file)
-            cache_mutex.release()
-            logger.debug("Symlinked '%s' to '%s'.", dependency_file, cache[dependency_hash])
+            with cache_mutex:
+                os.symlink(cache[dependency_hash], dependency_file)
+                logger.debug("Symlinked '%s' to '%s'.", dependency_file, cache[dependency_hash])
 
     return needed_dependencies
 

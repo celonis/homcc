@@ -2,6 +2,7 @@
 import threading
 import socketserver
 import logging
+import random
 from tempfile import TemporaryDirectory
 from typing import List, Dict, Tuple
 from threading import Lock
@@ -58,6 +59,8 @@ class TCPRequestHandler(socketserver.BaseRequestHandler):
     """All dependencies for the current compilation, mapped to server paths."""
     needed_dependencies: Dict[str, str] = {}
     """Further dependencies needed from the client."""
+    needed_dependency_keys: List[str] = []
+    """Shuffled list of keys for the needed dependencies dict."""
     compiler_arguments: List[str] = []
     """List of compiler arguments."""
     instance_path: str = ""
@@ -91,6 +94,11 @@ class TCPRequestHandler(socketserver.BaseRequestHandler):
         )
         logger.debug("Needed dependencies: %s", self.needed_dependencies)
 
+        # shuffle the keys so we request them at a different order later to avoid
+        # transmitting the same files for simultaneous requests
+        self.needed_dependency_keys = list(self.needed_dependencies.keys())
+        random.shuffle(self.needed_dependency_keys)
+
         logger.info(
             "#%i cached dependencies, #%i missing dependencies.",
             len(self.mapped_dependencies) - len(self.needed_dependencies),
@@ -109,7 +117,8 @@ class TCPRequestHandler(socketserver.BaseRequestHandler):
         logger.debug("Len of dependency reply payload is %i", message.get_further_payload_size())
 
         dependency_content = message.get_content()
-        dependency_path, dependency_hash = next(iter(self.needed_dependencies.items()))
+        dependency_path = next(iter(self.needed_dependency_keys))
+        dependency_hash = self.needed_dependencies[dependency_path]
 
         retrieved_dependency_hash = hash_file_with_bytes(dependency_content)
 
@@ -122,11 +131,12 @@ class TCPRequestHandler(socketserver.BaseRequestHandler):
             )
         else:
             del self.needed_dependencies[dependency_path]
+            self.needed_dependency_keys.pop(0)
+
             save_dependency(dependency_path, dependency_content)
 
-            self.server.cache_mutex.acquire()
-            self.server.cache[dependency_hash] = dependency_path
-            self.server.cache_mutex.release()
+            with self.server.cache_mutex:
+                self.server.cache[dependency_hash] = dependency_path
 
         self.check_dependencies_exist()
 
@@ -138,7 +148,8 @@ class TCPRequestHandler(socketserver.BaseRequestHandler):
         """Requests a dependency with the given sha1sum from the client.
         Returns False if there is nothing to request any more."""
         if len(self.needed_dependencies) > 0:
-            next_needed_hash = next(iter(self.needed_dependencies.values()))
+            next_needed_key = next(iter(self.needed_dependency_keys))
+            next_needed_hash = self.needed_dependencies[next_needed_key]
 
             request_message = DependencyRequestMessage(next_needed_hash)
 
