@@ -26,11 +26,11 @@ from homcc.client.client_utils import (  # pylint: disable=wrong-import-position
     local_compile,
     link_object_files,
 )
-from homcc.common.messages import (
+from homcc.common.messages import (  # pylint: disable=wrong-import-position
     Message,
     CompilationResultMessage,
     DependencyRequestMessage,
-)  # pylint: disable=wrong-import-position
+)
 
 logger: logging.Logger = logging.getLogger(__name__)
 
