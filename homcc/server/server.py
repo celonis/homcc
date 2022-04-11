@@ -27,6 +27,7 @@ from homcc.server.environment import (
     map_dependency_paths,
     save_dependency,
     do_compilation,
+    symlink_dependency_to_cache,
 )
 
 logger = logging.getLogger(__name__)
@@ -146,15 +147,28 @@ class TCPRequestHandler(socketserver.BaseRequestHandler):
 
     def _request_next_dependency(self) -> bool:
         """Requests a dependency with the given sha1sum from the client.
-        Returns False if there is nothing to request any more."""
-        if len(self.needed_dependencies) > 0:
-            next_needed_key = next(iter(self.needed_dependency_keys))
-            next_needed_hash = self.needed_dependencies[next_needed_key]
+        Returns False if there was nothing to request any more."""
+        request_sent = False
+        while not request_sent and len(self.needed_dependencies) > 0:
+            next_needed_file = next(iter(self.needed_dependency_keys))
+            next_needed_hash = self.needed_dependencies[next_needed_file]
 
-            request_message = DependencyRequestMessage(next_needed_hash)
+            with self.server.cache_mutex:
+                already_cached = next_needed_hash in self.server.cache
 
-            logger.debug("Sending request for dependency with hash %s", str(request_message.get_sha1sum()))
-            self.request.sendall(request_message.to_bytes())
+            if already_cached:
+                symlink_dependency_to_cache(
+                    next_needed_file, next_needed_hash, self.server.cache, self.server.cache_mutex
+                )
+
+                del self.needed_dependencies[next_needed_file]
+                self.needed_dependency_keys.pop(0)
+            else:
+                request_message = DependencyRequestMessage(next_needed_hash)
+
+                logger.debug("Sending request for dependency with hash %s", str(request_message.get_sha1sum()))
+                self.request.sendall(request_message.to_bytes())
+                request_sent = True
 
         return len(self.needed_dependencies) > 0
 
