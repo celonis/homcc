@@ -5,38 +5,43 @@ from enum import Enum
 from typing import Callable, List, Optional
 
 
-def lzo(_: bytes) -> bytes:
+def lzo(data: bytes, compress: bool) -> bytes:
     """Lempel–Ziv–Oberhumer compression algorithm"""
     raise NotImplementedError
 
 
-def lzma(_: bytes) -> bytes:
+def lzma(data: bytes, compress: bool) -> bytes:
     """Lempel–Ziv–Markov chain algorithm"""
     raise NotImplementedError
 
 
-class _CompressionFunctionWrapper:
+class _FunctionWrapper:
     """
-    Wrapper for compression functions to allow callable storage in Enum and access to their name and doc strings
+    Wrapper for compression functions to allow callable storage in the Compression Enum and easy access to their name
+    and doc strings
     """
 
-    def __init__(self, function: Callable[[bytes], bytes]):
+    def __init__(self, function: Callable[[bytes, bool], bytes]):
         self.function = function
-        self.doc: Optional[str] = function.__doc__
         self.name: str = function.__name__
 
-    def __call__(self, data: bytes) -> bytes:
-        return self.function(data)
+        if not function.__doc__:
+            raise ValueError(f"Function {self.name} must have a doc string!")
+
+        self.doc: str = function.__doc__
+
+    def __call__(self, data: bytes, compress: bool) -> bytes:
+        return self.function(data, compress)
 
 
 class Compression(Enum):
     """Enum class of all supported compression types"""
 
-    LZO = _CompressionFunctionWrapper(lzo)
-    LZMA = _CompressionFunctionWrapper(lzma)
+    LZO = _FunctionWrapper(lzo)
+    LZMA = _FunctionWrapper(lzma)
 
-    def __call__(self, data: bytes) -> bytes:
-        return self.value(data)
+    def __call__(self, data: bytes, compress: bool) -> bytes:
+        return self.value(data, compress)
 
     @staticmethod
     def get(item: str) -> Optional[Compression]:

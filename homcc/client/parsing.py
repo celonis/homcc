@@ -46,10 +46,7 @@ class ShowAndExitAction(ABC, Action):
         if nargs != 0:
             raise ValueError(f"nargs is {nargs}, but {self.__class__.__name__} requires nargs to be 0")
 
-        # use class docstring as help description if none is provided
-        help_: str = kwargs.pop("help", self.__doc__)
-
-        super().__init__(nargs=nargs, help=help_, **kwargs)
+        super().__init__(nargs=nargs, help=kwargs.pop("help", self.__doc__), **kwargs)
 
     @abstractmethod
     def __call__(self, *_):
@@ -60,7 +57,7 @@ class ShowVersion(ShowAndExitAction):
     """show version and exit"""
 
     def __call__(self, *_):
-        print("homcc 0.0.1")  # TODO(s.pirsch): make dynamic
+        print("homcc 0.0.1")
         sys.exit(os.EX_OK)
 
 
@@ -125,9 +122,6 @@ def parse_cli_args(args: List[str]) -> Tuple[Dict[str, Any], Arguments]:
         action="store_true",
         help="show all dependencies that would be sent to the server, as calculated from the given arguments, and exit",
     )
-
-    # TODO(s.pirsch): investigate this functionality in distcc
-    # parser.add_argument("--randomize", action="store_true", help="randomize the server list before execution")
 
     indented_newline: str = "\n\t"
     parser.add_argument(
@@ -261,6 +255,7 @@ def default_hosts_file_locations() -> List[Path]:
     Default locations for the hosts file:
     - File: $HOMCC_DIR/hosts
     - File: ~/.homcc/hosts
+    - File: ~/.config/homcc/hosts
     - File: /etc/homcc/hosts
     """
 
@@ -268,6 +263,7 @@ def default_hosts_file_locations() -> List[Path]:
     hosts_file_name: str = "hosts"
     homcc_dir_env_var = os.getenv(HOMCC_DIR_ENV_VAR)
     home_dir_homcc_hosts = Path("~/.homcc") / hosts_file_name
+    home_dir_config_homcc_hosts = Path("~/.config/homcc") / hosts_file_name
     etc_dir_homcc_hosts = Path("/etc/homcc") / hosts_file_name
 
     hosts_file_locations: List[Path] = []
@@ -280,6 +276,10 @@ def default_hosts_file_locations() -> List[Path]:
     # ~/.homcc/hosts
     if home_dir_homcc_hosts.exists():
         hosts_file_locations.append(home_dir_homcc_hosts)
+
+    # ~/.config/homcc/hosts
+    if home_dir_config_homcc_hosts.exists():
+        hosts_file_locations.append(home_dir_config_homcc_hosts)
 
     # /etc/homcc/hosts
     if etc_dir_homcc_hosts.exists():
@@ -323,18 +323,18 @@ def load_hosts(hosts_file_locations: Optional[List[Path]] = None) -> List[str]:
     for hosts_file_location in hosts_file_locations:
         if hosts_file_location.exists():
             if hosts_file_location.stat().st_size == 0:
-                logger.warning('Hosts file "%s" appears to be empty.', hosts_file_location)
+                logger.warning('Skipping empty hosts file "%s"!', hosts_file_location)
                 continue
             return filtered_lines(hosts_file_location.read_text(encoding="utf-8"))
 
     raise NoHostsFoundError
 
 
-def parse_config(config: str) -> Dict:
+def parse_config(config: str) -> Dict[str, str]:
     config_info: List[str] = ["COMPILER", "COMPRESSION", "DEBUG", "TIMEOUT"]
     # TODO: capture trailing comments as third group?
     config_pattern: str = f"^({'|'.join(config_info)})=(\\S+)$"
-    parsed_config = {}
+    parsed_config: Dict[str, str] = {}
 
     for line in config.splitlines():
         # remove leading and trailing whitespace as well as in-between space chars
@@ -364,12 +364,12 @@ def parse_config(config: str) -> Dict:
     return parsed_config
 
 
-def load_config_file() -> Dict:
+def default_config_file_locations() -> List[Path]:
     """
     Load homcc config from one of the following locations:
     - File: $HOMCC_DIR/config
     - File: ~/.homcc/config
-    - File: ~/config/homcc/config
+    - File: ~/.config/homcc/config
     - File: /etc/homcc/config
     """
 
@@ -377,25 +377,40 @@ def load_config_file() -> Dict:
     config_file_name: str = "config"
     homcc_dir_env_var = os.getenv(HOMCC_DIR_ENV_VAR)
     home_dir_homcc_config = Path("~/.homcc") / config_file_name
-    home_config_dir_homcc_config = Path("~/config/homcc") / config_file_name
+    home_config_dir_homcc_config = Path("~/.config/homcc") / config_file_name
     etc_dir_homcc_config = Path("/etc/homcc") / config_file_name
 
-    config_file_path: Optional[Path] = None
+    config_file_locations: List[Path] = []
 
+    # $HOMCC_DIR/config
     if homcc_dir_env_var:
         homcc_dir_config = Path(homcc_dir_env_var) / config_file_name
-        if homcc_dir_config.exists():  # $HOMCC_DIR/config
-            config_file_path = homcc_dir_config
-    elif home_dir_homcc_config.exists():  # ~/.homcc/config
-        config_file_path = home_dir_homcc_config
-    elif home_config_dir_homcc_config.exists():  # ~/config/homcc/config
-        config_file_path = home_config_dir_homcc_config
-    elif etc_dir_homcc_config.exists():  # /etc/homcc/config
-        config_file_path = etc_dir_homcc_config
+        config_file_locations.append(homcc_dir_config)
 
-    if config_file_path:
-        if config_file_path.stat().st_size == 0:
-            logger.info('Config file "%s" appears to be empty.', config_file_path)
-        return parse_config(config_file_path.read_text(encoding="utf-8"))
+    # ~/.homcc/config
+    if home_dir_homcc_config.exists():
+        config_file_locations.append(home_dir_homcc_config)
+
+    # ~/.config/homcc/config
+    if home_config_dir_homcc_config.exists():
+        config_file_locations.append(home_config_dir_homcc_config)
+
+    # /etc/homcc/config
+    if etc_dir_homcc_config.exists():
+        config_file_locations.append(etc_dir_homcc_config)
+
+    return config_file_locations
+
+
+def load_config_file(config_file_locations: Optional[List[Path]] = None) -> Dict[str, str]:
+
+    if not config_file_locations:
+        config_file_locations = default_config_file_locations()
+
+    for config_file_location in config_file_locations:
+        if config_file_location.exists():
+            if config_file_location.stat().st_size == 0:
+                logger.info('Config file "%s" appears to be empty.', config_file_location)
+            return parse_config(config_file_location.read_text(encoding="utf-8"))
 
     return {}

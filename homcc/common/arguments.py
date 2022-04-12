@@ -63,7 +63,6 @@ class Arguments:
 
         # single args: naming ends on _arg
         no_assembly_arg: str = "-S"
-        assembler_options_arg: str = "-Xassembler"
         rpo_arg: str = "-frepo"
 
         # arg families: naming ends on _args
@@ -246,7 +245,7 @@ class Arguments:
                 if self.is_source_file(arg):
                     source_file_paths.append(arg)
                 else:
-                    logger.debug("Not adding '%s' as source file, as it doesn't match source file regex.", arg)
+                    logger.debug('Not adding "%s" as source file, as it doesn\'t match source file regex.', arg)
 
             other_open_arg = False
 
@@ -309,29 +308,28 @@ def _is_sendable(arguments: Arguments) -> bool:
         return False
 
     for arg in arguments.args:
+        if not arg.startswith("-"):
+            continue
+
         # prefix args
-        if arg.startswith(Arguments.Unsendable.assembler_options_prefix):
-            log_unsendable(f"[{arg}] TODO")  # TODO
+        if arg.startswith(Arguments.Unsendable.assembler_options_prefix):  # "-Wa,"
+            log_unsendable(f"[{arg}] must be local")  # TODO(s.pirsch): this is more detailed
             return False
 
-        if arg.startswith(Arguments.Unsendable.specs_prefix):
-            log_unsendable(f"[{arg}] TODO")  # TODO
+        if arg.startswith(Arguments.Unsendable.specs_prefix):  # "-specs="
+            log_unsendable(f"[{arg}] overwrites spec strings")
             return False
 
-        if arg.startswith(Arguments.Unsendable.profile_generate_prefix):
-            log_unsendable(f"[{arg}] TODO")  # TODO
+        if arg.startswith(Arguments.Unsendable.profile_generate_prefix):  # "-fprofile-generate="
+            log_unsendable(f"[{arg}]  will emit profile info")
             return False
 
         # single args
-        if arg == Arguments.Unsendable.no_assembly_arg:
+        if arg == Arguments.Unsendable.no_assembly_arg:  # "-S"
             log_unsendable(f"[{arg}] implies a no assembly call")
             return False
 
-        if arg == Arguments.Unsendable.assembler_options_arg:
-            log_unsendable(f"[{arg}] TODO")  # TODO
-            return False
-
-        if arg == Arguments.Unsendable.rpo_arg:
+        if arg == Arguments.Unsendable.rpo_arg:  # "-frepo"
             log_unsendable(f"[{arg}] will emit .rpo files")
             return False
 
@@ -344,8 +342,9 @@ def _is_sendable(arguments: Arguments) -> bool:
             log_unsendable(f"[{arg}] implies a preprocessor only call")
             return False
 
-        if arg in Arguments.Unsendable.profile_args or arg.startswith(Arguments.Unsendable.profile_generate_prefix):
-            log_unsendable(f"[{arg}] will emit or use profile info")
-            return False
+        for profile_arg in Arguments.Unsendable.profile_args:
+            if arg.startswith(profile_arg):
+                log_unsendable(f"[{arg}] will emit or use profile info")
+                return False
 
     return True

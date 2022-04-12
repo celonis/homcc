@@ -6,7 +6,7 @@ import asyncio
 import logging
 import sys
 
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 from homcc.client.client import TCPClientError
 from homcc.client.client_utils import (
@@ -24,7 +24,7 @@ logger: logging.Logger = logging.getLogger(__name__)
 def main():
     # load and parse arguments and configuration information
     homcc_args_dict, compiler_arguments = parse_cli_args(sys.argv[1:])
-    config = load_config_file()
+    config: Dict[str, str] = load_config_file()
 
     # DEBUG; enable DEBUG mode
     if homcc_args_dict["DEBUG"] or config.get("DEBUG"):

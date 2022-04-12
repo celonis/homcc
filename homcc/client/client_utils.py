@@ -29,14 +29,14 @@ class CompilerError(subprocess.CalledProcessError):
         super().__init__(err.returncode, err.cmd, err.output, err.stderr)
 
 
-async def compile_remotely(hosts: List[str], config: Dict, timeout: float, arguments: Arguments) -> int:
+async def compile_remotely(hosts: List[str], config: Dict[str, str], timeout: float, arguments: Arguments) -> int:
     """main function for the communication between client and the remote compilation server"""
 
     # 0.) setup client
     host = hosts[0]  # TODO(s.pirsch): smart host selection with heuristic (CPL-6470)
     host_dict: Dict[str, str] = parse_host(host)
 
-    compression: Optional[str] = host_dict.pop("compression", None)
+    compression: Optional[str] = host_dict.get("compression")
 
     if not compression:
         compression = config.get("compression")

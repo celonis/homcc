@@ -15,16 +15,22 @@ class TestCompression:
     """
 
     # Tuple (name, function) of all functions in homcc.common.compression
-    compression_functions: List[Tuple[str, Callable[[bytes], bytes]]] = getmembers(compression, isfunction)
+    compression_functions: List[Tuple[str, Callable[[bytes, bool], bytes]]] = getmembers(compression, isfunction)
 
-    def test_all_compression_functions_in_compression_enum(self):
+    def test_if_all_compression_functions_are_in_compression_enum(self):
         for name, function in self.compression_functions:
             assert Compression.get(name).value.name == function.__name__
 
     def test_lzo(self):
+        data: bytes = bytes()
+
         with pytest.raises(NotImplementedError):
-            _ = lzo(bytes())
+            compressed_data: bytes = lzo(data, True)
+            assert lzo(compressed_data, False) == data
 
     def test_todo(self):
+        data: bytes = bytes()
+
         with pytest.raises(NotImplementedError):
-            _ = lzma(bytes())
+            compressed_data: bytes = lzma(data, True)
+            assert lzma(compressed_data, False) == data
