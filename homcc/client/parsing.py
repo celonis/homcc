@@ -142,7 +142,7 @@ def parse_cli_args(args: List[str]) -> Tuple[Dict[str, Any], Arguments]:
         # "\tUSER@HOST\tSSH connection to specified USER at HOST\n"
         "HOST,COMPRESSION defines any of the above HOST option and additionally specifies which "
         "COMPRESSION algorithm will be chosen\n\t"
-        f"{indented_newline.join(Compression.descriptions())}"
+        f"{indented_newline.join(Compression.descriptions())}",
     )
 
     parser.add_argument(
@@ -215,10 +215,10 @@ def parse_host(host: str) -> Dict[str, str]:
             )
 
     # categorize host format
-    user_at_host_match: Optional[re.Match] = re.match(r"^(\w+)@([\w.:/]+)$", host)  # USER@HOST
-    at_host_match: Optional[re.Match] = re.match(r"^@([\w.:/]+)$", host)  # @HOST
-    host_port_limit_match: Optional[re.Match] = re.match(r"^(([\w./]+)|\[(\S+)]):(\d+)(/(\d+))?$", host)  # HOST:PORT/LIMIT
-    host_match: Optional[re.Match] = re.match(r"^([\w.:/]+)$", host)  # HOST
+    user_at_host_match = re.match(r"^(\w+)@([\w.:/]+)$", host)  # USER@HOST
+    at_host_match = re.match(r"^@([\w.:/]+)$", host)  # @HOST
+    host_port_limit_match = re.match(r"^(([\w./]+)|\[(\S+)]):(\d+)(/(\d+))?$", host)  # HOST:PORT/LIMIT
+    host_match = re.match(r"^([\w.:/]+)$", host)  # HOST
 
     if user_at_host_match:  # USER@HOST
         user, host = user_at_host_match.groups()

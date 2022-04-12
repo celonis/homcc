@@ -2,7 +2,7 @@
 import pytest
 
 from inspect import getmembers, isfunction
-from typing import Callable, List
+from typing import Callable, List, Tuple
 
 from homcc.common.compression import Compression, lzo, lzma
 
@@ -15,7 +15,7 @@ class TestCompression:
     """
 
     # Tuple (name, function) of all functions in homcc.common.compression
-    compression_functions: List[Callable[[bytes], bytes]] = getmembers(compression, isfunction)
+    compression_functions: List[Tuple[str, Callable[[bytes], bytes]]] = getmembers(compression, isfunction)
 
     def test_all_compression_functions_in_compression_enum(self):
         for name, function in self.compression_functions:

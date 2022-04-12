@@ -22,7 +22,7 @@ class _CompressionFunctionWrapper:
 
     def __init__(self, function: Callable[[bytes], bytes]):
         self.function = function
-        self.doc: str = function.__doc__
+        self.doc: Optional[str] = function.__doc__
         self.name: str = function.__name__
 
     def __call__(self, data: bytes) -> bytes:
