@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 
 class CompilerError(subprocess.CalledProcessError):
     """
-    Error class to indicate unrecoverability for the client main function and provide error information that occurred
+    Error class to indicate unrecoverability for the client main function and to provide error information that occurred
     during execution of compiler commands
     """
 
@@ -33,10 +33,9 @@ async def compile_remotely(hosts: List[str], config: Dict, timeout: float, argum
     """main function for the communication between client and the remote compilation server"""
 
     # 0.) setup client
-    host = hosts[0]  # TODO(s.pirsch): smart host selection heuristic (CPL-6470)
+    host = hosts[0]  # TODO(s.pirsch): smart host selection with heuristic (CPL-6470)
     host_dict: Dict[str, str] = parse_host(host)
 
-    # COMPRESSION; disabled on default
     compression: Optional[str] = host_dict.pop("compression", None)
 
     if not compression:

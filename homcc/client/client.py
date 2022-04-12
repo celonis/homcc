@@ -57,10 +57,10 @@ class TCPClient(Client):
     """Wrapper class to exchange homcc protocol messages via TCP"""
 
     def __init__(self, host_dict: Dict[str, str], buffer_limit: Optional[int] = None):
-        connection_type = host_dict["type"]
+        connection_type: str = host_dict["type"]
 
         if connection_type != ConnectionType.TCP:
-            raise ValueError(f"TCPClient cannot be initialized with {connection_type} information")
+            raise ValueError(f"TCPClient cannot be initialized with {connection_type}!")
 
         self.host: str = host_dict["host"]
         self.port: str = host_dict.get("port", str(3633))

@@ -15,7 +15,7 @@ from homcc.client.client_utils import (
     compile_remotely,
     scan_includes,
 )
-from homcc.client.parsing import NoHostsFound, load_config_file, load_hosts, parse_cli_args
+from homcc.client.parsing import NoHostsFoundError, load_config_file, load_hosts, parse_cli_args
 from homcc.common.arguments import Arguments
 
 logger: logging.Logger = logging.getLogger(__name__)
@@ -44,14 +44,9 @@ def main():
     if homcc_args_dict.get("scan_includes"):
         sys.exit(scan_includes(compiler_arguments))
 
-    # HOST; get host from cli or hosts from either env var or file
+    # HOST; get host from cli or load hosts from env var or file
     host: Optional[str] = homcc_args_dict.get("host")
-    hosts: List[str]
-
-    if host:
-        hosts = [host]
-    else:
-        hosts = load_hosts()
+    hosts: List[str] = [host] if host else load_hosts()
 
     # TIMEOUT; default: 180s
     timeout: Optional[float] = homcc_args_dict.get("timeout")
@@ -68,7 +63,7 @@ def main():
         sys.exit(err.returncode)
 
     # compile locally on recoverable errors
-    except (NoHostsFound, TCPClientError):
+    except (NoHostsFoundError, TCPClientError):
         sys.exit(compile_locally(compiler_arguments))
 
 

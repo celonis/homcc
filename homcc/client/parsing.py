@@ -5,12 +5,13 @@ import re
 import sys
 
 from abc import ABC, abstractmethod
-from argparse import ArgumentParser, Action, Namespace, RawTextHelpFormatter
+from argparse import ArgumentParser, Action, RawTextHelpFormatter
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple
 
 from homcc.common.arguments import Arguments
+from homcc.common.compression import Compression
 
 logger = logging.getLogger(__name__)
 
@@ -18,11 +19,18 @@ HOMCC_HOSTS_ENV_VAR = "$HOMCC_HOSTS"
 HOMCC_DIR_ENV_VAR = "$HOMCC_DIR"
 
 
-class NoHostsFound(Exception):
+class NoHostsFoundError(Exception):
     """
     Error class to indicate a recoverable error when hosts could neither be determined from the environment variable nor
     from the default hosts file locations
     """
+
+
+class ConnectionType(str, Enum):
+    """Helper class to distinguish between different host connection types"""
+
+    TCP = "TCP"
+    SSH = "SSH"
 
 
 class ShowAndExitAction(ABC, Action):
@@ -44,13 +52,7 @@ class ShowAndExitAction(ABC, Action):
         super().__init__(nargs=nargs, help=help_, **kwargs)
 
     @abstractmethod
-    def __call__(
-        self,
-        parser: ArgumentParser,
-        namespace: Namespace,
-        values: Union[str, Sequence[Any], None],
-        option_string: Optional[str] = None,
-    ):
+    def __call__(self, *_):
         pass
 
 
@@ -58,7 +60,7 @@ class ShowVersion(ShowAndExitAction):
     """show version and exit"""
 
     def __call__(self, *_):
-        print("homcc 0.0.1")
+        print("homcc 0.0.1")  # TODO(s.pirsch): make dynamic
         sys.exit(os.EX_OK)
 
 
@@ -66,15 +68,35 @@ class ShowHosts(ShowAndExitAction):
     """show host list and exit"""
 
     def __call__(self, *_):
-        print("localhost/12")
+        try:
+            hosts: List[str] = load_hosts()
+
+        except NoHostsFoundError:
+            print("Failed to get hosts list")
+            sys.exit(os.EX_NOINPUT)
+
+        for host in hosts:
+            print(host)
+
         sys.exit(os.EX_OK)
 
 
 class ShowConcurrencyLevel(ShowAndExitAction):
-    """show the concurrency level, as calculated from the host list, and exit"""
+    """show the concurrency level, as calculated from the hosts list, and exit"""
 
     def __call__(self, *_):
-        print("12")
+        try:
+            hosts: List[str] = load_hosts()
+
+        except NoHostsFoundError:
+            print("Failed to get hosts list")
+            sys.exit(os.EX_NOINPUT)
+
+        concurrency_level: int = 0
+        for host in hosts:
+            concurrency_level += parse_host(host).get("limit", 0)
+
+        print(concurrency_level)
         sys.exit(os.EX_OK)
 
 
@@ -89,7 +111,7 @@ def parse_cli_args(args: List[str]) -> Tuple[Dict[str, Any], Arguments]:
     show_and_exit = parser.add_mutually_exclusive_group()
     show_and_exit.add_argument("--help", action="help", help="show this help message and exit")
     show_and_exit.add_argument("--version", action=ShowVersion)
-    show_and_exit.add_argument("--hosts", "--show-hosts", action=ShowHosts)
+    show_and_exit.add_argument("--show-hosts", action=ShowHosts)
     show_and_exit.add_argument("-j", action=ShowConcurrencyLevel)
 
     parser.add_argument(
@@ -107,6 +129,7 @@ def parse_cli_args(args: List[str]) -> Tuple[Dict[str, Any], Arguments]:
     # TODO(s.pirsch): investigate this functionality in distcc
     # parser.add_argument("--randomize", action="store_true", help="randomize the server list before execution")
 
+    indented_newline: str = "\n\t"
     parser.add_argument(
         "--host",
         metavar="HOST",
@@ -114,12 +137,12 @@ def parse_cli_args(args: List[str]) -> Tuple[Dict[str, Any], Arguments]:
         help="HOST defines the connection to the remote compilation server:\n"
         "\tHOST\t\tTCP connection to specified HOST with PORT either from config file or default port 3633\n"
         "\tHOST:PORT\tTCP connection to specified HOST with specified PORT\n"
-        # TODO(s.pirsch): enable these lines when SSHClient is implemented, parsing should already work
+        # TODO(s.pirsch): enable these lines when SSHClient is implemented, parsing should already work however
         # "\t@HOST\t\tSSH connection to specified HOST\n"
         # "\tUSER@HOST\tSSH connection to specified USER at HOST\n"
         "HOST,COMPRESSION defines any of the above HOST option and additionally specifies which "
-        "COMPRESSION algorithm will be chosen\n"
-        "\tlzo: Lempel–Ziv–Oberhumer compression",
+        "COMPRESSION algorithm will be chosen\n\t"
+        f"{indented_newline.join(Compression.descriptions())}"
     )
 
     parser.add_argument(
@@ -128,19 +151,19 @@ def parse_cli_args(args: List[str]) -> Tuple[Dict[str, Any], Arguments]:
         help="TIMEOUT in seconds to wait for a response from the remote compilation server",
     )
 
-    # capturing all remaining arguments which represent compiler arguments via nargs=argparse.REMAINDER and
-    # argparse.parse_args() is sadly not working as intended here, so we use the dummy "COMPILER_OR_ARGUMENT" argument
-    # for the automatically generated usage string instead and handle the remaining, unknown arguments separately
+    # capturing all remaining (compiler) arguments via nargs=argparse.REMAINDER and argparse.parse_args() is sadly not
+    # working as intended, so we use the dummy "COMPILER_OR_ARGUMENT" argument for the automatically generated user-
+    # facing strings instead and handle the remaining, unknown arguments separately
     parser.add_argument(
         "COMPILER_OR_ARGUMENT",
         type=str,
         metavar="[COMPILER] ARGUMENTS ...",
-        help=f"COMPILER, if not specified explicitly, is either read from the config file or defaults to "
+        help="COMPILER, if not specified explicitly, is either read from the config file or defaults to "
         f'"{Arguments.default_compiler}"\n'
-        f"all remaining ARGUMENTS will be directly forwarded to the COMPILER",
+        "all remaining ARGUMENTS will be directly forwarded to the COMPILER",
     )
 
-    # known args (used for homcc), unknown args (forwarded to compiler)
+    # known args (used for homcc), unknown args (used as and forwarded to the compiler)
     homcc_args_namespace, compiler_args = parser.parse_known_args(args)
     homcc_args_dict = vars(homcc_args_namespace)
 
@@ -150,65 +173,87 @@ def parse_cli_args(args: List[str]) -> Tuple[Dict[str, Any], Arguments]:
     return homcc_args_dict, compiler_arguments
 
 
-class ConnectionType(str, Enum):
-    """Helper class to distinguish between different host connection types"""
-
-    TCP = "TCP"
-    SSH = "SSH"
-
-
 def parse_host(host: str) -> Dict[str, str]:
-    # the following regexes are intentional simple and contain a lot of false positives for IPv4 and IPv6 addresses,
+    """
+    try to categorize and extract the following information from the host:
+    - Compression
+    - ConnectionType:
+        - TCP:
+            - HOST
+            - [PORT]
+        - SSH:
+            - HOST
+            - [USER]
+    - Limit
+    """
+    # the following regexes are intentionally simple and contain a lot of false positives for IPv4 and IPv6 addresses,
     # matches are however merely used for rough categorization and don't test the validity of the actual host values,
+    # since a single host line is usually short we parse over it multiple times for readability and maintainability,
     # meaningful failures on erroneous values will arise later on when the client tries to connect to the specified host
 
     host_dict: Dict[str, str] = {}
 
-    # HOST,COMPRESSION
-    match: Optional[re.Match] = re.match(r"^(\S+),(\S+)$", host)
+    # trim trailing comment
+    host_comment_match: Optional[re.Match] = re.match(r"^(\S+)#(\S+)$", host)  # HOST#COMMENT
 
-    if match:
-        host, compression = match.groups()
-        host_dict["compression"] = compression
+    if host_comment_match:  # HOST#COMMENT
+        host, _ = host_comment_match.groups()
 
-    # USER@HOST
-    match = re.match(r"^(\w+)@([\w.:]+)$", host)
+    # use trailing compression info
+    host_compression_match: Optional[re.Match] = re.match(r"^(\S+),(\S+)$", host)  # HOST,COMPRESSION
 
-    if match:
-        user, host = match.groups()
+    if host_compression_match:  # HOST,COMPRESSION
+        host, compression = host_compression_match.groups()
+
+        if Compression.get(compression):
+            host_dict["compression"] = compression
+        else:
+            logger.error(
+                'Compression "%s" is currently not supported! '
+                "The remote compilation will be executed without compression enabled!",
+                compression,
+            )
+
+    # categorize host format
+    user_at_host_match: Optional[re.Match] = re.match(r"^(\w+)@([\w.:/]+)$", host)  # USER@HOST
+    at_host_match: Optional[re.Match] = re.match(r"^@([\w.:/]+)$", host)  # @HOST
+    host_port_limit_match: Optional[re.Match] = re.match(r"^(([\w./]+)|\[(\S+)]):(\d+)(/(\d+))?$", host)  # HOST:PORT/LIMIT
+    host_match: Optional[re.Match] = re.match(r"^([\w.:/]+)$", host)  # HOST
+
+    if user_at_host_match:  # USER@HOST
+        user, host = user_at_host_match.groups()
         host_dict["type"] = ConnectionType.SSH
         host_dict["user"] = user
-        host_dict["host"] = host
-        return host_dict
 
-    # @HOST
-    match = re.match(r"^@([\w.:]+)$", host)
-
-    if match:
+    elif at_host_match:  # @HOST
+        host = at_host_match.group(1)
         host_dict["type"] = ConnectionType.SSH
-        host = match.group(1)
-        host_dict["host"] = host
-        return host_dict
 
-    # HOST:PORT
-    match = re.match(r"^(([\w.]+)|\[(\S+)]):(\d+)$", host)
-
-    if match:
+    elif host_port_limit_match:  # HOST:PORT
+        _, name_or_ipv4, ipv6, port, _, limit = host_port_limit_match.groups()
+        host = name_or_ipv4 or ipv6
         host_dict["type"] = ConnectionType.TCP
-        _, name_or_ipv4, ipv6, port = match.groups()
-        host_dict["host"] = name_or_ipv4 or ipv6
         host_dict["port"] = port
-        return host_dict
-
-    # HOST
-    match = re.match(r"^([\w.:]+)$", host)
-
-    if match:
-        host_dict["type"] = ConnectionType.TCP
+        host_dict["limit"] = limit
         host_dict["host"] = host
         return host_dict
 
-    raise ValueError(f'Host "{host}" could not be parsed correctly, please provide it in the correct format!')
+    elif host_match:  # HOST
+        host_dict["type"] = ConnectionType.TCP
+
+    else:
+        raise ValueError(f'Host "{host}" could not be parsed correctly, please provide it in the correct format!')
+
+    # extract remaining limit info
+    host_limit_match: Optional[re.Match] = re.match(r"^(\S+)/(\d+)$", host)  # HOST/LIMIT
+
+    if host_limit_match:  # HOST/LIMIT
+        host, limit = host_limit_match.groups()
+        host_dict["limit"] = limit
+
+    host_dict["host"] = host
+
+    return host_dict
 
 
 def default_hosts_file_locations() -> List[Path]:
@@ -247,20 +292,30 @@ def load_hosts(hosts_file_locations: Optional[List[Path]] = None) -> List[str]:
     """
     Load homcc hosts from one of the following options:
     - Environment Variable: $HOMCC_HOSTS
-    - Hosts file defined in hosts_locations parameter
+    - Hosts files defined at default hosts file locations
     """
 
-    def filter_and_rstrip_whitespace(data: str) -> List[str]:
-        return [line.rstrip() for line in data.splitlines() if not line.isspace()]
+    def filtered_lines(text: str) -> List[str]:
+        lines: List[str] = []
+
+        for line in text.splitlines():
+            # remove whitespace
+            line = line.strip().replace(" ", "")
+
+            # filter empty lines and comment lines
+            if len(line) != 0 and not line.startswith("#"):
+                lines.append(line)
+
+        return lines
 
     # $HOMCC_HOSTS
     homcc_hosts_env_var = os.getenv(HOMCC_HOSTS_ENV_VAR)
     if homcc_hosts_env_var:
-        return filter_and_rstrip_whitespace(homcc_hosts_env_var)
+        return filtered_lines(homcc_hosts_env_var)
 
-    # hosts_file_locations parameter
+    # HOSTS Files
     if hosts_file_locations and len(hosts_file_locations) == 0:
-        raise NoHostsFound
+        raise NoHostsFoundError
 
     if not hosts_file_locations:
         hosts_file_locations = default_hosts_file_locations()
@@ -269,13 +324,14 @@ def load_hosts(hosts_file_locations: Optional[List[Path]] = None) -> List[str]:
         if hosts_file_location.exists():
             if hosts_file_location.stat().st_size == 0:
                 logger.warning('Hosts file "%s" appears to be empty.', hosts_file_location)
-            return filter_and_rstrip_whitespace(hosts_file_location.read_text(encoding="utf-8"))
+                continue
+            return filtered_lines(hosts_file_location.read_text(encoding="utf-8"))
 
-    raise NoHostsFound
+    raise NoHostsFoundError
 
 
 def parse_config(config: str) -> Dict:
-    config_info: List[str] = ["COMPILER", "DEBUG", "TIMEOUT", "COMPRESSION"]
+    config_info: List[str] = ["COMPILER", "COMPRESSION", "DEBUG", "TIMEOUT"]
     # TODO: capture trailing comments as third group?
     config_pattern: str = f"^({'|'.join(config_info)})=(\\S+)$"
     parsed_config = {}
