@@ -1,17 +1,23 @@
 #!/usr/bin/env python3
 """Executable that is used to start the server."""
+import sys
+import os
+
 import argparse
 import signal
 
-from homcc.common.logging import Formatter, FormatterConfig, FormatterDestination, setup_logging
-from homcc.server.server import start_server, stop_server
+sys.path.append(os.path.join(os.path.dirname(__file__), "../.."))
+
+from homcc.common.logging import (  # pylint: disable=wrong-import-position
+    Formatter,
+    FormatterConfig,
+    FormatterDestination,
+    setup_logging,
+)
+from homcc.server.server import start_server, stop_server  # pylint: disable=wrong-import-position
 
 
-def signal_handler(*_):
-    stop_server(server)
-
-
-if __name__ == "__main__":
+def main():
     setup_logging(
         formatter=Formatter.SERVER,
         config=FormatterConfig.COLORED,
@@ -30,5 +36,13 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     server, server_thread = start_server(port=args.port)
+
+    def signal_handler(*_):
+        stop_server(server)
+
     signal.signal(signal.SIGINT, signal_handler)
     server_thread.join()
+
+
+if __name__ == "__main__":
+    main()
