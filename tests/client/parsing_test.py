@@ -1,16 +1,12 @@
 """ Tests for client/client_utils.py"""
-import sys
-
 import pytest
 
 import os
-import subprocess
 
 from pathlib import Path
 from pytest_mock.plugin import MockerFixture
 from typing import Dict, List
 
-from homcc_client import main
 from homcc.client.parsing import (
     HOMCC_HOSTS_ENV_VAR,
     ConnectionType,

@@ -10,7 +10,6 @@ from dataclasses import dataclass
 from typing import Any, Iterator, List, Optional
 
 logger = logging.getLogger(__name__)
-encoding: str = "utf-8"
 
 
 @dataclass
@@ -283,17 +282,16 @@ class Arguments:
         - cwd: changes the current working directory
         """
         check: bool = kwargs.pop("check", False)
-        encoding_: str = kwargs.pop("encoding", encoding)
         capture_output: bool = kwargs.pop("capture_output", True)
 
         if "stdout" in kwargs or "stderr" in kwargs:
             capture_output = False
 
         if "shell" in kwargs:
-            logger.error("Arguments does currently not support shell execution!")
+            logger.error("Arguments currently does not support shell execution!")
 
         result: subprocess.CompletedProcess = subprocess.run(
-            list(self), check=check, encoding=encoding_, capture_output=capture_output, **kwargs
+            list(self), check=check, encoding="utf-8", capture_output=capture_output, **kwargs
         )
         return ArgumentsExecutionResult.from_process_result(result)
 

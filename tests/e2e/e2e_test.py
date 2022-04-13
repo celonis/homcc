@@ -1,5 +1,4 @@
 """End to end integration tests, testing both the client and the server."""
-
 import pytest
 
 import os
@@ -13,13 +12,13 @@ class TestEndToEnd:
 
     @staticmethod
     def start_server(unused_tcp_port: int) -> subprocess.Popen:
-        return subprocess.Popen(["./homcc_server.py", f"--port={unused_tcp_port}"], stdout=subprocess.PIPE)
+        return subprocess.Popen(["./homcc/server/main.py", f"--port={unused_tcp_port}"], stdout=subprocess.PIPE)
 
     @staticmethod
     def start_client(unused_tcp_port: int) -> subprocess.CompletedProcess:
         return subprocess.run(
             [
-                "./homcc_client.py",
+                "./homcc/client/main.py",
                 "g++",
                 f"--host=localhost:{unused_tcp_port}",
                 "--DEBUG",
@@ -49,7 +48,6 @@ class TestEndToEnd:
             assert result.returncode == os.EX_OK
             assert '"return_code": 0' in result.stdout
             assert "Compiling locally instead" not in result.stdout
-            assert result.stdout
 
             executable_stdout = subprocess.check_output(["./e2e-test"], encoding="utf-8")
             assert executable_stdout == "homcc\n"

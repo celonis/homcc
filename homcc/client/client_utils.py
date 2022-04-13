@@ -9,12 +9,12 @@ import subprocess
 from pathlib import Path
 from typing import Dict, List, Optional, Set
 
-from homcc.client.client import TCPClient, UnexpectedMessageTypeError
+from homcc.client.client import TCPClient, ClientConnectionError, UnexpectedMessageTypeError
 from homcc.client.parsing import parse_host
 from homcc.common.arguments import Arguments, ArgumentsExecutionResult
 from homcc.common.hashing import hash_file_with_path
 from homcc.common.messages import ObjectFile
-from homcc.common.messages import Message, CompilationResultMessage, DependencyRequestMessage
+from homcc.common.messages import Message, CompilationResultMessage, ConnectionRefusedMessage, DependencyRequestMessage
 
 logger = logging.getLogger(__name__)
 
@@ -30,10 +30,20 @@ class CompilerError(subprocess.CalledProcessError):
 
 
 async def compile_remotely(hosts: List[str], config: Dict[str, str], timeout: float, arguments: Arguments) -> int:
+    # TODO(s.pirsch): smart host selection with heuristic (CPL-6470)
+    for host in hosts:
+        try:
+            return await compile_remotely_at(host, config, timeout, arguments)
+        except ClientConnectionError:
+            continue
+
+    raise ClientConnectionError  # TODO: change exception type
+
+
+async def compile_remotely_at(host: str, config: Dict[str, str], timeout: float, arguments: Arguments) -> int:
     """main function for the communication between client and the remote compilation server"""
 
     # 0.) setup client
-    host = hosts[0]  # TODO(s.pirsch): smart host selection with heuristic (CPL-6470)
     host_dict: Dict[str, str] = parse_host(host)
 
     compression: Optional[str] = host_dict.get("compression")
@@ -47,8 +57,6 @@ async def compile_remotely(hosts: List[str], config: Dict[str, str], timeout: fl
     client: TCPClient = TCPClient(host_dict)
 
     # 1.) test whether arguments should be sent, prepare for communication with server
-    if not arguments.is_sendable():
-        return compile_locally(arguments)
 
     dependency_dict: Dict[str, str] = calculate_dependency_dict(find_dependencies(arguments))
 
@@ -60,6 +68,12 @@ async def compile_remotely(hosts: List[str], config: Dict[str, str], timeout: fl
     dependency_dict = invert_dict(dependency_dict)  # invert dependency dictionary so that we can easily search by hash
 
     server_response: Message = await client.receive(timeout)
+
+    if isinstance(server_response, ConnectionRefusedMessage):
+        logger.warning("Server '%s:%s' refused the connection.", client.host, client.port)
+        await client.close()
+
+        raise ClientConnectionError
 
     while isinstance(server_response, DependencyRequestMessage):
         requested_dependency: str = dependency_dict[server_response.get_sha1sum()]

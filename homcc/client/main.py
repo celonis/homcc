@@ -4,19 +4,33 @@ homcc client
 """
 import asyncio
 import logging
+import os
 import sys
 
 from typing import Dict, List, Optional
 
-from homcc.client.client import TCPClientError
-from homcc.client.client_utils import (
+sys.path.append(os.path.join(os.path.dirname(__file__), "../.."))
+
+from homcc.client.client import TCPClientError  # pylint: disable=wrong-import-position
+from homcc.client.client_utils import (  # pylint: disable=wrong-import-position
     CompilerError,
     compile_locally,
     compile_remotely,
     scan_includes,
 )
-from homcc.client.parsing import NoHostsFoundError, load_config_file, load_hosts, parse_cli_args
-from homcc.common.arguments import Arguments
+from homcc.client.parsing import (  # pylint: disable=wrong-import-position
+    NoHostsFoundError,
+    load_config_file,
+    load_hosts,
+    parse_cli_args,
+)
+from homcc.common.arguments import Arguments  # pylint: disable=wrong-import-position
+from homcc.common.logging import (  # pylint: disable=wrong-import-position
+    Formatter,
+    FormatterConfig,
+    FormatterDestination,
+    setup_logging,
+)
 
 logger: logging.Logger = logging.getLogger(__name__)
 
@@ -28,7 +42,11 @@ def main():
 
     # DEBUG; enable DEBUG mode
     if homcc_args_dict["DEBUG"] or config.get("DEBUG"):
-        logging.basicConfig(level=logging.DEBUG)
+        setup_logging(
+            formatter=Formatter.CLIENT,
+            config=FormatterConfig.COLORED,
+            destination=FormatterDestination.STREAM,
+        )
 
     logger.debug("homcc args:\n%s\ncompiler args:\n%s", homcc_args_dict, compiler_arguments)
     logger.debug("config:%s", config)
@@ -54,17 +72,21 @@ def main():
     if not timeout:
         timeout = config.get("timeout", 180)
 
-    # try to compile remotely
-    try:
-        sys.exit(asyncio.run(compile_remotely(hosts, config, timeout, compiler_arguments)))
+    if compiler_arguments.is_sendable():
+        # try to compile remotely
+        try:
+            sys.exit(asyncio.run(compile_remotely(hosts, config, timeout, compiler_arguments)))
 
-    # exit on unrecoverable errors
-    except CompilerError as err:
-        sys.exit(err.returncode)
+        # exit on unrecoverable errors
+        except CompilerError as err:
+            sys.exit(err.returncode)
 
-    # compile locally on recoverable errors
-    except (NoHostsFoundError, TCPClientError):
-        sys.exit(compile_locally(compiler_arguments))
+        # compile locally on recoverable errors
+        except (NoHostsFoundError, TCPClientError):
+            pass
+
+    # compile locally
+    sys.exit(compile_locally(compiler_arguments))
 
 
 if __name__ == "__main__":

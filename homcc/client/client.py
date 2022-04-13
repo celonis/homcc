@@ -5,7 +5,6 @@ TCPClient class and related Exception classes for the homcc client
 import asyncio
 import logging
 
-from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Dict, Optional
 
@@ -40,20 +39,7 @@ class UnexpectedMessageTypeError(TCPClientError):
     """Exception for receiving a message with an unexpected type"""
 
 
-class Client(ABC):
-    """Abstract base class to exchange homcc protocol messages"""
-
-    @abstractmethod
-    async def connect(self):
-        pass
-
-    # TODO(s.pirsch): more methods
-
-
-# TODO(s.pirsch): class SSHClient(Client)
-
-
-class TCPClient(Client):
+class TCPClient:
     """Wrapper class to exchange homcc protocol messages via TCP"""
 
     def __init__(self, host_dict: Dict[str, str], buffer_limit: Optional[int] = None):

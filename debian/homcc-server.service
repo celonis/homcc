@@ -1,0 +1,8 @@
+[Unit]
+Description=The homcc-server service.
+
+[Service]
+ExecStart=/usr/bin/homcc-server
+
+[Install]
+WantedBy=multi-user.target

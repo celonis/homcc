@@ -8,6 +8,7 @@ from homcc.server.environment import (
     map_cwd,
     unmap_path,
     do_compilation,
+    get_needed_dependencies,
 )
 
 
@@ -101,6 +102,24 @@ class TestServerEnvironment:
         unmapped = unmap_path(instance_path, mapped_path)
 
         assert unmapped == client_path
+
+    def test_caching(self, mocker: MockerFixture):
+        dependencies = {"file1": "hash1", "file2": "hash2", "file3": "hash3"}
+        cache = {"hash2": "some/path/to/be/symlinked"}
+        mocker.patch(
+            "os.symlink",
+        )
+
+        # mock the locks
+        lock_mock = mocker.Mock()
+        lock_mock.__enter__ = mocker.Mock(return_value=(mocker.Mock(), None))
+        lock_mock.__exit__ = mocker.Mock(return_value=None)
+
+        needed_dependencies = get_needed_dependencies(dependencies, cache, lock_mock)
+
+        assert len(needed_dependencies) == 2
+        assert "file1" in needed_dependencies
+        assert "file3" in needed_dependencies
 
 
 class TestServerCompilation:
