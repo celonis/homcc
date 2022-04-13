@@ -10,12 +10,12 @@ class TestEndToEnd:
     """End to end integration tests."""
 
     def start_server(self) -> subprocess.Popen:
-        return subprocess.Popen(["./homcc_server.py"], stdout=subprocess.PIPE)
+        return subprocess.Popen(["./homcc/server/main.py"], stdout=subprocess.PIPE)
 
     def start_client(self) -> subprocess.CompletedProcess:
         return subprocess.run(
             [
-                "./homcc_client.py",
+                "./homcc/client/main.py",
                 "g++",
                 "-Iexample/include",
                 "example/src/foo.cpp",

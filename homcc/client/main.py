@@ -10,9 +10,16 @@ import os
 from pathlib import Path
 from typing import Dict, Set
 
-from homcc.common.arguments import Arguments, ArgumentsExecutionResult
-from homcc.client.client import TCPClient, TCPClientError, UnexpectedMessageTypeError, ClientConnectionError
-from homcc.client.client_utils import (
+sys.path.append(os.path.join(os.path.dirname(__file__), "../.."))
+
+from homcc.common.arguments import Arguments, ArgumentsExecutionResult  # pylint: disable=wrong-import-position
+from homcc.client.client import (  # pylint: disable=wrong-import-position
+    ClientConnectionError,
+    TCPClient,
+    TCPClientError,
+    UnexpectedMessageTypeError,
+)
+from homcc.client.client_utils import (  # pylint: disable=wrong-import-position
     CompilerError,
     calculate_dependency_dict,
     find_dependencies,
@@ -22,6 +29,8 @@ from homcc.client.client_utils import (
 )
 from homcc.common.messages import ConnectionRefusedMessage, Message, CompilationResultMessage, DependencyRequestMessage
 from homcc.common.logging import Formatter, FormatterConfig, FormatterDestination, setup_logging
+
+logger: logging.Logger = logging.getLogger(__name__)
 
 
 async def remote_compile(host: str, port: int, arguments: Arguments) -> int:
@@ -113,7 +122,7 @@ async def remote_compile(host: str, port: int, arguments: Arguments) -> int:
         return err.returncode
 
 
-async def main() -> int:
+async def run() -> int:
     """client main function, decides on which server to connect to or to compile locally"""
     arguments: Arguments = Arguments.from_argv(sys.argv)  # TODO(s.pirsch): provide compiler from config file (CPL-6419)
 
@@ -132,12 +141,14 @@ async def main() -> int:
         return local_compile(arguments)
 
 
-if __name__ == "__main__":
-    # TODO(s.pirsch): make logging level configurable via caller or config file
+def main():
     setup_logging(
         formatter=Formatter.CLIENT,
         config=FormatterConfig.COLORED,
         destination=FormatterDestination.STREAM,
     )
-    logger: logging.Logger = logging.getLogger(__name__)
-    sys.exit(asyncio.run(main()))
+    sys.exit(asyncio.run(run()))
+
+
+if __name__ == "__main__":
+    main()
