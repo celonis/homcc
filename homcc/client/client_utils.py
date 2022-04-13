@@ -74,7 +74,7 @@ async def compile_remotely_at(host: str, config: Dict[str, str], timeout: float,
     server_response: Message = await client.receive(timeout)
 
     if isinstance(server_response, ConnectionRefusedMessage):
-        logger.warning("Server '%s:%s' refused the connection.", client.host, client.port)
+        logger.warning('Server "%s:%s" refused the connection.', client.host, client.port)
         await client.close()
 
         raise ClientConnectionError
