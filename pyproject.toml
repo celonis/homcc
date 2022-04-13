@@ -9,3 +9,7 @@ show_error_codes = true
 [tool.pytest.ini_options]
 log_cli = true
 log_cli_level = "DEBUG"
+
+[[tool.mypy.overrides]]
+module = ["setuptools"]
+ignore_missing_imports = true

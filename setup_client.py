@@ -1,5 +1,5 @@
 """Setuptools for the homcc client."""
-from setuptools import setup  # type: ignore
+from setuptools import setup
 
 if __name__ == "__main__":
     setup(
