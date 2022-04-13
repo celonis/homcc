@@ -12,7 +12,7 @@ from homcc.client.client_utils import (
     CompilerError,
     compile_locally,
     find_dependencies,
-    # scan_includes,
+    scan_includes,
 )
 
 
@@ -30,7 +30,13 @@ class TestClientUtilsFunctions:
         self.example_out_dir.mkdir(exist_ok=True)
 
     def test_scan_includes(self):
-        pass  # TODO
+        arguments: Arguments = Arguments.from_args(
+            ["g++", "-Iexample/include", "example/src/main.cpp", "example/src/foo.cpp"]
+        )
+
+        includes: List[str] = scan_includes(arguments)
+
+        assert "example/include/foo.h" in includes
 
     def test_find_dependencies_without_class_impl(self):
         # absolute paths of: "g++ main.cpp -Iinclude/"

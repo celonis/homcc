@@ -91,7 +91,7 @@ class ShowConcurrencyLevel(ShowAndExitAction):
 
         concurrency_level: int = 0
         for host in hosts:
-            concurrency_level += parse_host(host).get("limit", 0)
+            concurrency_level += int(parse_host(host).get("limit", 0))
 
         print(concurrency_level)
         sys.exit(os.EX_OK)
@@ -131,7 +131,7 @@ def parse_cli_args(args: List[str]) -> Tuple[Dict[str, Any], Arguments]:
         help="HOST defines the connection to the remote compilation server:\n"
         "\tHOST\t\tTCP connection to specified HOST with PORT either from config file or default port 3633\n"
         "\tHOST:PORT\tTCP connection to specified HOST with specified PORT\n"
-        # TODO(s.pirsch): enable these lines when SSHClient is implemented, parsing should already work however
+        # TODO(s.pirsch): enable these lines once SSHClient is implemented, parsing should already work however
         # "\t@HOST\t\tSSH connection to specified HOST\n"
         # "\tUSER@HOST\tSSH connection to specified USER at HOST\n"
         "HOST,COMPRESSION defines any of the above HOST option and additionally specifies which "

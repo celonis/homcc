@@ -14,6 +14,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), "../.."))
 from homcc.client.client import TCPClientError  # pylint: disable=wrong-import-position
 from homcc.client.client_utils import (  # pylint: disable=wrong-import-position
     CompilerError,
+    HostsExhaustedError,
     compile_locally,
     compile_remotely,
     scan_includes,
@@ -38,29 +39,38 @@ logger: logging.Logger = logging.getLogger(__name__)
 def main():
     # load and parse arguments and configuration information
     homcc_args_dict, compiler_arguments = parse_cli_args(sys.argv[1:])
-    config: Dict[str, str] = load_config_file()
+    homcc_config: Dict[str, str] = load_config_file()
+    logging_config: Dict[str, int] = {
+        "config": FormatterConfig.COLORED,
+        "formatter": Formatter.CLIENT,
+        "destination": FormatterDestination.STREAM,
+    }
 
     # DEBUG; enable DEBUG mode
-    if homcc_args_dict["DEBUG"] or config.get("DEBUG"):
-        setup_logging(
-            formatter=Formatter.CLIENT,
-            config=FormatterConfig.COLORED,
-            destination=FormatterDestination.STREAM,
-        )
+    if homcc_args_dict["DEBUG"] or homcc_config.get("DEBUG"):
+        logging_config["config"] |= FormatterConfig.DETAILED
+        logging_config["level"] = logging.DEBUG
 
-    logger.debug("homcc args:\n%s\ncompiler args:\n%s", homcc_args_dict, compiler_arguments)
-    logger.debug("config:%s", config)
+    setup_logging(**logging_config)
 
     # COMPILER; default: "cc"
     compiler: Optional[str] = compiler_arguments.compiler
 
     if not compiler:
-        compiler = config.get("compiler", Arguments.default_compiler)
+        compiler = homcc_config.get("compiler", Arguments.default_compiler)
         compiler_arguments.compiler = compiler
 
     # SCAN-INCLUDES; and exit
     if homcc_args_dict.get("scan_includes"):
-        sys.exit(scan_includes(compiler_arguments))
+        try:
+            includes: List[str] = scan_includes(compiler_arguments)
+        except CompilerError as e:
+            sys.exit(e.returncode)
+
+        for include in includes:
+            print(include)
+
+        sys.exit(os.EX_OK)
 
     # HOST; get host from cli or load hosts from env var or file
     host: Optional[str] = homcc_args_dict.get("host")
@@ -70,22 +80,22 @@ def main():
     timeout: Optional[float] = homcc_args_dict.get("timeout")
 
     if not timeout:
-        timeout = config.get("timeout", 180)
+        timeout = homcc_config.get("timeout", 180)
 
+    # try to compile remotely
     if compiler_arguments.is_sendable():
-        # try to compile remotely
         try:
-            sys.exit(asyncio.run(compile_remotely(hosts, config, timeout, compiler_arguments)))
+            sys.exit(asyncio.run(compile_remotely(hosts, homcc_config, timeout, compiler_arguments)))
 
         # exit on unrecoverable errors
         except CompilerError as err:
             sys.exit(err.returncode)
 
         # compile locally on recoverable errors
-        except (NoHostsFoundError, TCPClientError):
+        except (HostsExhaustedError, NoHostsFoundError, TCPClientError):
             pass
 
-    # compile locally
+    # compile locally on recoverable failures or unsendability
     sys.exit(compile_locally(compiler_arguments))
 
 

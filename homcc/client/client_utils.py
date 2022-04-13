@@ -29,6 +29,10 @@ class CompilerError(subprocess.CalledProcessError):
         super().__init__(err.returncode, err.cmd, err.output, err.stderr)
 
 
+class HostsExhaustedError(Exception):
+    """Error class to indicate that all available hosts refused that client"""
+
+
 async def compile_remotely(hosts: List[str], config: Dict[str, str], timeout: float, arguments: Arguments) -> int:
     # TODO(s.pirsch): smart host selection with heuristic (CPL-6470)
     for host in hosts:
@@ -37,7 +41,7 @@ async def compile_remotely(hosts: List[str], config: Dict[str, str], timeout: fl
         except ClientConnectionError:
             continue
 
-    raise ClientConnectionError  # TODO: change exception type
+    raise HostsExhaustedError
 
 
 async def compile_remotely_at(host: str, config: Dict[str, str], timeout: float, arguments: Arguments) -> int:
@@ -143,19 +147,9 @@ def compile_locally(arguments: Arguments) -> int:
     return result.return_code
 
 
-def scan_includes(arguments: Arguments) -> int:
-    try:
-        dependencies = find_dependencies(arguments)
-    except CompilerError as err:
-        return err.returncode
-
-    source_files: List[str] = arguments.source_files
-
-    for dependency in dependencies:
-        if dependency not in source_files:
-            print(dependency)
-
-    return os.EX_OK
+def scan_includes(arguments: Arguments) -> List[str]:
+    dependencies: Set[str] = find_dependencies(arguments)
+    return [dependency for dependency in dependencies if dependency not in arguments.source_files]
 
 
 def find_dependencies(arguments: Arguments) -> Set[str]:

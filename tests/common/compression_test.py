@@ -28,7 +28,7 @@ class TestCompression:
             compressed_data: bytes = lzo(data, True)
             assert lzo(compressed_data, False) == data
 
-    def test_todo(self):
+    def test_lzma(self):
         data: bytes = bytes()
 
         with pytest.raises(NotImplementedError):

@@ -2,8 +2,10 @@
 import pytest
 
 import os
+import subprocess
 
 from pathlib import Path
+from pytest import CaptureFixture
 from pytest_mock.plugin import MockerFixture
 from typing import Dict, List
 
@@ -21,38 +23,58 @@ from homcc.client.parsing import (
 class TestCLI:
     """Tests for client.client_utils.parse_args"""
 
+    mocked_hosts: List[str] = ["localhost/8", "remotehost/64"]
+
     @pytest.fixture(autouse=True)
     def setup_mock(self, mocker: MockerFixture):
-        mocked_hosts: List[str] = ["localhost/64"]
         mocker.patch(
             "homcc.client.parsing.load_hosts",
-            return_value=mocked_hosts,
+            return_value=self.mocked_hosts,
         )
 
-    def test_help(self):
-        result = self.execute_cli_args(["--help"])
-        assert result.returncode == os.EX_OK
-        assert "homcc - Home-Office friendly distcc replacement" in result.stdout
+    def test_version(self, capfd: CaptureFixture):
+        with pytest.raises(SystemExit) as sys_exit:
+            parse_cli_args(["--version"])
 
-    def test_version(self):
-        result = self.execute_cli_args(["--version"])
-        assert result.returncode == os.EX_OK
-        assert "homcc 0.0.1" in result.stdout
+        cap = capfd.readouterr()
 
-    def test_show_hosts(self):
-        result = self.execute_cli_args(["--show-hosts"])
-        assert result.returncode == os.EX_OK
-        assert "localhost/64" in result.stdout
+        assert sys_exit.value.code == os.EX_OK
+        assert not cap.err
+        assert "homcc 0.0.1" in cap.out
 
-    def test_show_concurrency_level(self):
-        result = self.execute_cli_args(["-j"])
-        assert result.returncode == os.EX_OK
-        assert "64" in result.stdout
+    def test_show_hosts(self, capfd: CaptureFixture):
+        with pytest.raises(SystemExit) as sys_exit:
+            parse_cli_args(["--show-hosts"])
+
+        cap = capfd.readouterr()
+
+        assert sys_exit.value.code == os.EX_OK
+        assert not cap.err
+        for host in self.mocked_hosts:
+            assert host in cap.out
+
+    def test_show_concurrency_level(self, capfd: CaptureFixture):
+        with pytest.raises(SystemExit) as sys_exit:
+            parse_cli_args(["-j"])
+
+        cap = capfd.readouterr()
+
+        assert sys_exit.value.code == os.EX_OK
+        assert not cap.err
+        assert str(8 + 64) in cap.out
 
     def test_scan_includes(self):
         compiler_args: List[str] = ["g++", "-Iexample/include", "example/src/main.cpp", "example/src/foo.cpp"]
+        homcc_args = ["homcc/client/main.py", "--scan-includes"] + compiler_args
 
-        result = self.execute_cli_args(["--scan-includes"] + compiler_args)
+        result = subprocess.run(
+            homcc_args,
+            check=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            encoding="utf-8",
+        )
+
         assert result.returncode == os.EX_OK
         assert "example/include/foo.h" in result.stdout
 

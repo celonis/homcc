@@ -311,7 +311,7 @@ def _is_sendable(arguments: Arguments) -> bool:
 
         # prefix args
         if arg.startswith(Arguments.Unsendable.assembler_options_prefix):  # "-Wa,"
-            log_unsendable(f"[{arg}] must be local")  # TODO(s.pirsch): this is more detailed
+            log_unsendable(f"[{arg}] must be local")  # TODO(s.pirsch): this is more detailed, fix in separate PR
             return False
 
         if arg.startswith(Arguments.Unsendable.specs_prefix):  # "-specs="
