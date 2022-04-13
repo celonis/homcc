@@ -117,11 +117,11 @@ class Arguments:
 
     @classmethod
     def from_cli(cls, compiler_or_argument: str, args: List[str]) -> Arguments:
-        # explicit compiler argument, e.g.: "homcc_client.py [OPTIONAL ARGUMENTS] g++ -c foo.cpp"
+        # explicit compiler argument, e.g.: "homcc [OPTIONAL ARGUMENTS] g++ -c foo.cpp"
         if cls.is_compiler(compiler_or_argument):
             return cls(compiler_or_argument, args)
 
-        # missing compiler argument, e.g.: "homcc_client.py [OPTIONAL ARGUMENTS] -c foo.cpp"
+        # missing compiler argument, e.g.: "homcc [OPTIONAL ARGUMENTS] -c foo.cpp"
         return cls(None, [compiler_or_argument] + args)
 
     @staticmethod
