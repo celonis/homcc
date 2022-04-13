@@ -41,7 +41,8 @@ class TCPServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
     MAX_AMOUNT_CONNECTIONS = 48
 
     current_amount_connections: int
-    """TCP Server instance, holding data relevant across compilations."""
+    """Indicates the amount of clients that are currently connected."""
+    current_amount_connections_mutex: Lock
     root_temp_folder: TemporaryDirectory
     cache: Dict[str, str]
     """'Hash' -> 'File path' on server map for holding paths to cached files."""
@@ -51,11 +52,13 @@ class TCPServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
         super().__init__(server_address, RequestHandlerClass)
         self.root_temp_folder = create_root_temp_folder()
         self.current_amount_connections = 0
+        self.current_amount_connections_mutex = Lock()
         self.cache = {}
         self.cache_mutex = Lock()
 
     def verify_request(self, request, _) -> bool:
-        accept_connection = self.current_amount_connections < self.MAX_AMOUNT_CONNECTIONS
+        with self.current_amount_connections_mutex:
+            accept_connection = self.current_amount_connections < self.MAX_AMOUNT_CONNECTIONS
 
         if not accept_connection:
             logger.info(
@@ -225,16 +228,13 @@ class TCPRequestHandler(socketserver.BaseRequestHandler):
         except ConnectionError:
             return bytearray()
 
-    def handle(self):
-        """Handles incoming requests. Returning from this functions means
-        that the connection will be closed from the server side."""
-        self.server.current_amount_connections += 1
+    def recv_loop(self):
+        """Indefinitely tries to receive data and parse messages until the connection has been closed."""
         while True:
             recv_bytes: bytearray = self.recv()
 
             if len(recv_bytes) == 0:
                 logger.info("Connection closed gracefully.")
-                self.server.current_amount_connections -= 1
                 return
 
             bytes_needed: int = Message.MINIMUM_SIZE_BYTES
@@ -251,10 +251,21 @@ class TCPRequestHandler(socketserver.BaseRequestHandler):
 
                     if len(further_recv_bytes) == 0:
                         logger.error("Connection closed while only partly received a message. Ungraceful disconnect.")
-                        self.server.current_amount_connections -= 1
                         return
 
                     recv_bytes += further_recv_bytes
+
+    def handle(self):
+        """Handles incoming requests. Returning from this functions means
+        that the connection will be closed from the server side."""
+        with self.server.current_amount_connections_mutex:
+            self.server.current_amount_connections += 1
+
+        try:
+            self.recv_loop()
+        finally:
+            with self.server.current_amount_connections_mutex:
+                self.server.current_amount_connections -= 1
 
 
 def start_server(port: int = 0) -> Tuple[TCPServer, threading.Thread]:
