@@ -188,13 +188,13 @@ def parse_host(host: str) -> Dict[str, str]:
     host_dict: Dict[str, str] = {}
 
     # trim trailing comment
-    host_comment_match: Optional[re.Match] = re.match(r"^(\S+)#(\S+)$", host)  # HOST#COMMENT
+    host_comment_match = re.match(r"^(\S+)#(\S+)$", host)  # HOST#COMMENT
 
     if host_comment_match:  # HOST#COMMENT
         host, _ = host_comment_match.groups()
 
     # use trailing compression info
-    host_compression_match: Optional[re.Match] = re.match(r"^(\S+),(\S+)$", host)  # HOST,COMPRESSION
+    host_compression_match = re.match(r"^(\S+),(\S+)$", host)  # HOST,COMPRESSION
 
     if host_compression_match:  # HOST,COMPRESSION
         host, compression = host_compression_match.groups()
@@ -239,7 +239,7 @@ def parse_host(host: str) -> Dict[str, str]:
         raise ValueError(f'Host "{host}" could not be parsed correctly, please provide it in the correct format!')
 
     # extract remaining limit info
-    host_limit_match: Optional[re.Match] = re.match(r"^(\S+)/(\d+)$", host)  # HOST/LIMIT
+    host_limit_match = re.match(r"^(\S+)/(\d+)$", host)  # HOST/LIMIT
 
     if host_limit_match:  # HOST/LIMIT
         host, limit = host_limit_match.groups()
@@ -262,8 +262,8 @@ def default_hosts_file_locations() -> List[Path]:
     # HOSTS file locations
     hosts_file_name: str = "hosts"
     homcc_dir_env_var = os.getenv(HOMCC_DIR_ENV_VAR)
-    home_dir_homcc_hosts = Path("~/.homcc") / hosts_file_name
-    home_dir_config_homcc_hosts = Path("~/.config/homcc") / hosts_file_name
+    home_dir_homcc_hosts = Path.home() / ".homcc" / hosts_file_name
+    home_dir_config_homcc_hosts = Path.home() / ".config/homcc" / hosts_file_name
     etc_dir_homcc_hosts = Path("/etc/homcc") / hosts_file_name
 
     hosts_file_locations: List[Path] = []
@@ -332,7 +332,6 @@ def load_hosts(hosts_file_locations: Optional[List[Path]] = None) -> List[str]:
 
 def parse_config(config: str) -> Dict[str, str]:
     config_info: List[str] = ["COMPILER", "COMPRESSION", "DEBUG", "TIMEOUT"]
-    # TODO: capture trailing comments as third group?
     config_pattern: str = f"^({'|'.join(config_info)})=(\\S+)$"
     parsed_config: Dict[str, str] = {}
 
@@ -376,8 +375,8 @@ def default_config_file_locations() -> List[Path]:
     # config file locations
     config_file_name: str = "config"
     homcc_dir_env_var = os.getenv(HOMCC_DIR_ENV_VAR)
-    home_dir_homcc_config = Path("~/.homcc") / config_file_name
-    home_config_dir_homcc_config = Path("~/.config/homcc") / config_file_name
+    home_dir_homcc_config = Path.home() / ".homcc" / config_file_name
+    home_config_dir_homcc_config = Path.home() / ".config/homcc" / config_file_name
     etc_dir_homcc_config = Path("/etc/homcc") / config_file_name
 
     config_file_locations: List[Path] = []
@@ -403,6 +402,9 @@ def default_config_file_locations() -> List[Path]:
 
 
 def load_config_file(config_file_locations: Optional[List[Path]] = None) -> Dict[str, str]:
+    """
+    Load and parse a homcc config file from the default locations are as parameterized by config_file_locations
+    """
 
     if not config_file_locations:
         config_file_locations = default_config_file_locations()

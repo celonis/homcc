@@ -1,44 +1,64 @@
 """ Tests for client/client_utils.py"""
+import sys
+
 import pytest
 
 import os
+import subprocess
 
-from typing import List
+from pathlib import Path
+from pytest_mock.plugin import MockerFixture
+from typing import Dict, List
 
-from homcc.common.arguments import Arguments
+from homcc_client import main
 from homcc.client.parsing import (
-    HOMCC_DIR_ENV_VAR,
     HOMCC_HOSTS_ENV_VAR,
     ConnectionType,
-    load_hosts,
     parse_cli_args,
+    load_config_file,
+    load_hosts,
     parse_host,
     parse_config,
 )
-from homcc.client.client_utils import scan_includes
 
 
-class TestParsingCLIArgs:
+class TestCLI:
     """Tests for client.client_utils.parse_args"""
 
-    def test_parse_optional_info_args(self):
-        # optional info args exit early and do not require compiler args
-        optional_info_args: List[str] = ["--help", "--version", "--hosts", "-j"]
+    @pytest.fixture(autouse=True)
+    def setup_mock(self, mocker: MockerFixture):
+        mocked_hosts: List[str] = ["localhost/64"]
+        mocker.patch(
+            "homcc.client.parsing.load_hosts",
+            return_value=mocked_hosts,
+        )
 
-        for optional_info_arg in optional_info_args:
-            with pytest.raises(SystemExit) as info_exit:
-                _ = parse_cli_args([optional_info_arg])
-                # TODO: capture stdout and assert
-            assert info_exit.type == SystemExit
-            # assert info_exit.value.code == os.EX_OK
+    def test_help(self):
+        result = self.execute_cli_args(["--help"])
+        assert result.returncode == os.EX_OK
+        assert "homcc - Home-Office friendly distcc replacement" in result.stdout
 
-    def test_parse_args_scan_includes(self):
-        compiler_args = ["g++", "-Iexample/include", "example/src/main.cpp", "example/src/foo.cpp"]
+    def test_version(self):
+        result = self.execute_cli_args(["--version"])
+        assert result.returncode == os.EX_OK
+        assert "homcc 0.0.1" in result.stdout
 
-        # dependency arg exits early and requires compiler args
-        _, compiler_arguments = parse_cli_args(["--scan-includes"] + compiler_args)
-        assert compiler_arguments == Arguments.from_args(compiler_args)
-        assert scan_includes(compiler_arguments) == os.EX_OK
+    def test_show_hosts(self):
+        result = self.execute_cli_args(["--show-hosts"])
+        assert result.returncode == os.EX_OK
+        assert "localhost/64" in result.stdout
+
+    def test_show_concurrency_level(self):
+        result = self.execute_cli_args(["-j"])
+        assert result.returncode == os.EX_OK
+        assert "64" in result.stdout
+
+    def test_scan_includes(self):
+        compiler_args: List[str] = ["g++", "-Iexample/include", "example/src/main.cpp", "example/src/foo.cpp"]
+
+        result = self.execute_cli_args(["--scan-includes"] + compiler_args)
+        assert result.returncode == os.EX_OK
+        assert "example/include/foo.h" in result.stdout
 
 
 class TestParsingHosts:
@@ -351,7 +371,7 @@ class TestParsingHosts:
         assert parsed_host_dict.get("limit") == "64"
         assert parsed_host_dict.get("compression") == "lzo"
 
-    def test_load_hosts(self, monkeypatch):
+    def test_load_hosts(self, monkeypatch, tmp_path):
         hosts = ["localhost", "localhost:3633 ", "localhost:3633,lzo\t", " ", ""]
         hosts_no_whitespace = ["localhost", "localhost:3633", "localhost:3633,lzo"]
 
@@ -359,8 +379,13 @@ class TestParsingHosts:
         monkeypatch.setenv(HOMCC_HOSTS_ENV_VAR, "\n".join(hosts))
         assert load_hosts() == hosts_no_whitespace
 
-        # $HOMCC_DIR/hosts
-        assert HOMCC_DIR_ENV_VAR
+        # HOSTS file
+        tmp_hosts_file: Path = tmp_path / "config"
+        tmp_hosts_file.write_text("\n".join(hosts))
+
+        hosts_file_locations: List[Path] = [tmp_hosts_file]
+
+        assert load_hosts(hosts_file_locations) == hosts_no_whitespace
 
 
 class TestParsingConfig:
@@ -368,18 +393,32 @@ class TestParsingConfig:
     Tests for client.parsing related to config files
     """
 
+    config: List[str] = [
+        "",
+        " ",
+        "# HOMCC TEST CONFIG COMMENT",
+        " # comment with whitespace ",
+        "COMPILER=g++",
+        "DEBUG=TRUE  # DEBUG",
+        " TIMEOUT = 180 ",
+        "\tCoMpReSsIoN=lZo",
+    ]
+
     def test_parse_config(self):
-        config: List[str] = [
-            "",
-            " ",
-            "# HOMCC TEST CONFIG COMMENT",
-            " # comment with whitespace ",
-            "COMPILER=g++",
-            "DEBUG=TRUE  # DEBUG",
-            " TIMEOUT = 180 ",
-            "\tCoMpReSsIoN=lZo",
-        ]
-        parsed_config = parse_config("\n".join(config))
+        parsed_config = parse_config("\n".join(self.config))
+
+        assert parsed_config["COMPILER"] == "g++"
+        assert parsed_config["DEBUG"] == "true"
+        assert parsed_config["TIMEOUT"] == "180"
+        assert parsed_config["COMPRESSION"] == "lzo"
+
+    def test_load_config_file(self, tmp_path):
+        tmp_config_file: Path = tmp_path / "config"
+        tmp_config_file.write_text("\n".join(self.config))
+
+        config_file_locations: List[Path] = [tmp_config_file]
+
+        parsed_config: Dict[str, str] = load_config_file(config_file_locations)
 
         assert parsed_config["COMPILER"] == "g++"
         assert parsed_config["DEBUG"] == "true"

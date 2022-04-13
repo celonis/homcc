@@ -43,6 +43,9 @@ class Compression(Enum):
     def __call__(self, data: bytes, compress: bool) -> bytes:
         return self.value(data, compress)
 
+    def __str__(self) -> str:
+        return self.value.name
+
     @staticmethod
     def get(item: str) -> Optional[Compression]:
         for compression in Compression:
