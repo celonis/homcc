@@ -27,8 +27,18 @@ from homcc.client.client_utils import (  # pylint: disable=wrong-import-position
     local_compile,
     link_object_files,
 )
-from homcc.common.messages import ConnectionRefusedMessage, Message, CompilationResultMessage, DependencyRequestMessage
-from homcc.common.logging import Formatter, FormatterConfig, FormatterDestination, setup_logging
+from homcc.common.messages import (  # pylint: disable=wrong-import-position
+    ConnectionRefusedMessage,
+    Message,
+    CompilationResultMessage,
+    DependencyRequestMessage,
+)
+from homcc.common.logging import (  # pylint: disable=wrong-import-position
+    Formatter,
+    FormatterConfig,
+    FormatterDestination,
+    setup_logging,
+)
 
 logger: logging.Logger = logging.getLogger(__name__)
 
