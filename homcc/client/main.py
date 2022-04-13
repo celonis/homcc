@@ -14,6 +14,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), "../.."))
 
 from homcc.common.arguments import Arguments, ArgumentsExecutionResult  # pylint: disable=wrong-import-position
 from homcc.client.client import (  # pylint: disable=wrong-import-position
+    ClientConnectionError,
     TCPClient,
     TCPClientError,
     UnexpectedMessageTypeError,
@@ -27,6 +28,7 @@ from homcc.client.client_utils import (  # pylint: disable=wrong-import-position
     link_object_files,
 )
 from homcc.common.messages import (  # pylint: disable=wrong-import-position
+    ConnectionRefusedMessage,
     Message,
     CompilationResultMessage,
     DependencyRequestMessage,
@@ -38,28 +40,20 @@ from homcc.common.logging import (  # pylint: disable=wrong-import-position
     setup_logging,
 )
 
-
 logger: logging.Logger = logging.getLogger(__name__)
 
 
-async def run() -> int:
-    """client main function for parsing arguments and communicating with the homcc server"""
-    arguments: Arguments = Arguments.from_argv(sys.argv)  # TODO(s.pirsch): provide compiler from config file (CPL-6419)
-    cwd: str = os.getcwd()  # current working directory
+async def remote_compile(host: str, port: int, arguments: Arguments) -> int:
+    """Tries to connect to a server and compile there."""
 
-    host: str = "localhost"
-    port: int = 3633
+    client: TCPClient = TCPClient(host, port)
+    cwd: str = os.getcwd()  # current working directory
 
     # timeout window in seconds for receiving messages
     timeout: int = 180
 
-    client: TCPClient = TCPClient(host, port)
-
     try:
-        # 1.) test whether arguments should be sent, prepare for communication with server
-        if not arguments.is_sendable():
-            return local_compile(arguments)
-
+        # 1.) prepare for communication with server
         dependencies: Set[str] = find_dependencies(arguments)
         logger.debug("Dependency list:\n%s", dependencies)
         dependency_dict: Dict[str, str] = calculate_dependency_dict(dependencies)
@@ -75,6 +69,12 @@ async def run() -> int:
         await client.send_argument_message(arguments, cwd, dependency_dict)
 
         server_response: Message = await client.receive(timeout=timeout)
+
+        if isinstance(server_response, ConnectionRefusedMessage):
+            logger.warning("Server '%s:%i' refused the connection.", host, port)
+            await client.close()
+
+            raise ClientConnectionError
 
         while isinstance(server_response, DependencyRequestMessage):
             requested_dependency: str = inverted_dependency_dict[server_response.get_sha1sum()]
@@ -131,8 +131,23 @@ async def run() -> int:
     except CompilerError as err:
         return err.returncode
 
-    # recoverable errors
+
+async def run() -> int:
+    """client main function, decides on which server to connect to or to compile locally"""
+    arguments: Arguments = Arguments.from_argv(sys.argv)  # TODO(s.pirsch): provide compiler from config file (CPL-6419)
+
+    # check if we need even need to contact the server at first
+    if not arguments.is_sendable():
+        return local_compile(arguments)
+
+    host: str = "localhost"
+    port: int = 3633
+
+    try:
+        return await remote_compile(host, port, arguments)
     except TCPClientError:
+        # TODO(o.layer): here we would have to continue and try to call compile() for another
+        # server defined in our config instead of doing a local compile
         return local_compile(arguments)
 
 
