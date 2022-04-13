@@ -7,9 +7,11 @@ from tempfile import TemporaryDirectory
 from typing import List, Dict, Tuple
 from threading import Lock
 from functools import singledispatchmethod
+from socket import SHUT_RD
 
 from homcc.common.messages import (
     ArgumentMessage,
+    ConnectionRefusedMessage,
     Message,
     DependencyReplyMessage,
     DependencyRequestMessage,
@@ -36,6 +38,11 @@ logger = logging.getLogger(__name__)
 class TCPServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
     """TCP Server instance, holding data relevant across compilations."""
 
+    MAX_AMOUNT_CONNECTIONS = 48
+
+    current_amount_connections: int
+    """Indicates the amount of clients that are currently connected."""
+    current_amount_connections_mutex: Lock
     root_temp_folder: TemporaryDirectory
     cache: Dict[str, str]
     """'Hash' -> 'File path' on server map for holding paths to cached files."""
@@ -44,8 +51,27 @@ class TCPServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
     def __init__(self, server_address, RequestHandlerClass) -> None:
         super().__init__(server_address, RequestHandlerClass)
         self.root_temp_folder = create_root_temp_folder()
+        self.current_amount_connections = 0
+        self.current_amount_connections_mutex = Lock()
         self.cache = {}
         self.cache_mutex = Lock()
+
+    def verify_request(self, request, _) -> bool:
+        with self.current_amount_connections_mutex:
+            accept_connection = self.current_amount_connections < self.MAX_AMOUNT_CONNECTIONS
+
+        if not accept_connection:
+            logger.info(
+                "Not accepting new connection, as max limit of #%i connections is already reached.",
+                self.MAX_AMOUNT_CONNECTIONS,
+            )
+
+            connection_refused_message = ConnectionRefusedMessage()
+            request.sendall(connection_refused_message.to_bytes())
+            request.shutdown(SHUT_RD)
+            request.close()
+
+        return accept_connection
 
     def __del__(self) -> None:
         self.root_temp_folder.cleanup()
@@ -202,9 +228,8 @@ class TCPRequestHandler(socketserver.BaseRequestHandler):
         except ConnectionError:
             return bytearray()
 
-    def handle(self):
-        """Handles incoming requests. Returning from this functions means
-        that the connection will be closed from the server side."""
+    def recv_loop(self):
+        """Indefinitely tries to receive data and parse messages until the connection has been closed."""
         while True:
             recv_bytes: bytearray = self.recv()
 
@@ -229,6 +254,18 @@ class TCPRequestHandler(socketserver.BaseRequestHandler):
                         return
 
                     recv_bytes += further_recv_bytes
+
+    def handle(self):
+        """Handles incoming requests. Returning from this functions means
+        that the connection will be closed from the server side."""
+        with self.server.current_amount_connections_mutex:
+            self.server.current_amount_connections += 1
+
+        try:
+            self.recv_loop()
+        finally:
+            with self.server.current_amount_connections_mutex:
+                self.server.current_amount_connections -= 1
 
 
 def start_server(port: int = 0) -> Tuple[TCPServer, threading.Thread]:
