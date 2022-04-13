@@ -1,7 +1,4 @@
-"""
-fundamental utility functions and Exception class for the homcc client to interact with the linux
-command line and the specified compiler
-"""
+"""fundamental compilation functions and classes for the homcc client"""
 import logging
 import os
 import subprocess
@@ -30,7 +27,7 @@ class CompilerError(subprocess.CalledProcessError):
 
 
 class HostsExhaustedError(Exception):
-    """Error class to indicate that all available hosts refused that client"""
+    """Error class to indicate that the compilation request was refused by all hosts"""
 
 
 async def compile_remotely(hosts: List[str], config: Dict[str, str], timeout: float, arguments: Arguments) -> int:
@@ -47,7 +44,7 @@ async def compile_remotely(hosts: List[str], config: Dict[str, str], timeout: fl
 async def compile_remotely_at(host: str, config: Dict[str, str], timeout: float, arguments: Arguments) -> int:
     """main function for the communication between client and the remote compilation server"""
 
-    # 0.) setup client
+    # setup and connect client
     host_dict: Dict[str, str] = parse_host(host)
 
     compression: Optional[str] = host_dict.get("compression")
@@ -60,13 +57,10 @@ async def compile_remotely_at(host: str, config: Dict[str, str], timeout: float,
     # TODO(s.pirsch): use compression parameter (CPL-6421)
     client: TCPClient = TCPClient(host_dict)
 
-    # 1.) test whether arguments should be sent, prepare for communication with server
-
-    dependency_dict: Dict[str, str] = calculate_dependency_dict(find_dependencies(arguments))
-
     await client.connect()
 
-    # 2.) send arguments and dependency information to server and provide requested dependencies
+    # send arguments and dependency information to server and provide requested dependencies
+    dependency_dict: Dict[str, str] = calculate_dependency_dict(find_dependencies(arguments))
     await client.send_argument_message(arguments, os.getcwd(), dependency_dict)
 
     dependency_dict = invert_dict(dependency_dict)  # invert dependency dictionary so that we can easily search by hash
@@ -85,14 +79,14 @@ async def compile_remotely_at(host: str, config: Dict[str, str], timeout: float,
 
         server_response = await client.receive(timeout)
 
-    # 3.) close client and handle final message
+    # close client and handle final message
     await client.close()
 
     if not isinstance(server_response, CompilationResultMessage):
         logger.error("Received message of unexpected type %s", server_response.message_type)
         raise UnexpectedMessageTypeError
 
-    # 4.) extract and use compilation result
+    # extract and use compilation result
     server_result: ArgumentsExecutionResult = server_response.get_compilation_result()
 
     if server_result.stdout:
@@ -118,7 +112,7 @@ async def compile_remotely_at(host: str, config: Dict[str, str], timeout: float,
         logger.debug("Writing file %s", object_file.file_name)
         Path(object_file.file_name).write_bytes(object_file.content)
 
-    # 5.) link and delete object files if required
+    # link and delete object files if required
     if arguments.is_linking():
         linker_return_code: int = link_object_files(arguments, server_response.get_object_files())
 

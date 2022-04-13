@@ -1,4 +1,4 @@
-""" Tests for client/client_utils.py"""
+""" Tests for client/compilation.py"""
 import pytest
 
 import os
@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import List, Set
 
 from homcc.common.arguments import Arguments
-from homcc.client.client_utils import (
+from homcc.client.compilation import (
     CompilerError,
     compile_locally,
     find_dependencies,
@@ -16,8 +16,8 @@ from homcc.client.client_utils import (
 )
 
 
-class TestClientUtilsFunctions:
-    """Tests for functions in client/client_utils.py"""
+class TestCompilation:
+    """Tests for functions in client/compilation.py"""
 
     @pytest.fixture(autouse=True)
     def _init(self):
@@ -36,6 +36,7 @@ class TestClientUtilsFunctions:
 
         includes: List[str] = scan_includes(arguments)
 
+        assert len(includes) == 1
         assert "example/include/foo.h" in includes
 
     def test_find_dependencies_without_class_impl(self):

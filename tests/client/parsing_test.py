@@ -1,4 +1,4 @@
-""" Tests for client/client_utils.py"""
+""" Tests for client/compilation.py"""
 import pytest
 
 import os
@@ -21,7 +21,7 @@ from homcc.client.parsing import (
 
 
 class TestCLI:
-    """Tests for client.client_utils.parse_args"""
+    """Tests for client.parsing.parse_cli_args"""
 
     mocked_hosts: List[str] = ["localhost/8", "remotehost/64"]
 

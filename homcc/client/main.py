@@ -12,7 +12,7 @@ from typing import Dict, List, Optional
 sys.path.append(os.path.join(os.path.dirname(__file__), "../.."))
 
 from homcc.client.client import TCPClientError  # pylint: disable=wrong-import-position
-from homcc.client.client_utils import (  # pylint: disable=wrong-import-position
+from homcc.client.compilation import (  # pylint: disable=wrong-import-position
     CompilerError,
     HostsExhaustedError,
     compile_locally,
@@ -91,11 +91,10 @@ def main():
         except CompilerError as err:
             sys.exit(err.returncode)
 
-        # compile locally on recoverable errors
         except (HostsExhaustedError, NoHostsFoundError, TCPClientError):
             pass
 
-    # compile locally on recoverable failures or unsendability
+    # compile locally on unsendable arguments or recoverable errors
     sys.exit(compile_locally(compiler_arguments))
 
 

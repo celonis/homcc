@@ -7,7 +7,7 @@ import pytest
 
 from homcc.common.arguments import Arguments
 from homcc.client.client import TCPClient
-from homcc.client.client_utils import calculate_dependency_dict, find_dependencies
+from homcc.client.compilation import calculate_dependency_dict, find_dependencies
 from homcc.server.server import start_server, stop_server
 
 
