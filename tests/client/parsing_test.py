@@ -1,4 +1,4 @@
-""" Tests for client/compilation.py"""
+""" Tests for client/parsing.py"""
 import pytest
 
 import os
