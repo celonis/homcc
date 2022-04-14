@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from enum import Enum
-from typing import Callable, List, Optional
+from typing import Any, Callable, List, Optional
 
 
 def lzo(data: bytes, compress: bool) -> bytes:
@@ -47,11 +47,11 @@ class Compression(Enum):
         return self.value.name
 
     @staticmethod
-    def get(item: str) -> Optional[Compression]:
+    def get(item: str, default: Any = None) -> Optional[Compression]:
         for compression in Compression:
             if compression.value.name == item:
                 return compression
-        return None
+        return default
 
     @staticmethod
     def descriptions() -> List[str]:

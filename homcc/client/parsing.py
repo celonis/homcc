@@ -12,6 +12,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from homcc.common.arguments import Arguments
 from homcc.common.compression import Compression
+from homcc.common.parsing import parse_config_keys, load_config_file_from
 
 logger = logging.getLogger(__name__)
 
@@ -330,50 +331,31 @@ def load_hosts(hosts_file_locations: Optional[List[Path]] = None) -> List[str]:
     raise NoHostsFoundError
 
 
-def parse_config(config: str) -> Dict[str, str]:
-    config_info: List[str] = ["COMPILER", "COMPRESSION", "DEBUG", "TIMEOUT"]
-    config_pattern: str = f"^({'|'.join(config_info)})=(\\S+)$"
-    parsed_config: Dict[str, str] = {}
+def parse_config(config_lines: List[str]) -> Dict[str, str]:
+    config_keys: List[str] = ["compiler", "compression", "debug", "timeout"]
+    return parse_config_keys(config_keys, config_lines)
 
-    for line in config.splitlines():
-        # remove leading and trailing whitespace as well as in-between space chars
-        config_line = line.strip().replace(" ", "")
 
-        # ignore comment lines
-        if config_line.startswith("#"):
-            continue
+def load_config_file(config_file_locations: Optional[List[Path]] = None) -> List[str]:
+    """load a homcc config file from the default locations are as parameterized by config_file_locations"""
 
-        # remove trailing comment
-        match: Optional[re.Match] = re.match(r"^(\S+)#(\S+)$", config_line)
-        if match:
-            config_line, _ = match.groups()
+    if not config_file_locations:
+        return load_config_file_from(default_config_file_locations())
 
-        # parse and save config
-        match = re.match(config_pattern, config_line, re.IGNORECASE)
-        if match:
-            key, value = match.groups()
-            parsed_config[key.upper()] = value.lower()
-        else:
-            logger.warning(
-                'Config line "%s" ignored\n'
-                "To disable this warning, please correct or comment out the corresponding line!",
-                line,
-            )
-
-    return parsed_config
+    return load_config_file_from(config_file_locations)
 
 
 def default_config_file_locations() -> List[Path]:
     """
     Load homcc config from one of the following locations:
-    - File: $HOMCC_DIR/config
-    - File: ~/.homcc/config
-    - File: ~/.config/homcc/config
-    - File: /etc/homcc/config
+    - File: $HOMCC_DIR/client.conf
+    - File: ~/.homcc/client.conf
+    - File: ~/.config/homcc/client.conf
+    - File: /etc/homcc/client.conf
     """
 
     # config file locations
-    config_file_name: str = "config"
+    config_file_name: str = "client.conf"
     homcc_dir_env_var = os.getenv(HOMCC_DIR_ENV_VAR)
     home_dir_homcc_config = Path.home() / ".homcc" / config_file_name
     home_config_dir_homcc_config = Path.home() / ".config/homcc" / config_file_name
@@ -381,38 +363,21 @@ def default_config_file_locations() -> List[Path]:
 
     config_file_locations: List[Path] = []
 
-    # $HOMCC_DIR/config
+    # $HOMCC_DIR/client.conf
     if homcc_dir_env_var:
         homcc_dir_config = Path(homcc_dir_env_var) / config_file_name
         config_file_locations.append(homcc_dir_config)
 
-    # ~/.homcc/config
+    # ~/.homcc/client.conf
     if home_dir_homcc_config.exists():
         config_file_locations.append(home_dir_homcc_config)
 
-    # ~/.config/homcc/config
+    # ~/.config/homcc/client.conf
     if home_config_dir_homcc_config.exists():
         config_file_locations.append(home_config_dir_homcc_config)
 
-    # /etc/homcc/config
+    # /etc/homcc/client.conf
     if etc_dir_homcc_config.exists():
         config_file_locations.append(etc_dir_homcc_config)
 
     return config_file_locations
-
-
-def load_config_file(config_file_locations: Optional[List[Path]] = None) -> Dict[str, str]:
-    """
-    Load and parse a homcc config file from the default locations are as parameterized by config_file_locations
-    """
-
-    if not config_file_locations:
-        config_file_locations = default_config_file_locations()
-
-    for config_file_location in config_file_locations:
-        if config_file_location.exists():
-            if config_file_location.stat().st_size == 0:
-                logger.info('Config file "%s" appears to be empty.', config_file_location)
-            return parse_config(config_file_location.read_text(encoding="utf-8"))
-
-    return {}

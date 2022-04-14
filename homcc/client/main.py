@@ -24,6 +24,7 @@ from homcc.client.parsing import (  # pylint: disable=wrong-import-position
     load_config_file,
     load_hosts,
     parse_cli_args,
+    parse_config,
 )
 from homcc.common.arguments import Arguments  # pylint: disable=wrong-import-position
 from homcc.common.logging import (  # pylint: disable=wrong-import-position
@@ -39,7 +40,7 @@ logger: logging.Logger = logging.getLogger(__name__)
 def main():
     # load and parse arguments and configuration information
     homcc_args_dict, compiler_arguments = parse_cli_args(sys.argv[1:])
-    homcc_config: Dict[str, str] = load_config_file()
+    homcc_config: Dict[str, str] = parse_config(load_config_file())
     logging_config: Dict[str, int] = {
         "config": FormatterConfig.COLORED,
         "formatter": Formatter.CLIENT,
@@ -80,7 +81,7 @@ def main():
     timeout: Optional[float] = homcc_args_dict.get("timeout")
 
     if not timeout:
-        timeout = homcc_config.get("timeout", 180)
+        timeout = float(homcc_config.get("timeout", 180))
 
     # try to compile remotely
     if compiler_arguments.is_sendable():

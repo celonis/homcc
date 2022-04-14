@@ -4,7 +4,7 @@ import socketserver
 import logging
 import random
 from tempfile import TemporaryDirectory
-from typing import List, Dict, Tuple
+from typing import Dict, List, Tuple
 from threading import Lock
 from functools import singledispatchmethod
 from socket import SHUT_RD
@@ -38,8 +38,10 @@ logger = logging.getLogger(__name__)
 class TCPServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
     """TCP Server instance, holding data relevant across compilations."""
 
-    MAX_AMOUNT_CONNECTIONS = 48
+    DEFAULT_LIFETIME: float = 180
+    DEFAULT_PORT: int = 3633
 
+    connections_limit: int
     current_amount_connections: int
     """Indicates the amount of clients that are currently connected."""
     current_amount_connections_mutex: Lock
@@ -48,9 +50,10 @@ class TCPServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
     """'Hash' -> 'File path' on server map for holding paths to cached files."""
     cache_mutex: Lock
 
-    def __init__(self, server_address, RequestHandlerClass) -> None:
-        super().__init__(server_address, RequestHandlerClass)
+    def __init__(self, server_address: Tuple[str, int], connections_limit: int):
+        super().__init__(server_address, TCPRequestHandler)
         self.root_temp_folder = create_root_temp_folder()
+        self.connections_limit = connections_limit
         self.current_amount_connections = 0
         self.current_amount_connections_mutex = Lock()
         self.cache = {}
@@ -58,12 +61,12 @@ class TCPServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
 
     def verify_request(self, request, _) -> bool:
         with self.current_amount_connections_mutex:
-            accept_connection = self.current_amount_connections < self.MAX_AMOUNT_CONNECTIONS
+            accept_connection = self.current_amount_connections < self.connections_limit
 
         if not accept_connection:
             logger.info(
                 "Not accepting new connection, as max limit of #%i connections is already reached.",
-                self.MAX_AMOUNT_CONNECTIONS,
+                self.connections_limit,
             )
 
             connection_refused_message = ConnectionRefusedMessage()
@@ -73,7 +76,7 @@ class TCPServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
 
         return accept_connection
 
-    def __del__(self) -> None:
+    def __del__(self):
         self.root_temp_folder.cleanup()
 
 
@@ -198,7 +201,7 @@ class TCPRequestHandler(socketserver.BaseRequestHandler):
 
         return len(self.needed_dependencies) > 0
 
-    def check_dependencies_exist(self) -> None:
+    def check_dependencies_exist(self):
         """Checks if all dependencies exist. If yes, starts compiling. If no, requests missing dependencies."""
         if not self._request_next_dependency():
             # no further dependencies needed, compile now
@@ -268,11 +271,12 @@ class TCPRequestHandler(socketserver.BaseRequestHandler):
                 self.server.current_amount_connections -= 1
 
 
-def start_server(port: int = 0) -> Tuple[TCPServer, threading.Thread]:
-    server: TCPServer = TCPServer(("localhost", port), TCPRequestHandler)
+def start_server(address, port, limit, **kwargs) -> Tuple[TCPServer, threading.Thread]:
+    print("Remaining Arguments: ", kwargs)
 
-    server_thread = threading.Thread(target=server.serve_forever)
-    server_thread.daemon = True
+    server: TCPServer = TCPServer((address, port), limit)
+
+    server_thread = threading.Thread(target=server.serve_forever, daemon=True)
     server_thread.start()
 
     return server, server_thread

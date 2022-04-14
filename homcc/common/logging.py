@@ -8,8 +8,20 @@ from enum import Enum, Flag, auto
 from typing import Dict, Optional
 
 
-class MissingLogFile(Exception):
+class MissingLogFileError(Exception):
     """Exception to indicate a missing logging file when FormatterDestination.FILE is specified."""
+
+
+class LogLevel(Enum):
+    DEBUG = logging.DEBUG
+    INFO = logging.INFO
+    WARNING = logging.WARNING
+    ERROR = logging.ERROR
+    CRITICAL = logging.CRITICAL
+
+    @staticmethod
+    def as_dict():
+        return {level.name: level.value for level in LogLevel}
 
 
 class Formatter(Enum):
@@ -134,7 +146,13 @@ class _ServerFormatter(_Formatter):
         raise ValueError(f"Unrecognized formatter configuration {self._config}")
 
 
-def setup_logging(formatter: Formatter, config: FormatterConfig, destination: FormatterDestination, **kwargs):
+def setup_logging(
+    formatter: Formatter,
+    config: FormatterConfig,
+    destination: FormatterDestination,
+    level: int = logging.INFO,  # use logging.INFO as default instead of the usual logging.WARNING
+    filename: Optional[str] = None,
+):
     """
     Set up basic configuration for the logging system to display homcc messages on the client or the server.
 
@@ -149,13 +167,6 @@ def setup_logging(formatter: Formatter, config: FormatterConfig, destination: Fo
     file_name   Optional: Used only if FormatterDestination.File was chosen, specify the logging file.
     level       Optional: Explicitly state the logging level [DEBUG, INFO, WARNING, ERROR, CRITICAL].
     """
-    # default logging level in the logging library is logging.WARNING, but we use logging.INFO as default instead
-    level: int = kwargs.pop("level", logging.INFO)
-    filename: Optional[str] = kwargs.pop("filename", None)
-
-    if kwargs:
-        keys: str = ", ".join(kwargs.keys())
-        raise ValueError(f"Unrecognised argument(s): {keys}")
 
     # initialize formatter to deduce the correct formatting strings
     fmt: _Formatter = _ClientFormatter(config) if formatter == Formatter.CLIENT else _ServerFormatter(config)
@@ -169,13 +180,13 @@ def setup_logging(formatter: Formatter, config: FormatterConfig, destination: Fo
 
     elif destination == FormatterDestination.FILE:
         if not filename:
-            raise MissingLogFile
+            raise MissingLogFileError
 
         handler = logging.FileHandler(filename)
         handler.setFormatter(fmt)
 
     else:
-        raise ValueError(f"Unrecognized formatter destination {destination}")
+        raise ValueError(f'Unrecognized formatter destination "{destination}"')
 
     # configure the root logger
     logging.basicConfig(level=level, handlers=[handler])
