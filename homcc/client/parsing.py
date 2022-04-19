@@ -352,7 +352,7 @@ def parse_config(config: str) -> Dict[str, str]:
         match = re.match(config_pattern, config_line, re.IGNORECASE)
         if match:
             key, value = match.groups()
-            parsed_config[key.upper()] = value.lower()
+            parsed_config[key.lower()] = value
         else:
             logger.warning(
                 'Config line "%s" ignored\n'

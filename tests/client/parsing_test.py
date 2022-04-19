@@ -419,16 +419,17 @@ class TestParsingConfig:
         "COMPILER=g++",
         "DEBUG=TRUE  # DEBUG",
         " TIMEOUT = 180 ",
-        "\tCoMpReSsIoN=lZo",
+        "\tCoMpReSsIoN=lzo",
     ]
 
     def test_parse_config(self):
         parsed_config = parse_config("\n".join(self.config))
 
-        assert parsed_config["COMPILER"] == "g++"
-        assert parsed_config["DEBUG"] == "true"
-        assert parsed_config["TIMEOUT"] == "180"
-        assert parsed_config["COMPRESSION"] == "lzo"
+        assert parsed_config.pop("compiler") == "g++"
+        assert parsed_config.pop("debug") == "TRUE"
+        assert parsed_config.pop("timeout") == "180"
+        assert parsed_config.pop("compression") == "lzo"
+        assert not parsed_config
 
     def test_load_config_file(self, tmp_path):
         tmp_config_file: Path = tmp_path / "config"
@@ -438,7 +439,8 @@ class TestParsingConfig:
 
         parsed_config: Dict[str, str] = load_config_file(config_file_locations)
 
-        assert parsed_config["COMPILER"] == "g++"
-        assert parsed_config["DEBUG"] == "true"
-        assert parsed_config["TIMEOUT"] == "180"
-        assert parsed_config["COMPRESSION"] == "lzo"
+        assert parsed_config.pop("compiler") == "g++"
+        assert parsed_config.pop("debug") == "TRUE"
+        assert parsed_config.pop("timeout") == "180"
+        assert parsed_config.pop("compression") == "lzo"
+        assert not parsed_config
