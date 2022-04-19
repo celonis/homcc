@@ -2,11 +2,13 @@
 import threading
 import socketserver
 import logging
+import os
 import random
-from tempfile import TemporaryDirectory
-from typing import Dict, List, Tuple
-from threading import Lock
+
 from functools import singledispatchmethod
+from tempfile import TemporaryDirectory
+from threading import Lock
+from typing import Dict, List, Optional, Tuple
 from socket import SHUT_RD
 
 from homcc.common.messages import (
@@ -17,9 +19,7 @@ from homcc.common.messages import (
     DependencyRequestMessage,
     CompilationResultMessage,
 )
-
 from homcc.common.hashing import hash_file_with_bytes
-
 from homcc.server.environment import (
     create_root_temp_folder,
     create_instance_folder,
@@ -39,42 +39,66 @@ class TCPServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
     """TCP Server instance, holding data relevant across compilations."""
 
     DEFAULT_LIFETIME: float = 180
+    DEFAULT_LIMIT: int = (
+        len(os.sched_getaffinity(0))  # number of available CPUs for our process
+        or os.cpu_count()  # total number of physical CPUs
+        or 8  # fallback value
+    )
     DEFAULT_PORT: int = 3633
 
     connections_limit: int
-    current_amount_connections: int
-    """Indicates the amount of clients that are currently connected."""
+    request_lifetime: float
+    denylist: Optional[str]
+    allowlist: Optional[str]
+
+    current_amount_connections: int  # indicates the amount of clients that are currently connected
     current_amount_connections_mutex: Lock
     root_temp_folder: TemporaryDirectory
-    cache: Dict[str, str]
-    """'Hash' -> 'File path' on server map for holding paths to cached files."""
+    cache: Dict[str, str]  # 'Hash' -> 'File path' on server map for holding paths to cached files
     cache_mutex: Lock
 
-    def __init__(self, server_address: Tuple[str, int], connections_limit: int):
+    def __init__(
+        self,
+        server_address: Tuple[str, int],
+        limit: int = DEFAULT_LIMIT,
+        lifetime: float = DEFAULT_LIFETIME,
+        denylist: Optional[str] = None,
+        allowlist: Optional[str] = None,
+    ):
         super().__init__(server_address, TCPRequestHandler)
+        self.connections_limit = limit
+        self.request_lifetime = lifetime
+        self.denylist = denylist  # load_clients(Path(denylist))
+        self.allowlist = allowlist  # load_clients(Path(allowlist))
+
         self.root_temp_folder = create_root_temp_folder()
-        self.connections_limit = connections_limit
         self.current_amount_connections = 0
         self.current_amount_connections_mutex = Lock()
         self.cache = {}
         self.cache_mutex = Lock()
 
     def verify_request(self, request, _) -> bool:
+        # client_ip, _ = request.getpeername()
+
+        # TODO: FIX THIS, probably with extra datastructure
+        # if client_ip in self.allowlist and client_ip not in self.denylist:
         with self.current_amount_connections_mutex:
             accept_connection = self.current_amount_connections < self.connections_limit
 
-        if not accept_connection:
-            logger.info(
-                "Not accepting new connection, as max limit of #%i connections is already reached.",
-                self.connections_limit,
-            )
+        if accept_connection:
+            return True
 
-            connection_refused_message = ConnectionRefusedMessage()
-            request.sendall(connection_refused_message.to_bytes())
-            request.shutdown(SHUT_RD)
-            request.close()
+        logger.info(
+            "Not accepting new connection, as max limit of #%i connections is already reached.",
+            self.connections_limit,
+        )
 
-        return accept_connection
+        connection_refused_message = ConnectionRefusedMessage()
+        request.sendall(connection_refused_message.to_bytes())
+        request.shutdown(SHUT_RD)
+        request.close()
+
+        return False
 
     def __del__(self):
         self.root_temp_folder.cleanup()
@@ -271,10 +295,8 @@ class TCPRequestHandler(socketserver.BaseRequestHandler):
                 self.server.current_amount_connections -= 1
 
 
-def start_server(address, port, limit, **kwargs) -> Tuple[TCPServer, threading.Thread]:
-    print("Remaining Arguments: ", kwargs)
-
-    server: TCPServer = TCPServer((address, port), limit)
+def start_server(address: str, port: int, **kwargs) -> Tuple[TCPServer, threading.Thread]:
+    server: TCPServer = TCPServer((address, port), **kwargs)
 
     server_thread = threading.Thread(target=server.serve_forever, daemon=True)
     server_thread.start()

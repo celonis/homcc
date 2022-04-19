@@ -179,7 +179,7 @@ def calculate_dependency_dict(dependencies: Set[str]) -> Dict[str, str]:
     return {dependency: hash_file_with_path(dependency) for dependency in dependencies}
 
 
-def invert_dict(to_invert: Dict):
+def invert_dict(to_invert: Dict) -> Dict:
     return {v: k for k, v in to_invert.items()}
 
 

@@ -18,18 +18,19 @@ class TestParsingConfig:
         "LIMIT=64",
         "LIFETIME=42  # Answer to the Ultimate Question of Life, the Universe, and Everything",
         " port = 3633 ",
-        "\tAdDrEsS=lOcAlHoSt",
+        "\tAdDrEsS=localhost",
     ]
 
     def test_parse_config(self):
         parsed_config = parse_config(self.config)
 
-        assert parsed_config["limit"] == "64"
-        assert parsed_config["lifetime"] == "42"
-        assert parsed_config["port"] == "3633"
-        assert parsed_config["address"] == "localhost"
+        assert parsed_config.pop("limit") == "64"
+        assert parsed_config.pop("lifetime") == "42"
+        assert parsed_config.pop("port") == "3633"
+        assert parsed_config.pop("address") == "localhost"
+        assert not parsed_config
 
-    def test_load_config_file(self, tmp_path):
+    def test_load_config_file(self, tmp_path: Path):
         tmp_config_file: Path = tmp_path / "server.conf"
         tmp_config_file.write_text("\n".join(self.config))
 
@@ -41,7 +42,8 @@ class TestParsingConfig:
 
         parsed_config: Dict[str, str] = parse_config(config)
 
-        assert parsed_config["limit"] == "64"
-        assert parsed_config["lifetime"] == "42"
-        assert parsed_config["port"] == "3633"
-        assert parsed_config["address"] == "localhost"
+        assert parsed_config.pop("limit") == "64"
+        assert parsed_config.pop("lifetime") == "42"
+        assert parsed_config.pop("port") == "3633"
+        assert parsed_config.pop("address") == "localhost"
+        assert not parsed_config

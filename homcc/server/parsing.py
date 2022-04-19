@@ -1,6 +1,7 @@
 """Parsing related functionality regarding the homcc server"""
 import logging
 import os
+import re
 import sys
 
 from argparse import Action, ArgumentParser, RawTextHelpFormatter
@@ -9,10 +10,15 @@ from typing import Any, Dict, List, Optional
 
 from homcc.common.logging import LogLevel
 from homcc.common.parsing import parse_config_keys, load_config_file_from
+from homcc.server.server import TCPServer
 
 logger = logging.getLogger(__name__)
 
 HOMCC_DIR_ENV_VAR = "$HOMCC_DIR"
+
+
+class NoClientsFileFound(Exception):
+    """Error class to indicate a recoverable error when a clients file could not be loaded correctly"""
 
 
 class ShowVersion(Action):
@@ -56,7 +62,7 @@ def parse_cli_args(args: List[str]) -> Dict[str, Any]:
         required=False,
         metavar="SECONDS",
         type=float,
-        help="maximum lifetime of a compilation request in SECONDS, defaults to 3 minutes",
+        help=f"maximum lifetime of a compilation request in SECONDS, defaults to {TCPServer.DEFAULT_LIFETIME} seconds",
     )
 
     # networking
@@ -64,7 +70,7 @@ def parse_cli_args(args: List[str]) -> Dict[str, Any]:
         "--port",
         required=False,
         type=int,
-        help="TCP PORT to listen on",
+        help=f"TCP PORT to listen on, defaults to {TCPServer.DEFAULT_PORT}",
     )
 
     networking_group.add_argument(
@@ -72,7 +78,7 @@ def parse_cli_args(args: List[str]) -> Dict[str, Any]:
         required=False,
         metavar="ADDRESS",
         type=str,
-        help="IP ADDRESS to listen on",
+        help='IP ADDRESS to listen on, defaults to "localhost"',
     )
 
     networking_group.add_argument(
@@ -81,7 +87,7 @@ def parse_cli_args(args: List[str]) -> Dict[str, Any]:
         required=False,
         metavar="FILE",
         type=str,
-        help="exclusive control of client access through a denying FILE",
+        help="control of client exclusive access via a denying FILE",
     )
 
     networking_group.add_argument(
@@ -90,7 +96,7 @@ def parse_cli_args(args: List[str]) -> Dict[str, Any]:
         required=False,
         metavar="FILE",
         type=str,
-        help="inclusive control of client access through an allowing FILE",
+        help="control of client inclusive access via an allowing FILE",
     )
 
     # debug
@@ -110,6 +116,37 @@ def parse_cli_args(args: List[str]) -> Dict[str, Any]:
     )
 
     return vars(parser.parse_args(args))
+
+
+def load_clients(clients_file_location: Path) -> List[str]:
+    """Load client data from clients_file_location"""
+
+    def filtered_lines(text: str) -> List[str]:
+        lines: List[str] = []
+
+        for line in text.splitlines():
+            # remove whitespace
+            line = line.strip().replace(" ", "")
+
+            # remove trailing comment
+            match: Optional[re.Match] = re.match(r"^(\S+)#(\S+)$", line)
+            if match:
+                line, _ = match.groups()
+
+            # filter empty lines and comment lines
+            if len(line) != 0 and not line.startswith("#"):
+                lines.append(line)
+
+        return lines
+
+    if not clients_file_location.exists():
+        logger.warning('File "%s" does not exist!', str(clients_file_location.absolute()))
+        return []
+
+    if clients_file_location.stat().st_size == 0:
+        logger.warning('Clients file appears to be empty "%s"!', clients_file_location)
+
+    return filtered_lines(clients_file_location.read_text(encoding="utf-8"))
 
 
 def parse_config(config_lines: List[str]) -> Dict[str, str]:

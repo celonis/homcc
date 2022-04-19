@@ -49,7 +49,7 @@ def main():
     limit: Optional[int] = homccd_args_dict.get("jobs")
 
     if not limit:
-        limit = int(homccd_config.get("limit", os.cpu_count()))
+        limit = int(homccd_config.get("limit", TCPServer.DEFAULT_LIMIT))
 
     # LIFETIME
     lifetime: Optional[float] = homccd_args_dict.get("lifetime")
