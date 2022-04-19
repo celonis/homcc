@@ -331,7 +331,7 @@ def load_hosts(hosts_file_locations: Optional[List[Path]] = None) -> List[str]:
 
 
 def parse_config(config: str) -> Dict[str, str]:
-    config_info: List[str] = ["COMPILER", "COMPRESSION", "DEBUG", "TIMEOUT"]
+    config_info: List[str] = ["compiler", "compression", "debug", "timeout"]
     config_pattern: str = f"^({'|'.join(config_info)})=(\\S+)$"
     parsed_config: Dict[str, str] = {}
 
