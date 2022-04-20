@@ -7,7 +7,8 @@ import pytest
 
 from homcc.common.arguments import Arguments
 from homcc.client.client import TCPClient
-from homcc.client.client_utils import calculate_dependency_dict, find_dependencies
+from homcc.client.compilation import calculate_dependency_dict, find_dependencies
+from homcc.client.parsing import ConnectionType, Host
 from homcc.server.server import start_server, stop_server
 
 
@@ -16,10 +17,9 @@ class TestClient:
 
     @pytest.fixture(autouse=True)
     def _init(self, unused_tcp_port: int):
-        host: str = "localhost"
         server, server_thread = start_server(port=unused_tcp_port)
 
-        self.client: TCPClient = TCPClient(host, unused_tcp_port)
+        self.client: TCPClient = TCPClient(Host(type=ConnectionType.TCP, host="localhost", port=str(unused_tcp_port)))
 
         self.example_base_dir: Path = Path("example")
         self.example_main_cpp: Path = self.example_base_dir / "src" / "main.cpp"
@@ -45,9 +45,9 @@ class TestClient:
             str(self.example_out_file.absolute()),
         ]
         cwd: str = ""
-        dependencies: Set[str] = find_dependencies(Arguments(args))
+        dependencies: Set[str] = find_dependencies(Arguments.from_args(args))
         dependency_dict: Dict[str, str] = calculate_dependency_dict(dependencies)
 
         await self.client.connect()
-        await self.client.send_argument_message(Arguments(args), cwd, dependency_dict)
+        await self.client.send_argument_message(Arguments.from_args(args), cwd, dependency_dict)
         await self.client.close()

@@ -4,34 +4,28 @@ homcc client
 """
 import asyncio
 import logging
-import sys
 import os
+import sys
 
-from pathlib import Path
-from typing import Dict, Set
+from typing import Dict, List, Optional
 
 sys.path.append(os.path.join(os.path.dirname(__file__), "../.."))
 
-from homcc.common.arguments import Arguments, ArgumentsExecutionResult  # pylint: disable=wrong-import-position
-from homcc.client.client import (  # pylint: disable=wrong-import-position
-    ClientConnectionError,
-    TCPClient,
-    TCPClientError,
-    UnexpectedMessageTypeError,
-)
-from homcc.client.client_utils import (  # pylint: disable=wrong-import-position
+from homcc.client.client import TCPClientError  # pylint: disable=wrong-import-position
+from homcc.client.compilation import (  # pylint: disable=wrong-import-position
     CompilerError,
-    calculate_dependency_dict,
-    find_dependencies,
-    invert_dict,
-    local_compile,
-    link_object_files,
+    HostsExhaustedError,
+    compile_locally,
+    compile_remotely,
+    scan_includes,
 )
-from homcc.common.messages import (  # pylint: disable=wrong-import-position
-    ConnectionRefusedMessage,
-    Message,
-    CompilationResultMessage,
-    DependencyRequestMessage,
+from homcc.client.parsing import (  # pylint: disable=wrong-import-position
+    ClientConfig,
+    NoHostsFoundError,
+    load_config_file,
+    load_hosts,
+    parse_cli_args,
+    parse_config,
 )
 from homcc.common.logging import (  # pylint: disable=wrong-import-position
     Formatter,
@@ -43,121 +37,67 @@ from homcc.common.logging import (  # pylint: disable=wrong-import-position
 logger: logging.Logger = logging.getLogger(__name__)
 
 
-async def remote_compile(host: str, port: int, arguments: Arguments) -> int:
-    """Tries to connect to a server and compile there."""
-
-    client: TCPClient = TCPClient(host, port)
-    cwd: str = os.getcwd()  # current working directory
-
-    # timeout window in seconds for receiving messages
-    timeout: int = 180
-
-    try:
-        # 1.) prepare for communication with server
-        dependencies: Set[str] = find_dependencies(arguments)
-        logger.debug("Dependency list:\n%s", dependencies)
-        dependency_dict: Dict[str, str] = calculate_dependency_dict(dependencies)
-
-        # invert this so we can easily search by the hash later on when dependencies are requested
-        inverted_dependency_dict = invert_dict(dependency_dict)
-
-        logger.debug("Dependency dict:\n%s", dependency_dict)
-
-        await client.connect()
-
-        # 2.) send arguments and dependency information to server and provide requested dependencies
-        await client.send_argument_message(arguments, cwd, dependency_dict)
-
-        server_response: Message = await client.receive(timeout=timeout)
-
-        if isinstance(server_response, ConnectionRefusedMessage):
-            logger.warning("Server '%s:%i' refused the connection.", host, port)
-            await client.close()
-
-            raise ClientConnectionError
-
-        while isinstance(server_response, DependencyRequestMessage):
-            requested_dependency: str = inverted_dependency_dict[server_response.get_sha1sum()]
-            await client.send_dependency_reply_message(requested_dependency)
-
-            server_response = await client.receive(timeout=timeout)
-
-        # 3.) close client and handle final message
-        await client.close()
-
-        if not isinstance(server_response, CompilationResultMessage):
-            logger.error("Received message of unexpected type %s", server_response.message_type)
-            raise UnexpectedMessageTypeError
-
-        # 4.) extract and use compilation result
-        server_result: ArgumentsExecutionResult = server_response.get_compilation_result()
-
-        if server_result.stdout:
-            logger.debug("Server output:\n%s", server_result.stdout)
-
-        if server_result.return_code != os.EX_OK:
-            logger.warning("Server error(%i):\n%s", server_result.return_code, server_result.stderr)
-
-            # TODO(s.pirsch): remove local compilation fallback after extensive testing
-            # for now, we try to recover from server compilation errors via local compilation to track bugs
-            compilation_return_code: int = local_compile(arguments)
-
-            if compilation_return_code != server_result.return_code:
-                logger.debug(
-                    "Different compilation result errors: Client error(%i) - Server error(%i)",
-                    compilation_return_code,
-                    server_result.return_code,
-                )
-
-            return compilation_return_code
-
-        for object_file in server_response.get_object_files():
-            logger.debug("Writing file %s", object_file.file_name)
-            Path(object_file.file_name).write_bytes(object_file.content)
-
-        # 5.) link and delete object files if required
-        if arguments.is_linking():
-            linker_return_code: int = link_object_files(arguments, server_response.get_object_files())
-
-            for object_file in server_response.get_object_files():
-                logger.debug("Deleting file %s", object_file.file_name)
-                Path(object_file.file_name).unlink()
-
-            return linker_return_code
-
-        return os.EX_OK
-
-    # unrecoverable errors
-    except CompilerError as err:
-        return err.returncode
-
-
-async def run() -> int:
-    """client main function, decides on which server to connect to or to compile locally"""
-    arguments: Arguments = Arguments.from_argv(sys.argv)  # TODO(s.pirsch): provide compiler from config file (CPL-6419)
-
-    # check if we need even need to contact the server at first
-    if not arguments.is_sendable():
-        return local_compile(arguments)
-
-    host: str = "localhost"
-    port: int = 3633
-
-    try:
-        return await remote_compile(host, port, arguments)
-    except TCPClientError:
-        # TODO(o.layer): here we would have to continue and try to call compile() for another
-        # server defined in our config instead of doing a local compile
-        return local_compile(arguments)
-
-
 def main():
-    setup_logging(
-        formatter=Formatter.CLIENT,
-        config=FormatterConfig.COLORED,
-        destination=FormatterDestination.STREAM,
-    )
-    sys.exit(asyncio.run(run()))
+    # load and parse arguments and configuration information
+    homcc_args_dict, compiler_arguments = parse_cli_args(sys.argv[1:])
+    client_config: ClientConfig = parse_config(load_config_file())
+    logging_config: Dict[str, int] = {
+        "config": FormatterConfig.COLORED,
+        "formatter": Formatter.CLIENT,
+        "destination": FormatterDestination.STREAM,
+    }
+
+    # VERBOSE; enables verbose mode
+    if homcc_args_dict["verbose"] or client_config.verbose:
+        logging_config["config"] |= FormatterConfig.DETAILED
+        logging_config["level"] = logging.DEBUG
+
+    setup_logging(**logging_config)
+
+    # COMPILER; default: "cc"
+    compiler: Optional[str] = compiler_arguments.compiler
+
+    if not compiler:
+        compiler = client_config.compiler
+        compiler_arguments.compiler = compiler
+
+    # SCAN-INCLUDES; and exit
+    if homcc_args_dict["scan_includes"]:
+        try:
+            includes: List[str] = scan_includes(compiler_arguments)
+        except CompilerError as e:
+            sys.exit(e.returncode)
+
+        for include in includes:
+            print(include)
+
+        sys.exit(os.EX_OK)
+
+    # HOST; get host from cli or load hosts from env var or file
+    host: Optional[str] = homcc_args_dict["host"]
+    hosts: List[str] = [host] if host else load_hosts()
+
+    # TIMEOUT
+    timeout: Optional[float] = homcc_args_dict["timeout"]
+
+    if timeout:
+        client_config.timeout = timeout
+
+    # try to compile remotely
+    if compiler_arguments.is_sendable():
+        try:
+            sys.exit(asyncio.run(compile_remotely(hosts, client_config, compiler_arguments)))
+
+        # exit on unrecoverable errors
+        except CompilerError as error:
+            sys.exit(error.returncode)
+
+        # recoverable errors
+        except (HostsExhaustedError, NoHostsFoundError, TCPClientError) as error:
+            logger.warning("%s", error)
+
+    # compile locally on unsendable arguments or recoverable errors
+    sys.exit(compile_locally(compiler_arguments))
 
 
 if __name__ == "__main__":
