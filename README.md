@@ -15,8 +15,8 @@ Note: currently, installing both packages leads to an issue with conflicting fil
 ## Development
 
 ### Setup
-- Install the `python3-lzo` apt package (needed for LZO compression):
-  `sudo apt install python3-lzo`
+- Install the `liblzo2-dev` apt package (needed for LZO compression):
+  `sudo apt install liblzo2-dev`
 
 - Install required dependencies:<br/>
   `python -m pip install -r requirements.txt`

@@ -250,7 +250,8 @@ class DependencyReplyMessage(Message):
             self.size = size
         else:
             raise ValueError(
-                f"Passed no data AND no size information to the {type(self).__name__}. Pass either of the two arguments."
+                f"""Passed no data AND no size information to the {type(self).__name__}.
+                Pass either of the two arguments."""
             )
 
         self.compression = compression

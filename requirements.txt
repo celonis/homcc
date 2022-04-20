@@ -1,4 +1,4 @@
-python-lzo==1.12 # see https://packages.debian.org/buster/python-lzo
+python-lzo>=1.12 # see https://packages.debian.org/buster/python-lzo
 
 black
 mypy>=0.931
