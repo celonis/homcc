@@ -20,7 +20,7 @@ from homcc.common.messages import (
 
 from homcc.common.hashing import hash_file_with_bytes
 
-from homcc.common.compression import Compression
+from homcc.common.compression import Compression, NoCompression
 
 from homcc.server.environment import (
     create_root_temp_folder,
@@ -126,6 +126,8 @@ class TCPRequestHandler(socketserver.BaseRequestHandler):
         logger.debug("Needed dependencies: %s", self.needed_dependencies)
 
         self.compression = message.get_compression()
+        if type(self.compression) is not NoCompression:
+            logger.info("Using %s compression.", self.compression.name())
 
         # shuffle the keys so we request them at a different order later to avoid
         # transmitting the same files for simultaneous requests

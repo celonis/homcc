@@ -155,7 +155,55 @@ class Arguments:
 
     def is_sendable(self) -> bool:
         """determine if the Arguments lead to a meaningful remote compilation"""
-        return _is_sendable(self)
+
+        def log_unsendable(message: str):
+            logger.info("%s; cannot compile remotely", message)
+
+        if not self.source_files:
+            log_unsendable("no source files given")
+            return False
+
+        for arg in self.args:
+            if not arg.startswith("-"):
+                continue
+
+            # prefix args
+            if arg.startswith(self.Unsendable.assembler_options_prefix):  # "-Wa,"
+                log_unsendable(f"[{arg}] must be local")  # TODO(s.pirsch): this is more detailed, fix in separate PR
+                return False
+
+            if arg.startswith(self.Unsendable.specs_prefix):  # "-specs="
+                log_unsendable(f"[{arg}] overwrites spec strings")
+                return False
+
+            if arg.startswith(self.Unsendable.profile_generate_prefix):  # "-fprofile-generate="
+                log_unsendable(f"[{arg}]  will emit profile info")
+                return False
+
+            # single args
+            if arg == self.Unsendable.no_assembly_arg:  # "-S"
+                log_unsendable(f"[{arg}] implies a no assembly call")
+                return False
+
+            if arg == self.Unsendable.rpo_arg:  # "-frepo"
+                log_unsendable(f"[{arg}] will emit .rpo files")
+                return False
+
+            # arg families
+            if arg in self.Unsendable.native_args:
+                log_unsendable(f"[{arg}] optimizes for local machine")
+                return False
+
+            if arg in self.Unsendable.preprocessor_args:
+                log_unsendable(f"[{arg}] implies a preprocessor only call")
+                return False
+
+            for profile_arg in self.Unsendable.profile_args:
+                if arg.startswith(profile_arg):
+                    log_unsendable(f"[{arg}] will emit or use profile info")
+                    return False
+
+        return True
 
     def is_linking(self) -> bool:
         """check whether the linking flag is present"""

@@ -4,14 +4,19 @@ import os
 import subprocess
 
 from pathlib import Path
-from typing import Dict, List, Set
+from typing import Dict, List, Optional, Set
 
 from homcc.client.client import TCPClient, ClientConnectionError, UnexpectedMessageTypeError
-from homcc.client.parsing import parse_host
+from homcc.client.parsing import ClientConfig, Host, HostParsingError, parse_host
 from homcc.common.arguments import Arguments, ArgumentsExecutionResult
 from homcc.common.hashing import hash_file_with_path
-from homcc.common.messages import ObjectFile
-from homcc.common.messages import Message, CompilationResultMessage, ConnectionRefusedMessage, DependencyRequestMessage
+from homcc.common.messages import (
+    Message,
+    CompilationResultMessage,
+    ConnectionRefusedMessage,
+    DependencyRequestMessage,
+    ObjectFile,
+)
 from homcc.common.compression import Compression, NoCompression
 
 logger = logging.getLogger(__name__)
@@ -31,29 +36,30 @@ class HostsExhaustedError(Exception):
     """Error class to indicate that the compilation request was refused by all hosts"""
 
 
-async def compile_remotely(hosts: List[str], config: Dict[str, str], timeout: float, arguments: Arguments) -> int:
+async def compile_remotely(hosts: List[str], config: ClientConfig, arguments: Arguments) -> int:
     # TODO(s.pirsch): smart host selection with heuristic (CPL-6470)
     for host in hosts:
         try:
-            return await compile_remotely_at(host, config, timeout, arguments)
-        except ClientConnectionError:
+            parsed_host: Host = parse_host(host)
+            compression: Optional[str] = parsed_host.compression or config.compression
+            return await compile_remotely_at(parsed_host, compression, config.timeout, arguments)
+
+        except (ClientConnectionError, HostParsingError) as error:
+            logger.warning("%s", error)
             continue
 
-    raise HostsExhaustedError
+    raise HostsExhaustedError(f"All hosts {hosts} are exhausted!")
 
 
-async def compile_remotely_at(host: str, config: Dict[str, str], timeout: float, arguments: Arguments) -> int:
+async def compile_remotely_at(
+    host: Host, compression_name: Optional[str], timeout: Optional[float], arguments: Arguments
+) -> int:
     """main function for the communication between client and the remote compilation server"""
 
-    # setup and connect client
-    host_dict: Dict[str, str] = parse_host(host)
+    compression = get_compression(compression_name)
 
-    compression = get_compression(host_dict, config)
-
-    logger.debug("Compression: %s", compression)
-
-    client: TCPClient = TCPClient(host_dict, compression)
-
+    # connect TCP client
+    client: TCPClient = TCPClient(host, compression)
     await client.connect()
 
     # send arguments and dependency information to server and provide requested dependencies
@@ -65,10 +71,8 @@ async def compile_remotely_at(host: str, config: Dict[str, str], timeout: float,
     server_response: Message = await client.receive(timeout)
 
     if isinstance(server_response, ConnectionRefusedMessage):
-        logger.warning('Server "%s:%s" refused the connection.', client.host, client.port)
         await client.close()
-
-        raise ClientConnectionError
+        raise ClientConnectionError(f"Server {client.host}:{client.port} refused the connection!")
 
     while isinstance(server_response, DependencyRequestMessage):
         requested_dependency: str = dependency_dict[server_response.get_sha1sum()]
@@ -80,8 +84,7 @@ async def compile_remotely_at(host: str, config: Dict[str, str], timeout: float,
     await client.close()
 
     if not isinstance(server_response, CompilationResultMessage):
-        logger.error("Received message of unexpected type %s", server_response.message_type)
-        raise UnexpectedMessageTypeError
+        raise UnexpectedMessageTypeError(f'Received message of unexpected type "{server_response.message_type}"!')
 
     # extract and use compilation result
     server_result: ArgumentsExecutionResult = server_response.get_compilation_result()
@@ -128,9 +131,9 @@ def compile_locally(arguments: Arguments) -> int:
     try:
         # execute compile command, e.g.: "g++ foo.cpp -o foo"
         result: ArgumentsExecutionResult = arguments.execute(check=True)
-    except subprocess.CalledProcessError as err:
-        logger.error("Compiler error:\n%s", err.stderr)
-        return err.returncode
+    except subprocess.CalledProcessError as error:
+        logger.error("Compiler error:\n%s", error.stderr)
+        return error.returncode
 
     if result.stdout:
         logger.debug("Compiler result:\n%s", result.stdout)
@@ -148,9 +151,9 @@ def find_dependencies(arguments: Arguments) -> Set[str]:
     try:
         # execute preprocessor command, e.g.: "g++ main.cpp -MM"
         result: ArgumentsExecutionResult = arguments.dependency_finding().execute(check=True)
-    except subprocess.CalledProcessError as err:
-        logger.error("Preprocessor error:\n%s", err.stderr)
-        raise CompilerError(err) from err
+    except subprocess.CalledProcessError as error:
+        logger.error("Preprocessor error:\n%s", error.stderr)
+        raise CompilerError(error) from error
 
     if result.stdout:
         logger.debug("Preprocessor result:\n%s", result.stdout)
@@ -176,12 +179,14 @@ def calculate_dependency_dict(dependencies: Set[str]) -> Dict[str, str]:
     return {dependency: hash_file_with_path(dependency) for dependency in dependencies}
 
 
-def invert_dict(to_invert: Dict):
+def invert_dict(to_invert: Dict) -> Dict:
     return {v: k for k, v in to_invert.items()}
 
 
-def get_compression(host_dict: Dict[str, str], config: Dict[str, str]) -> Compression:
-    compression_name: str = host_dict.get("compression", config.get("compression", NoCompression.name()))
+def get_compression(compression_name: Optional[str]) -> Compression:
+    if compression_name is None:
+        return NoCompression()
+
     return Compression.from_name(compression_name)
 
 
@@ -202,9 +207,9 @@ def link_object_files(arguments: Arguments, object_files: List[ObjectFile]) -> i
     try:
         # execute linking command, e.g.: "g++ foo.o bar.o -ofoobar"
         result: ArgumentsExecutionResult = arguments.execute(check=True)
-    except subprocess.CalledProcessError as err:
-        logger.error("Linker error:\n%s", err.stderr)
-        return err.returncode
+    except subprocess.CalledProcessError as error:
+        logger.error("Linker error:\n%s", error.stderr)
+        return error.returncode
 
     if result.stdout:
         logger.debug("Linker result:\n%s", result.stdout)

@@ -20,10 +20,12 @@ from homcc.client.compilation import (  # pylint: disable=wrong-import-position
     scan_includes,
 )
 from homcc.client.parsing import (  # pylint: disable=wrong-import-position
+    ClientConfig,
     NoHostsFoundError,
     load_config_file,
     load_hosts,
     parse_cli_args,
+    parse_config,
 )
 from homcc.common.arguments import Arguments  # pylint: disable=wrong-import-position
 from homcc.common.logging import (  # pylint: disable=wrong-import-position
@@ -39,15 +41,15 @@ logger: logging.Logger = logging.getLogger(__name__)
 def main():
     # load and parse arguments and configuration information
     homcc_args_dict, compiler_arguments = parse_cli_args(sys.argv[1:])
-    homcc_config: Dict[str, str] = load_config_file()
+    client_config: ClientConfig = parse_config(load_config_file())
     logging_config: Dict[str, int] = {
         "config": FormatterConfig.COLORED,
         "formatter": Formatter.CLIENT,
         "destination": FormatterDestination.STREAM,
     }
 
-    # DEBUG; enable DEBUG mode
-    if homcc_args_dict["DEBUG"] or homcc_config.get("DEBUG"):
+    # VERBOSE; enables verbose mode
+    if homcc_args_dict["verbose"] or client_config.verbose:
         logging_config["config"] |= FormatterConfig.DETAILED
         logging_config["level"] = logging.DEBUG
 
@@ -57,11 +59,11 @@ def main():
     compiler: Optional[str] = compiler_arguments.compiler
 
     if not compiler:
-        compiler = homcc_config.get("compiler", Arguments.default_compiler)
+        compiler = client_config.compiler
         compiler_arguments.compiler = compiler
 
     # SCAN-INCLUDES; and exit
-    if homcc_args_dict.get("scan_includes"):
+    if homcc_args_dict["scan_includes"]:
         try:
             includes: List[str] = scan_includes(compiler_arguments)
         except CompilerError as e:
@@ -73,26 +75,27 @@ def main():
         sys.exit(os.EX_OK)
 
     # HOST; get host from cli or load hosts from env var or file
-    host: Optional[str] = homcc_args_dict.get("host")
+    host: Optional[str] = homcc_args_dict["host"]
     hosts: List[str] = [host] if host else load_hosts()
 
-    # TIMEOUT; default: 180s
-    timeout: Optional[float] = homcc_args_dict.get("timeout")
+    # TIMEOUT
+    timeout: Optional[float] = homcc_args_dict["timeout"]
 
-    if not timeout:
-        timeout = homcc_config.get("timeout", 180)
+    if timeout:
+        client_config.timeout = timeout
 
     # try to compile remotely
     if compiler_arguments.is_sendable():
         try:
-            sys.exit(asyncio.run(compile_remotely(hosts, homcc_config, timeout, compiler_arguments)))
+            sys.exit(asyncio.run(compile_remotely(hosts, client_config, compiler_arguments)))
 
         # exit on unrecoverable errors
-        except CompilerError as err:
-            sys.exit(err.returncode)
+        except CompilerError as error:
+            sys.exit(error.returncode)
 
-        except (HostsExhaustedError, NoHostsFoundError, TCPClientError):
-            pass
+        # recoverable errors
+        except (HostsExhaustedError, NoHostsFoundError, TCPClientError) as error:
+            logger.warning("%s", error)
 
     # compile locally on unsendable arguments or recoverable errors
     sys.exit(compile_locally(compiler_arguments))
