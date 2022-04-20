@@ -1,6 +1,4 @@
 """ Tests for common/compression.py"""
-from cgi import test
-from unittest import TextTestResult
 from homcc.common.compression import LZO, LZMA, CompressedBytes, NoCompression
 
 
