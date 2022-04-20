@@ -4,12 +4,15 @@ from abc import ABC, abstractmethod
 from typing import Optional, List, Type
 
 import lzma
+import lzo  # type: ignore
 import logging
 
 logger = logging.getLogger(__name__)
 
 
 class CompressedBytes:
+    """Class that holds (compressed) bytes."""
+
     data: bytearray
     """Uncompressed data."""
     compressed_data: Optional[bytearray]
@@ -81,6 +84,14 @@ class Compression(ABC):
             algorithms.remove(NoCompression)
         return algorithms
 
+    def __str__(self) -> str:
+        return self.name()
+
+    def __eq__(self, other) -> bool:
+        if isinstance(other, Compression):
+            return self.name() == other.name()
+        return False
+
 
 class NoCompression(Compression):
     """Class that represents no compression, i.e. the identity function."""
@@ -95,25 +106,23 @@ class NoCompression(Compression):
     def name() -> str:
         return "no_compression"
 
-    def __str__(self) -> str:
-        return self.name()
-
 
 class LZO(Compression):
     """Lempel-Ziv-Oberhumer compression algorithm"""
 
     def compress(self, data: bytearray) -> bytearray:
-        pass
+        compressed_data = bytearray(lzo.compress(bytes(data)))
+        logger.debug("LZO: Compressed #%i bytes to #%i bytes.", len(data), len(compressed_data))
+        return compressed_data
 
     def decompress(self, data: bytearray) -> bytearray:
-        pass
+        decompressed_data = bytearray(lzo.decompress(bytes(data)))
+        logger.debug("LZO: Decompressed #%i bytes to #%i bytes.", len(data), len(decompressed_data))
+        return decompressed_data
 
     @staticmethod
     def name() -> str:
         return "lzo"
-
-    def __str__(self) -> str:
-        return self.name()
 
 
 class LZMA(Compression):
@@ -132,6 +141,3 @@ class LZMA(Compression):
     @staticmethod
     def name() -> str:
         return "lzma"
-
-    def __str__(self) -> str:
-        return self.name()

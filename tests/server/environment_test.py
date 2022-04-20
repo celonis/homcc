@@ -1,6 +1,7 @@
 """Tests for the server environment."""
 from pytest_mock.plugin import MockerFixture
 import pytest
+from homcc.common.compression import NoCompression
 
 from homcc.server.environment import (
     CompilerResult,
@@ -144,7 +145,7 @@ class TestServerCompilation:
             f"{mapped_cwd}/other.cpp",
         ]
 
-        result_message = do_compilation(instance_path, mapped_cwd, arguments)
+        result_message = do_compilation(instance_path, mapped_cwd, arguments, NoCompression())
 
         assert len(result_message.object_files) == 2
         assert result_message.object_files[0].file_name == "/home/user/cwd/main.o"
@@ -159,7 +160,7 @@ class TestServerCompilation:
             f"{mapped_cwd}/src/this_is_a_source_file.cpp",
         ]
 
-        result_message = do_compilation(instance_path, mapped_cwd, arguments)
+        result_message = do_compilation(instance_path, mapped_cwd, arguments, NoCompression())
 
         assert len(result_message.object_files) == 1
         assert result_message.object_files[0].file_name == "/home/user/cwd/this_is_a_source_file.o"

@@ -315,10 +315,10 @@ class ObjectFile:
     ) -> None:
         self.file_name = file_name
 
-        if content:
+        if content is not None:
             self.content = CompressedBytes(content, compression)
             self.size = None
-        elif size:
+        elif size is not None:
             self.content = None
             self.size = size
         else:
@@ -347,6 +347,12 @@ class ObjectFile:
             raise ValueError(
                 f"Tried to convert {type(self).__name__} to wire format even though it has no content set."
             )
+
+    def __eq__(self, other) -> bool:
+        if isinstance(other, ObjectFile):
+            return self.file_name == other.file_name and self.content == other.content
+
+        return False
 
 
 class CompilationResultMessage(Message):

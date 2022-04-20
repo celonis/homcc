@@ -9,6 +9,7 @@ if __name__ == "__main__":
         license="GPL-3.0",
         url="https://github.com/celonis/homcc",
         packages=["homcc.client", "homcc.common"],
+        install_requires=["python-lzo>=1.12"],
         entry_points="""
             [console_scripts]
             homcc=homcc.client.main:main
