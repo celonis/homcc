@@ -7,6 +7,7 @@ from dataclasses import dataclass
 import json
 
 from homcc.common.arguments import ArgumentsExecutionResult
+from homcc.common.compression import Compression, NoCompression, CompressedBytes
 
 
 class MessageType(Enum):
@@ -148,13 +149,14 @@ class Message(ABC):
 
 
 class ArgumentMessage(Message):
-    """Initial message in the protocol. Client sends arguments, working directory and
-    dependencies (key: file paths, value: SHA1 hash)."""
+    """Initial message in the protocol. Client sends arguments, working directory,
+    dependencies (key: file paths, value: SHA1 hash) and the to be used compression algorithm."""
 
-    def __init__(self, arguments: List[str], cwd: str, dependencies: Dict[str, str]) -> None:
+    def __init__(self, arguments: List[str], cwd: str, dependencies: Dict[str, str], compression: Compression) -> None:
         self.arguments = arguments
         self.cwd = cwd
         self.dependencies = dependencies
+        self.compression = compression
 
         super().__init__(MessageType.ArgumentMessage)
 
@@ -165,6 +167,9 @@ class ArgumentMessage(Message):
         json_dict["arguments"] = self.arguments
         json_dict["cwd"] = self.cwd
         json_dict["dependencies"] = self.dependencies
+
+        if self.compression:
+            json_dict["compression"] = str(self.compression)
 
         return json_dict
 
@@ -180,18 +185,28 @@ class ArgumentMessage(Message):
         """Returns a dictionary with dependencies."""
         return self.dependencies
 
+    def get_compression(self) -> Compression:
+        """Returns the to be used compression algorithm."""
+        return self.compression
+
     def __eq__(self, other):
         if isinstance(other, ArgumentMessage):
             return (
                 self.get_arguments() == other.get_arguments()
                 and self.get_cwd() == other.get_cwd()
                 and self.get_dependencies() == other.get_dependencies()
+                and self.get_compression() == other.get_compression()
             )
         return False
 
     @staticmethod
     def from_dict(json_dict: dict) -> ArgumentMessage:
-        return ArgumentMessage(json_dict["arguments"], json_dict["cwd"], json_dict["dependencies"])
+        return ArgumentMessage(
+            json_dict["arguments"],
+            json_dict["cwd"],
+            json_dict["dependencies"],
+            Compression.from_name(json_dict.get("compression", str(NoCompression))),
+        )
 
 
 class DependencyRequestMessage(Message):
@@ -227,33 +242,39 @@ class DependencyRequestMessage(Message):
 class DependencyReplyMessage(Message):
     """Message that contains exactly one previously requested file."""
 
-    def __init__(self, content: bytearray) -> None:
-        self.size = len(content)
-        self.content = content
+    def __init__(self, content: Optional[bytearray], compression: Compression, size: Optional[int] = None) -> None:
+        if content is not None:
+            self.content = CompressedBytes(content, compression)
+            self.size = len(self.content)
+        elif size is not None:
+            self.size = size
+        else:
+            raise ValueError(
+                f"Passed no data AND no size information to the {type(self).__name__}. Pass either of the two arguments."
+            )
+
+        self.compression = compression
 
         super().__init__(MessageType.DependencyReplyMessage)
 
     def _get_json_dict(self) -> Dict:
         json_dict: Dict = super()._get_json_dict()
 
-        json_dict["size"] = self.size
+        json_dict["size"] = len(self.content)
+        json_dict["compression"] = str(self.compression)
 
         return json_dict
 
     def get_content(self) -> bytearray:
-        return self.content
-
-    def get_size(self) -> int:
-        """Returns the size of the dependency."""
-        return self.size
+        return self.content.get_data()
 
     def get_further_payload(self) -> bytearray:
         """Overwritten so that the dependency's content is appended to the message."""
-        return self.content
+        return self.content.to_wire()
 
     def set_further_payload(self, further_payload: bytearray):
         """Overwritten so that the dependency's content can be set."""
-        self.content = further_payload
+        self.content = CompressedBytes.from_wire(further_payload, self.compression)
 
     def get_further_payload_size(self) -> int:
         """Overwritten so that the dependency's payload size can be retrieved."""
@@ -261,16 +282,23 @@ class DependencyReplyMessage(Message):
 
     def __eq__(self, other):
         if isinstance(other, DependencyReplyMessage):
-            return self.get_size() == other.get_size() and self.get_content() == other.get_content()
+            return (
+                self.get_content() == other.get_content()
+                and self.size == other.size
+                and self.compression == other.compression
+            )
 
         return False
 
     @staticmethod
     def from_dict(json_dict: dict) -> DependencyReplyMessage:
-        message = DependencyReplyMessage(bytearray())
+        compression_name = json_dict["compression"]
         # explicitly set the message size from the field in the JSON. Can not
         # directly add the payload to the message, because the payload isn't contained in the JSON.
-        message.size = json_dict["size"]
+        message = DependencyReplyMessage(
+            content=None, compression=Compression.from_name(compression_name), size=json_dict["size"]
+        )
+
         return message
 
 
@@ -279,13 +307,46 @@ class ObjectFile:
     """Represents an object file (-> compilation result)."""
 
     file_name: str
-    size: int
-    content: bytearray
+    size: Optional[int]
+    content: Optional[CompressedBytes]
 
-    def __init__(self, file_name: str, content: bytearray) -> None:
+    def __init__(
+        self, file_name: str, content: Optional[bytearray], compression: Compression, size: Optional[int] = None
+    ) -> None:
         self.file_name = file_name
-        self.size = len(content)
-        self.content = content
+
+        if content:
+            self.content = CompressedBytes(content, compression)
+            self.size = None
+        elif size:
+            self.content = None
+            self.size = size
+        else:
+            raise ValueError(
+                f"Passed no data AND no size information to {type(self).__name__}. Pass either of the two arguments."
+            )
+
+    def __len__(self) -> int:
+        if self.size is not None:
+            return self.size
+        elif self.content is not None:
+            return len(self.content)
+        else:
+            raise ValueError
+
+    def get_data(self) -> bytearray:
+        if self.content is not None:
+            return self.content.data
+        else:
+            raise ValueError(f"Tried to access data of {type(self).__name__}, even though it has no content set.")
+
+    def to_wire(self) -> bytearray:
+        if self.content is not None:
+            return self.content.to_wire()
+        else:
+            raise ValueError(
+                f"Tried to convert {type(self).__name__} to wire format even though it has no content set."
+            )
 
 
 class CompilationResultMessage(Message):
@@ -293,11 +354,14 @@ class CompilationResultMessage(Message):
     A file contains the filename (valid on client side), the size of
     the file in bytes and the actual file bytes."""
 
-    def __init__(self, object_files: List[ObjectFile], stdout: str, stderr: str, return_code: int) -> None:
+    def __init__(
+        self, object_files: List[ObjectFile], stdout: str, stderr: str, return_code: int, compression: Compression
+    ) -> None:
         self.object_files = object_files
         self.stdout = stdout
         self.stderr = stderr
         self.return_code = return_code
+        self.compression = compression
 
         super().__init__(MessageType.CompilationResultMessage)
 
@@ -306,12 +370,13 @@ class CompilationResultMessage(Message):
 
         files = []
         for object_file in self.object_files:
-            files.append({"filename": object_file.file_name, "size": object_file.size})
+            files.append({"filename": object_file.file_name, "size": len(object_file)})
         json_dict["files"] = files
 
         json_dict["stdout"] = self.stdout
         json_dict["stderr"] = self.stderr
         json_dict["return_code"] = self.return_code
+        json_dict["compression"] = str(self.compression)
 
         return json_dict
 
@@ -327,6 +392,9 @@ class CompilationResultMessage(Message):
     def get_return_code(self) -> int:
         return self.return_code
 
+    def get_compression(self) -> Compression:
+        return self.compression
+
     def get_compilation_result(self) -> ArgumentsExecutionResult:
         return ArgumentsExecutionResult(self.return_code, self.stdout, self.stderr)
 
@@ -335,7 +403,7 @@ class CompilationResultMessage(Message):
         further_payload = bytearray()
 
         for file in self.object_files:
-            further_payload += file.content
+            further_payload += file.to_wire()
 
         return further_payload
 
@@ -343,15 +411,18 @@ class CompilationResultMessage(Message):
         """Overwritten so that the dependencies' content can be set."""
         current_payload_offset: int = 0
         for file in self.object_files:
-            file.content = further_payload[current_payload_offset : current_payload_offset + file.size]
-            current_payload_offset += file.size
+            file_len = len(file)
+
+            file.content = CompressedBytes.from_wire(
+                further_payload[current_payload_offset : current_payload_offset + file_len], self.compression
+            )
+            current_payload_offset += file_len
 
     def get_further_payload_size(self) -> int:
         """Overwritten so that the dependencies' payload size can be retrieved."""
         total_size: int = 0
-
         for object_file in self.object_files:
-            total_size += object_file.size
+            total_size += len(object_file)
 
         return total_size
 
@@ -362,27 +433,32 @@ class CompilationResultMessage(Message):
                 and self.get_stdout() == other.get_stdout()
                 and self.get_stderr() == other.get_stderr()
                 and self.get_return_code() == other.get_return_code()
+                and self.get_compression() == other.get_compression()
             )
 
         return False
 
     @staticmethod
     def from_dict(json_dict: dict) -> CompilationResultMessage:
+        compression_name = json_dict.get("compression", str(NoCompression))
+        compression = Compression.from_name(compression_name)
+
         object_files: List[ObjectFile] = []
         for file in json_dict["files"]:
             object_file_size = file["size"]
 
-            object_file = ObjectFile(file["filename"], bytearray())
             # explicitly set the message size from the field in the JSON. Can not
             # directly add the payload to the message, because the payload isn't contained in the JSON.
-            object_file.size = object_file_size
+            object_file = ObjectFile(
+                file_name=file["filename"], content=None, compression=compression, size=object_file_size
+            )
             object_files.append(object_file)
 
         stdout = json_dict["stdout"]
         stderr = json_dict["stderr"]
         return_code = json_dict["return_code"]
 
-        return CompilationResultMessage(object_files, stdout, stderr, return_code)
+        return CompilationResultMessage(object_files, stdout, stderr, return_code, compression)
 
 
 class ConnectionRefusedMessage(Message):

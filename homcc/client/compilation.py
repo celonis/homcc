@@ -4,7 +4,7 @@ import os
 import subprocess
 
 from pathlib import Path
-from typing import Dict, List, Optional, Set
+from typing import Dict, List, Set
 
 from homcc.client.client import TCPClient, ClientConnectionError, UnexpectedMessageTypeError
 from homcc.client.parsing import parse_host
@@ -12,6 +12,7 @@ from homcc.common.arguments import Arguments, ArgumentsExecutionResult
 from homcc.common.hashing import hash_file_with_path
 from homcc.common.messages import ObjectFile
 from homcc.common.messages import Message, CompilationResultMessage, ConnectionRefusedMessage, DependencyRequestMessage
+from homcc.common.compression import Compression, NoCompression
 
 logger = logging.getLogger(__name__)
 
@@ -47,15 +48,11 @@ async def compile_remotely_at(host: str, config: Dict[str, str], timeout: float,
     # setup and connect client
     host_dict: Dict[str, str] = parse_host(host)
 
-    compression: Optional[str] = host_dict.get("compression")
-
-    if not compression:
-        compression = config.get("compression")
+    compression = get_compression(host_dict, config)
 
     logger.debug("Compression: %s", compression)
 
-    # TODO(s.pirsch): use compression parameter (CPL-6421)
-    client: TCPClient = TCPClient(host_dict)
+    client: TCPClient = TCPClient(host_dict, compression)
 
     await client.connect()
 
@@ -110,7 +107,7 @@ async def compile_remotely_at(host: str, config: Dict[str, str], timeout: float,
 
     for object_file in server_response.get_object_files():
         logger.debug("Writing file %s", object_file.file_name)
-        Path(object_file.file_name).write_bytes(object_file.content)
+        Path(object_file.file_name).write_bytes(object_file.get_data())
 
     # link and delete object files if required
     if arguments.is_linking():
@@ -181,6 +178,11 @@ def calculate_dependency_dict(dependencies: Set[str]) -> Dict[str, str]:
 
 def invert_dict(to_invert: Dict):
     return {v: k for k, v in to_invert.items()}
+
+
+def get_compression(host_dict: Dict[str, str], config: Dict[str, str]) -> Compression:
+    compression_name: str = host_dict.get("compression", config.get("compression", NoCompression.name()))
+    return Compression.from_name(compression_name)
 
 
 def link_object_files(arguments: Arguments, object_files: List[ObjectFile]) -> int:

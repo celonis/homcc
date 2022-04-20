@@ -11,6 +11,7 @@ from typing import Dict, Optional
 from homcc.client.parsing import ConnectionType
 from homcc.common.arguments import Arguments
 from homcc.common.messages import ArgumentMessage, DependencyReplyMessage, Message
+from homcc.common.compression import Compression
 
 logger = logging.getLogger(__name__)
 
@@ -42,7 +43,7 @@ class UnexpectedMessageTypeError(TCPClientError):
 class TCPClient:
     """Wrapper class to exchange homcc protocol messages via TCP"""
 
-    def __init__(self, host_dict: Dict[str, str], buffer_limit: Optional[int] = None):
+    def __init__(self, host_dict: Dict[str, str], compression: Compression, buffer_limit: Optional[int] = None):
         connection_type: str = host_dict["type"]
 
         if connection_type != ConnectionType.TCP:
@@ -50,6 +51,8 @@ class TCPClient:
 
         self.host: str = host_dict["host"]
         self.port: str = host_dict.get("port", str(3633))
+
+        self.compression = compression
 
         # default buffer size limit of StreamReader is 64 KiB
         self.buffer_limit: int = buffer_limit or 65536
@@ -78,12 +81,12 @@ class TCPClient:
 
     async def send_argument_message(self, arguments: Arguments, cwd: str, dependency_dict: Dict[str, str]):
         """send an argument message to homcc server"""
-        await self._send(ArgumentMessage(list(arguments), cwd, dependency_dict))
+        await self._send(ArgumentMessage(list(arguments), cwd, dependency_dict, self.compression))
 
     async def send_dependency_reply_message(self, dependency: str):
         """send dependency reply message to homcc server"""
         content: bytearray = bytearray(Path(dependency).read_bytes())
-        await self._send(DependencyReplyMessage(content))
+        await self._send(DependencyReplyMessage(content, self.compression))
 
     async def receive(self, timeout: Optional[float]) -> Message:
         """receive data from homcc server with timeout limit and convert to message"""
