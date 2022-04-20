@@ -187,7 +187,7 @@ def do_compilation(instance_path: str, mapped_cwd: str, args: List[str]) -> Comp
     # create the mapped current working directory if it doesn't exist yet
     Path(mapped_cwd).mkdir(parents=True, exist_ok=True)
 
-    arguments: Arguments = Arguments(args).no_linking()
+    arguments: Arguments = Arguments.from_args(args).no_linking()
     source_files: List[str] = arguments.source_files
 
     result = invoke_compiler(mapped_cwd, list(arguments))

@@ -1,18 +1,23 @@
-""" Tests for client/client_utils.py"""
+""" Tests for client/compilation.py"""
+import pytest
+
 import os
 
 from datetime import datetime
 from pathlib import Path
 from typing import List, Set
 
-import pytest
-
 from homcc.common.arguments import Arguments
-from homcc.client.client_utils import CompilerError, find_dependencies, local_compile
+from homcc.client.compilation import (
+    CompilerError,
+    compile_locally,
+    find_dependencies,
+    scan_includes,
+)
 
 
-class TestClientUtils:
-    """Tests for client/client_utils.py"""
+class TestCompilation:
+    """Tests for functions in client/compilation.py"""
 
     @pytest.fixture(autouse=True)
     def _init(self):
@@ -24,10 +29,20 @@ class TestClientUtils:
         self.example_out_dir: Path = self.example_base_dir / "build"
         self.example_out_dir.mkdir(exist_ok=True)
 
+    def test_scan_includes(self):
+        arguments: Arguments = Arguments.from_args(
+            ["g++", "-Iexample/include", "example/src/main.cpp", "example/src/foo.cpp"]
+        )
+
+        includes: List[str] = scan_includes(arguments)
+
+        assert len(includes) == 1
+        assert "example/include/foo.h" in includes
+
     def test_find_dependencies_without_class_impl(self):
         # absolute paths of: "g++ main.cpp -Iinclude/"
         args: List[str] = ["g++", str(self.example_main_cpp.absolute()), f"-I{str(self.example_inc_dir.absolute())}"]
-        dependencies: Set[str] = find_dependencies(Arguments(args))
+        dependencies: Set[str] = find_dependencies(Arguments.from_args(args))
         example_dependency: Path = self.example_inc_dir / "foo.h"
 
         assert len(dependencies) == 2
@@ -42,7 +57,7 @@ class TestClientUtils:
             str(self.example_foo_cpp.absolute()),
             f"-I{str(self.example_inc_dir.absolute())}",
         ]
-        dependencies: Set[str] = find_dependencies(Arguments(args))
+        dependencies: Set[str] = find_dependencies(Arguments.from_args(args))
         example_dependency: Path = self.example_inc_dir / "foo.h"
 
         assert len(dependencies) == 3
@@ -60,7 +75,7 @@ class TestClientUtils:
         ]
 
         with pytest.raises(CompilerError):
-            _: Set[str] = find_dependencies(Arguments(args))
+            _: Set[str] = find_dependencies(Arguments.from_args(args))
 
     def test_local_compilation(self):
         time_str: str = datetime.now().strftime("%Y%m%d-%H%M%S")
@@ -77,10 +92,10 @@ class TestClientUtils:
         ]
 
         assert not example_out_file.exists()
-        assert local_compile(Arguments(args)) == os.EX_OK
+        assert compile_locally(Arguments.from_args(args)) == os.EX_OK
         assert example_out_file.exists()
 
         example_out_file.unlink()
 
         # intentionally execute an erroneous call
-        assert local_compile(Arguments(args + ["-OError"])) != os.EX_OK
+        assert compile_locally(Arguments.from_args(args + ["-OError"])) != os.EX_OK

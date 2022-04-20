@@ -7,10 +7,9 @@ import shutil
 import subprocess
 
 from dataclasses import dataclass
-from typing import Iterator, List, Optional
+from typing import Any, Iterator, List, Optional
 
 logger = logging.getLogger(__name__)
-encoding: str = "utf-8"
 
 
 @dataclass
@@ -33,51 +32,110 @@ class ArgumentsOutputError(Exception):
 class Arguments:
     """
     Class to encapsulate and produce compiler arguments.
-    Note that most modifying methods assume sendability as modifications to the arguments are only required for
-    non-local compilation which implies arguments being sent!
+
+    Note: Most modifying methods assume sendability as modifications to the arguments are only required for remote
+    compilation which implies arguments being able to be sent!
     """
 
-    no_assembly_arg: str = "-S"
+    # if the compiler is neither specified by the callee nor defined in the config file use this as fallback
+    default_compiler: str = "cc"
+
     no_linking_arg: str = "-c"
     output_arg: str = "-o"
 
     include_args: List[str] = ["-I", "-isysroot", "-isystem"]
-    preprocessor_args: List[str] = ["-E", "-M", "-MM"]
 
     preprocessor_target: str = "$(homcc)"
 
-    def __init__(self, args: List[str]):
+    class Unsendable:
+        """
+        Class to encapsulate all args that imply unsendability.
+
+        Note: Respect the naming scheme as listed in the comments below when additional arguments are added, so that the
+        sendability test can deduce them automatically!
+        """
+
+        # arg prefixes: naming ends on _prefix
+        assembler_options_prefix: str = "-Wa,"
+        specs_prefix: str = "-specs="
+        profile_generate_prefix: str = "-fprofile-generate="
+
+        # single args: naming ends on _arg
+        no_assembly_arg: str = "-S"
+        rpo_arg: str = "-frepo"
+
+        # arg families: naming ends on _args
+        native_args: List[str] = ["-march=native", "-mtune=native"]
+        preprocessor_args: List[str] = ["-E", "-M", "-MM"]
+        profile_args: List[str] = [
+            "-fprofile-arcs",
+            "-ftest-coverage",
+            "--coverage",
+            "-fprofile-generate",
+            "-fprofile-use",
+            "-fauto-profile",
+            "-fprofile-correction",
+        ]
+
+    def __init__(self, compiler: Optional[str], args: List[str]):
+        self._compiler: Optional[str] = compiler
         self._args: List[str] = args
 
-    def __eq__(self, other) -> bool:
-        if isinstance(other, Arguments):
-            return self.args == other.args
-        if isinstance(other, list):
-            return self.args == other
-        raise NotImplementedError
+    def __eq__(self, other: Any) -> bool:
+        if isinstance(other, Arguments) and len(self) == len(other):
+            return self.compiler == other.compiler and self.args == other.args
+        if isinstance(other, list) and len(self) == len(other):
+            return self.compiler == other[0] and self.args == other[1:]
+        return False
 
     def __iter__(self) -> Iterator:
+        yield self.compiler
+
         for arg in self.args:
             yield arg
 
     def __len__(self) -> int:
-        return len(self.args)
+        return len(self.args) + 1
 
     def __str__(self) -> str:
-        return "[" + " ".join(self.args) + "]"
+        return f'[{self.compiler} {" ".join(self.args[1:])}]'
+
+    def __repr__(self) -> str:
+        return f"{self.__class__}({str(self)})"
+
+    @classmethod
+    def from_args(cls, args: List[str]) -> Arguments:
+        if len(args) == 0:
+            raise ValueError("Not enough arguments supplied to construct Arguments")
+
+        # compiler without arguments, e.g. ["g++"]
+        if len(args) == 1:
+            return cls(args[0], [])
+
+        # compiler with arguments, e.g. ["g++", "foo.cpp", "-c"]
+        return cls(args[0], args[1:])
+
+    @classmethod
+    def from_cli(cls, compiler_or_argument: str, args: List[str]) -> Arguments:
+        # explicit compiler argument, e.g.: "homcc [OPTIONAL ARGUMENTS] g++ -c foo.cpp"
+        if cls.is_compiler(compiler_or_argument):
+            return cls(compiler_or_argument, args)
+
+        # missing compiler argument, e.g.: "homcc [OPTIONAL ARGUMENTS] -c foo.cpp"
+        return cls(None, [compiler_or_argument] + args)
 
     @staticmethod
     def is_source_file(arg: str) -> bool:
         """check whether an argument looks like a source file"""
         # if we enable remote assembly, additionally allow file extension ".s"
         source_file_pattern: str = r"^\S+\.(i|ii|c|cc|cp|cpp|cxx|c\+\+|m|mm|mi|mii)$"  # e.g. "foo.cpp"
-        return re.match(source_file_pattern, arg.lower()) is not None
+        return re.match(source_file_pattern, arg, re.IGNORECASE) is not None
 
     @staticmethod
     def is_object_file(arg: str) -> bool:
         """check whether an argument looks like an object file"""
         object_file_pattern: str = r"^\S+\.o$"  # e.g. "foo.o"
-        return re.match(object_file_pattern, arg.lower()) is not None
+        return re.match(object_file_pattern, arg, re.IGNORECASE) is not None
 
     @staticmethod
     def is_executable(arg: str) -> bool:
@@ -95,28 +153,55 @@ class Arguments:
             return True
         return False
 
-    @classmethod
-    def from_argv(cls, argv: List[str], compiler: Optional[str] = None) -> Arguments:
-        # compiler as explicit second argument, e.g.: homcc_client.py g++ -c foo.cpp
-        if Arguments.is_compiler(argv[1]):
-            return Arguments(argv[1:])
-
-        # unspecified compiler argument, e.g.: homcc_client.py -c foo.cpp
-        arguments: Arguments = Arguments(argv)
-        arguments.compiler = compiler or "cc"  # overwrite compiler with cc as fallback
-
-        return arguments
-
     def is_sendable(self) -> bool:
-        """determine if the current Arguments lead to a meaningful compilation on the server"""
-        # if only the preprocessor should be executed or if no assembly step is required, do not send to server
-        for arg in self.args[1:]:
-            if arg in [self.no_assembly_arg] + self.preprocessor_args:
-                return False
+        """determine if the Arguments lead to a meaningful remote compilation"""
+
+        def log_unsendable(message: str):
+            logger.info("%s; cannot compile remotely", message)
 
         if not self.source_files:
-            logger.info("No source files given, can not distribute to server.")
+            log_unsendable("no source files given")
             return False
+
+        for arg in self.args:
+            if not arg.startswith("-"):
+                continue
+
+            # prefix args
+            if arg.startswith(self.Unsendable.assembler_options_prefix):  # "-Wa,"
+                log_unsendable(f"[{arg}] must be local")  # TODO(s.pirsch): this is more detailed, fix in separate PR
+                return False
+
+            if arg.startswith(self.Unsendable.specs_prefix):  # "-specs="
+                log_unsendable(f"[{arg}] overwrites spec strings")
+                return False
+
+            if arg.startswith(self.Unsendable.profile_generate_prefix):  # "-fprofile-generate="
+                log_unsendable(f"[{arg}]  will emit profile info")
+                return False
+
+            # single args
+            if arg == self.Unsendable.no_assembly_arg:  # "-S"
+                log_unsendable(f"[{arg}] implies a no assembly call")
+                return False
+
+            if arg == self.Unsendable.rpo_arg:  # "-frepo"
+                log_unsendable(f"[{arg}] will emit .rpo files")
+                return False
+
+            # arg families
+            if arg in self.Unsendable.native_args:
+                log_unsendable(f"[{arg}] optimizes for local machine")
+                return False
+
+            if arg in self.Unsendable.preprocessor_args:
+                log_unsendable(f"[{arg}] implies a preprocessor only call")
+                return False
+
+            for profile_arg in self.Unsendable.profile_args:
+                if arg.startswith(profile_arg):
+                    log_unsendable(f"[{arg}] will emit or use profile info")
+                    return False
 
         return True
 
@@ -143,17 +228,17 @@ class Arguments:
         return self
 
     @property
-    def compiler(self) -> str:
-        return self.args[0]
+    def compiler(self) -> Optional[str]:
+        return self._compiler
 
     @compiler.setter
     def compiler(self, compiler: str):
-        self._args[0] = compiler
+        self._compiler = compiler
 
     def dependency_finding(self) -> Arguments:
         """return Arguments with which to find dependencies via the preprocessor"""
         return (
-            Arguments(self.args)
+            Arguments(self.compiler, self.args)
             .remove_arg(self.no_linking_arg)
             .remove_output_args()
             .add_arg("-M")  # output dependencies
@@ -162,24 +247,24 @@ class Arguments:
         )
 
     def no_linking(self) -> Arguments:
-        """return copy of Arguments with no linking argument added"""
-        return Arguments(self.args).remove_output_args().add_arg(self.no_linking_arg)
+        """return copy of Arguments with output arguments removed and no linking argument added"""
+        return Arguments(self.compiler, self.args).remove_output_args().add_arg(self.no_linking_arg)
 
     @property
     def output(self) -> Optional[str]:
-        """if present, returns the last specified output target"""
+        """if present, return the last specified output target"""
         output: Optional[str] = None
 
-        it: Iterator[str] = iter(self.args[1:])
+        it: Iterator[str] = iter(self.args)
         for arg in it:
             if arg.startswith("-o"):
-                if arg == "-o":  # output flag with following output argument: -o out
+                if arg == "-o":  # output argument with output target following: e.g.: -o out
                     try:
                         output = next(it)  # skip output target argument
                     except StopIteration as error:
                         logger.error("Faulty output arguments provided: %s", self)
                         raise ArgumentsOutputError from error
-                else:  # compact output argument: -oout
+                else:  # compact output argument: e.g.: -oout
                     output = arg[2:]
         return output
 
@@ -189,11 +274,11 @@ class Arguments:
 
     @property
     def source_files(self) -> List[str]:
-        """extracts files to be compiled and returns their paths"""
+        """extract files to be compiled and returns their paths"""
         source_file_paths: List[str] = []
         other_open_arg: bool = False
 
-        for arg in self.args[1:]:
+        for arg in self.args:
             if arg.startswith("-"):
                 for arg_prefix in [self.output_arg] + self.include_args:
                     if arg == arg_prefix:
@@ -207,36 +292,36 @@ class Arguments:
                 if self.is_source_file(arg):
                     source_file_paths.append(arg)
                 else:
-                    logger.debug("Not adding '%s' as source file, as it doesn't match source file regex.", arg)
+                    logger.debug('Not adding "%s" as source file, as it doesn\'t match source file regex.', arg)
 
             other_open_arg = False
 
         return source_file_paths
 
     def remove_output_args(self) -> Arguments:
-        """returns modified Arguments with all output related arguments removed"""
-        args: List[str] = [self.args[0]]
+        """return modified Arguments with all output related arguments removed"""
+        arguments: Arguments = Arguments(self.compiler, [])
 
-        it: Iterator[str] = iter(self.args[1:])
+        it: Iterator[str] = iter(self.args)
         for arg in it:
             if arg.startswith("-o"):
                 # skip output related args
                 if arg == "-o":
                     next(it, None)  # skip output target argument without raising an exception
             else:
-                args.append(arg)
+                arguments.add_arg(arg)
 
-        self._args = args
+        self._args = arguments.args
         return self
 
     def remove_source_file_args(self) -> Arguments:
-        """removes source file args"""
+        """remove source file args"""
         for source_file in self.source_files:
             self.remove_arg(source_file)
 
         return self
 
-    def execute(self, check: bool = False, cwd: Optional[str] = None) -> ArgumentsExecutionResult:
+    def execute(self, **kwargs) -> ArgumentsExecutionResult:
         """
         execute the current arguments as command and return its execution result
 
@@ -244,8 +329,16 @@ class Arguments:
         - check: enables the raising of CalledProcessError
         - cwd: changes the current working directory
         """
-        logger.debug("Executing %s", self)
+        check: bool = kwargs.pop("check", False)
+        capture_output: bool = kwargs.pop("capture_output", True)
+
+        if "stdout" in kwargs or "stderr" in kwargs:
+            capture_output = False
+
+        if "shell" in kwargs:
+            logger.error("Arguments currently does not support shell execution!")
+
         result: subprocess.CompletedProcess = subprocess.run(
-            self.args, check=check, cwd=cwd, encoding=encoding, capture_output=True
+            list(self), check=check, encoding="utf-8", capture_output=capture_output, **kwargs
         )
         return ArgumentsExecutionResult.from_process_result(result)
