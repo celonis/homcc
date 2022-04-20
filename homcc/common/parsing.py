@@ -3,12 +3,12 @@ import logging
 import re
 
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, Iterable, List, Optional
 
 logger = logging.getLogger(__name__)
 
 
-def parse_config_keys(config_keys: List[str], config_lines: List[str]) -> Dict[str, str]:
+def parse_config_keys(config_keys: Iterable[str], config_lines: List[str]) -> Dict[str, str]:
     config_pattern: str = f"^({'|'.join(config_keys)})=(\\S+)$"
     parsed_config: Dict[str, str] = {}
 

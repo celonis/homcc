@@ -8,7 +8,7 @@ import logging
 from pathlib import Path
 from typing import Dict, Optional
 
-from homcc.client.parsing import ConnectionType
+from homcc.client.parsing import ConnectionType, Host
 from homcc.common.arguments import Arguments
 from homcc.common.messages import ArgumentMessage, DependencyReplyMessage, Message
 
@@ -42,17 +42,20 @@ class UnexpectedMessageTypeError(TCPClientError):
 class TCPClient:
     """Wrapper class to exchange homcc protocol messages via TCP"""
 
-    def __init__(self, host_dict: Dict[str, str], buffer_limit: Optional[int] = None):
-        connection_type: str = host_dict["type"]
+    DEFAULT_PORT: int = 3633
+    DEFAULT_TIMEOUT: float = 180
+
+    def __init__(self, host: Host, buffer_limit: Optional[int] = None):
+        connection_type: ConnectionType = host.type
 
         if connection_type != ConnectionType.TCP:
             raise ValueError(f"TCPClient cannot be initialized with {connection_type}!")
 
-        self.host: str = host_dict["host"]
-        self.port: str = host_dict.get("port", str(3633))
+        self.host: str = host.host
+        self.port: int = host.port or self.DEFAULT_PORT
 
         # default buffer size limit of StreamReader is 64 KiB
-        self.buffer_limit: int = buffer_limit or 65536
+        self.buffer_limit: int = buffer_limit or 65_536
 
         self._data: bytes = bytes()
         self._reader: Optional[asyncio.StreamReader] = None
@@ -60,19 +63,18 @@ class TCPClient:
 
     async def connect(self):
         """connect to specified server at host:port"""
-        logger.debug("Connecting to %s:%s", self.host, self.port)
+        logger.debug("Connecting to %s:%i", self.host, self.port)
 
         try:
             self._reader, self._writer = await asyncio.open_connection(
                 host=self.host, port=self.port, limit=self.buffer_limit
             )
-        except ConnectionError as err:
-            logger.warning("Failed to establish connection: %s", err)
-            raise ClientConnectionError from None
+        except ConnectionError as error:
+            raise ClientConnectionError(f"Failed to establish connection: {error}") from error
 
     async def _send(self, message: Message):
         """send a message to homcc server"""
-        logger.debug("Sending %s to %s:%s:\n%s", message.message_type, self.host, self.port, message.get_json_str())
+        logger.debug("Sending %s to %s:%i:\n%s", message.message_type, self.host, self.port, message.get_json_str())
         self._writer.write(message.to_bytes())  # type: ignore[union-attr]
         await self._writer.drain()  # type: ignore[union-attr]
 
@@ -88,11 +90,10 @@ class TCPClient:
     async def receive(self, timeout: Optional[float]) -> Message:
         """receive data from homcc server with timeout limit and convert to message"""
         try:
-            return await asyncio.wait_for(self._timed_receive(), timeout=timeout)
+            return await asyncio.wait_for(self._timed_receive(), timeout=timeout or self.DEFAULT_TIMEOUT)
 
-        except asyncio.TimeoutError:
-            logger.warning("Waiting for server response timed out!")
-            raise ReceiveTimedOutError from None
+        except asyncio.TimeoutError as error:
+            raise ReceiveTimedOutError(f"Waiting for server {self.host}:{self.port} response timed out!") from error
 
     async def _timed_receive(self) -> Message:
         #  read stream into internal buffer
@@ -116,11 +117,10 @@ class TCPClient:
             self._data = self._data[len(self._data) - abs(bytes_needed) :]
 
         if not parsed_message:
-            logger.error("Received data could not be parsed to message!")
-            raise ClientParsingError
+            raise ClientParsingError("Received data could not be parsed to a message!")
 
         logger.debug(
-            "Received %s message from %s:%s:\n%s",
+            "Received %s message from %s:%i:\n%s",
             parsed_message.message_type,
             self.host,
             self.port,
@@ -130,6 +130,6 @@ class TCPClient:
 
     async def close(self):
         """disconnect from server and close client socket"""
-        logger.debug("Disconnecting from %s:%s", self.host, self.port)
+        logger.debug("Disconnecting from %s:%i", self.host, self.port)
         self._writer.close()
         await self._writer.wait_closed()

@@ -22,7 +22,7 @@ class TestEndToEnd:
                 "./homcc/client/main.py",
                 compiler,
                 f"--host=localhost:{unused_tcp_port}",
-                "--DEBUG",
+                "--verbose",
                 "-Iexample/include",
                 "example/src/foo.cpp",
                 "example/src/main.cpp",
