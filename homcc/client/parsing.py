@@ -423,7 +423,7 @@ def parse_config(config_lines: List[str]) -> ClientConfig:
 
 def load_config_file(config_file_locations: Optional[List[Path]] = None) -> List[str]:
     """
-    Load a homcc config file from the default locations are as parameterized by config_file_locations
+    Load a homcc config file from the default locations as parameterized by config_file_locations
     """
 
     if not config_file_locations:
