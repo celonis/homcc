@@ -44,6 +44,12 @@ class CompressedBytes:
         """Creates an object from data in the wire format."""
         return CompressedBytes(compression.decompress(data), compression)
 
+    def __eq__(self, other) -> bool:
+        if isinstance(other, CompressedBytes):
+            return self.data == other.data and self.compression == other.compression
+
+        return False
+
 
 class Compression(ABC):
     """Base class for compression algorithms"""

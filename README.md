@@ -4,9 +4,20 @@
 
 ### !TODO
 
+## Installation
+1. Download or build (see below) the Debian packages
+1. To install either the server or the client, use:
+  ```sudo apt install ./homcc.deb```
+  For the server use the `homcc_server.deb` package.
+
+Note: currently, installing both packages leads to an issue with conflicting files. Therefore, to install the second package, use `sudo dpkg -i --force-overwrite {package.deb}`
+
 ## Development
 
 ### Setup
+- Install the `python3-lzo` apt package (needed for LZO compression):
+  `sudo apt install python3-lzo`
+
 - Install required dependencies:<br/>
   `python -m pip install -r requirements.txt`
 
@@ -27,3 +38,7 @@
 - Check the formatting of all python files and list the required changes:<br/>
   `black --check --color --diff --verbose *.py homcc tests`
 - Format a specified python file: `black ./path/to/file.py`
+
+### Build Debian packagaes
+1. Run `make all` in the repository root
+1. The generated `.deb` files are then contained in the `target` folder
