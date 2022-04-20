@@ -6,9 +6,10 @@ import sys
 
 from abc import ABC, abstractmethod
 from argparse import ArgumentParser, Action, RawTextHelpFormatter
+from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 from homcc.common.arguments import Arguments
 from homcc.common.compression import Compression
@@ -17,6 +18,8 @@ logger = logging.getLogger(__name__)
 
 HOMCC_HOSTS_ENV_VAR = "$HOMCC_HOSTS"
 HOMCC_DIR_ENV_VAR = "$HOMCC_DIR"
+HOMCC_HOSTS_FILENAME: str = "hosts"
+HOMCC_CLIENT_CONFIG_FILENAME: str = "client.conf"
 
 
 class NoHostsFoundError(Exception):
@@ -24,6 +27,10 @@ class NoHostsFoundError(Exception):
     Error class to indicate a recoverable error when hosts could neither be determined from the environment variable nor
     from the default hosts file locations
     """
+
+
+class HostParsingError(Exception):
+    """Class to indicate an error during parsing a host"""
 
 
 class ConnectionType(str, Enum):
@@ -91,10 +98,67 @@ class ShowConcurrencyLevel(ShowAndExitAction):
 
         concurrency_level: int = 0
         for host in hosts:
-            concurrency_level += int(parse_host(host).get("limit", 0))
+            concurrency_level += parse_host(host).limit or 0
 
         print(concurrency_level)
         sys.exit(os.EX_OK)
+
+
+@dataclass
+class Host:
+    """Class to encapsulate host information"""
+
+    type: ConnectionType
+    host: str
+    port: Optional[int]
+    user: Optional[str]
+    limit: Optional[int]
+    compression: Optional[str]
+
+    def __init__(
+        self,
+        *,
+        type: ConnectionType,  # pylint: disable=redefined-builtin
+        host: str,
+        port: Optional[str] = None,
+        user: Optional[str] = None,
+        limit: Optional[str] = None,
+        compression: Optional[str] = None,
+    ):
+        self.type = type
+        self.host = host
+        self.port = int(port) if port else None
+        self.user = user
+        self.limit = int(limit) if limit else None
+        self.compression = compression
+
+
+@dataclass
+class ClientConfig:
+    """Class to encapsulate and default client configuration information"""
+
+    compiler: str
+    compression: Optional[str]
+    verbose: bool
+    timeout: Optional[float]
+
+    def __init__(
+        self,
+        compiler: Optional[str] = None,
+        compression: Optional[str] = None,
+        verbose: Optional[str] = None,
+        timeout: Optional[str] = None,
+    ):
+        self.compiler = compiler or Arguments.default_compiler
+        self.compression = compression
+        self.timeout = float(timeout) if timeout else None
+
+        # additional parsing step for verbosity
+        self.verbose = verbose is not None and re.match(r"^true$", verbose, re.IGNORECASE) is not None
+
+    @staticmethod
+    def keys() -> Iterable[str]:
+        return ClientConfig.__annotations__.keys()
 
 
 def parse_cli_args(args: List[str]) -> Tuple[Dict[str, Any], Arguments]:
@@ -112,9 +176,9 @@ def parse_cli_args(args: List[str]) -> Tuple[Dict[str, Any], Arguments]:
     show_and_exit.add_argument("-j", action=ShowConcurrencyLevel)
 
     parser.add_argument(
-        "--DEBUG",
+        "--verbose",
         action="store_true",
-        help="enables a verbose DEBUG mode which prints detailed, colored logging messages to the terminal",
+        help="enables a verbose mode which implies detailed and colored logging of debug messages",
     )
 
     parser.add_argument(
@@ -167,7 +231,44 @@ def parse_cli_args(args: List[str]) -> Tuple[Dict[str, Any], Arguments]:
     return homcc_args_dict, compiler_arguments
 
 
-def parse_host(host: str) -> Dict[str, str]:
+def default_locations(filename: str) -> List[Path]:
+    """
+    Look for homcc files in the default locations:
+    - File: $HOMCC_DIR/filename
+    - File: ~/.homcc/filename
+    - File: ~/.config/homcc/filename
+    - File: /etc/homcc/filename
+    """
+
+    # HOSTS file locations
+    homcc_dir_env_var = os.getenv(HOMCC_DIR_ENV_VAR)
+    home_dir_homcc_hosts = Path.home() / ".homcc" / filename
+    home_dir_config_homcc_hosts = Path.home() / ".config/homcc" / filename
+    etc_dir_homcc_hosts = Path("/etc/homcc") / filename
+
+    hosts_file_locations: List[Path] = []
+
+    # $HOMCC_DIR/filename
+    if homcc_dir_env_var:
+        homcc_dir_hosts = Path(homcc_dir_env_var) / filename
+        hosts_file_locations.append(homcc_dir_hosts)
+
+    # ~/.homcc/filename
+    if home_dir_homcc_hosts.exists():
+        hosts_file_locations.append(home_dir_homcc_hosts)
+
+    # ~/.config/homcc/filename
+    if home_dir_config_homcc_hosts.exists():
+        hosts_file_locations.append(home_dir_config_homcc_hosts)
+
+    # /etc/homcc/filename
+    if etc_dir_homcc_hosts.exists():
+        hosts_file_locations.append(etc_dir_homcc_hosts)
+
+    return hosts_file_locations
+
+
+def parse_host(host: str) -> Host:
     """
     try to categorize and extract the following information from the host:
     - Compression
@@ -186,6 +287,7 @@ def parse_host(host: str) -> Dict[str, str]:
     # meaningful failures on erroneous values will arise later on when the client tries to connect to the specified host
 
     host_dict: Dict[str, str] = {}
+    connection_type: ConnectionType
 
     # trim trailing comment
     host_comment_match = re.match(r"^(\S+)#(\S+)$", host)  # HOST#COMMENT
@@ -216,27 +318,26 @@ def parse_host(host: str) -> Dict[str, str]:
 
     if user_at_host_match:  # USER@HOST
         user, host = user_at_host_match.groups()
-        host_dict["type"] = ConnectionType.SSH
+        connection_type = ConnectionType.SSH
         host_dict["user"] = user
 
     elif at_host_match:  # @HOST
         host = at_host_match.group(1)
-        host_dict["type"] = ConnectionType.SSH
+        connection_type = ConnectionType.SSH
 
     elif host_port_limit_match:  # HOST:PORT
         _, name_or_ipv4, ipv6, port, _, limit = host_port_limit_match.groups()
         host = name_or_ipv4 or ipv6
-        host_dict["type"] = ConnectionType.TCP
+        connection_type = ConnectionType.TCP
         host_dict["port"] = port
         host_dict["limit"] = limit
-        host_dict["host"] = host
-        return host_dict
+        return Host(type=connection_type, host=host, **host_dict)
 
     elif host_match:  # HOST
-        host_dict["type"] = ConnectionType.TCP
+        connection_type = ConnectionType.TCP
 
     else:
-        raise ValueError(f'Host "{host}" could not be parsed correctly, please provide it in the correct format!')
+        raise HostParsingError(f'Host "{host}" could not be parsed correctly, please provide it in the correct format!')
 
     # extract remaining limit info
     host_limit_match = re.match(r"^(\S+)/(\d+)$", host)  # HOST/LIMIT
@@ -245,53 +346,14 @@ def parse_host(host: str) -> Dict[str, str]:
         host, limit = host_limit_match.groups()
         host_dict["limit"] = limit
 
-    host_dict["host"] = host
-
-    return host_dict
-
-
-def default_hosts_file_locations() -> List[Path]:
-    """
-    Default locations for the hosts file:
-    - File: $HOMCC_DIR/hosts
-    - File: ~/.homcc/hosts
-    - File: ~/.config/homcc/hosts
-    - File: /etc/homcc/hosts
-    """
-
-    # HOSTS file locations
-    hosts_file_name: str = "hosts"
-    homcc_dir_env_var = os.getenv(HOMCC_DIR_ENV_VAR)
-    home_dir_homcc_hosts = Path.home() / ".homcc" / hosts_file_name
-    home_dir_config_homcc_hosts = Path.home() / ".config/homcc" / hosts_file_name
-    etc_dir_homcc_hosts = Path("/etc/homcc") / hosts_file_name
-
-    hosts_file_locations: List[Path] = []
-
-    # $HOMCC_DIR/hosts
-    if homcc_dir_env_var:
-        homcc_dir_hosts = Path(homcc_dir_env_var) / hosts_file_name
-        hosts_file_locations.append(homcc_dir_hosts)
-
-    # ~/.homcc/hosts
-    if home_dir_homcc_hosts.exists():
-        hosts_file_locations.append(home_dir_homcc_hosts)
-
-    # ~/.config/homcc/hosts
-    if home_dir_config_homcc_hosts.exists():
-        hosts_file_locations.append(home_dir_config_homcc_hosts)
-
-    # /etc/homcc/hosts
-    if etc_dir_homcc_hosts.exists():
-        hosts_file_locations.append(etc_dir_homcc_hosts)
-
-    return hosts_file_locations
+    return Host(type=connection_type, host=host, **host_dict)
 
 
 def load_hosts(hosts_file_locations: Optional[List[Path]] = None) -> List[str]:
     """
     Load homcc hosts from one of the following options:
     - Environment Variable: $HOMCC_HOSTS
+    - Hosts files defined via parameter hosts_file_locations
     - Hosts files defined at default hosts file locations
     """
 
@@ -314,11 +376,8 @@ def load_hosts(hosts_file_locations: Optional[List[Path]] = None) -> List[str]:
         return filtered_lines(homcc_hosts_env_var)
 
     # HOSTS Files
-    if hosts_file_locations and len(hosts_file_locations) == 0:
-        raise NoHostsFoundError
-
     if not hosts_file_locations:
-        hosts_file_locations = default_hosts_file_locations()
+        hosts_file_locations = default_locations(HOMCC_HOSTS_FILENAME)
 
     for hosts_file_location in hosts_file_locations:
         if hosts_file_location.exists():
@@ -327,15 +386,14 @@ def load_hosts(hosts_file_locations: Optional[List[Path]] = None) -> List[str]:
                 continue
             return filtered_lines(hosts_file_location.read_text(encoding="utf-8"))
 
-    raise NoHostsFoundError
+    raise NoHostsFoundError("No hosts information were found!")
 
 
-def parse_config(config: str) -> Dict[str, str]:
-    config_info: List[str] = ["compiler", "compression", "debug", "timeout"]
-    config_pattern: str = f"^({'|'.join(config_info)})=(\\S+)$"
+def parse_config(config_lines: List[str]) -> ClientConfig:
+    config_pattern: str = f"^({'|'.join(ClientConfig.keys())})=(\\S+)$"
     parsed_config: Dict[str, str] = {}
 
-    for line in config.splitlines():
+    for line in config_lines:
         # remove leading and trailing whitespace as well as in-between space chars
         config_line = line.strip().replace(" ", "")
 
@@ -360,59 +418,21 @@ def parse_config(config: str) -> Dict[str, str]:
                 line,
             )
 
-    return parsed_config
+    return ClientConfig(**parsed_config)
 
 
-def default_config_file_locations() -> List[Path]:
+def load_config_file(config_file_locations: Optional[List[Path]] = None) -> List[str]:
     """
-    Load homcc config from one of the following locations:
-    - File: $HOMCC_DIR/config
-    - File: ~/.homcc/config
-    - File: ~/.config/homcc/config
-    - File: /etc/homcc/config
-    """
-
-    # config file locations
-    config_file_name: str = "config"
-    homcc_dir_env_var = os.getenv(HOMCC_DIR_ENV_VAR)
-    home_dir_homcc_config = Path.home() / ".homcc" / config_file_name
-    home_config_dir_homcc_config = Path.home() / ".config/homcc" / config_file_name
-    etc_dir_homcc_config = Path("/etc/homcc") / config_file_name
-
-    config_file_locations: List[Path] = []
-
-    # $HOMCC_DIR/config
-    if homcc_dir_env_var:
-        homcc_dir_config = Path(homcc_dir_env_var) / config_file_name
-        config_file_locations.append(homcc_dir_config)
-
-    # ~/.homcc/config
-    if home_dir_homcc_config.exists():
-        config_file_locations.append(home_dir_homcc_config)
-
-    # ~/.config/homcc/config
-    if home_config_dir_homcc_config.exists():
-        config_file_locations.append(home_config_dir_homcc_config)
-
-    # /etc/homcc/config
-    if etc_dir_homcc_config.exists():
-        config_file_locations.append(etc_dir_homcc_config)
-
-    return config_file_locations
-
-
-def load_config_file(config_file_locations: Optional[List[Path]] = None) -> Dict[str, str]:
-    """
-    Load and parse a homcc config file from the default locations are as parameterized by config_file_locations
+    Load a homcc config file from the default locations are as parameterized by config_file_locations
     """
 
     if not config_file_locations:
-        config_file_locations = default_config_file_locations()
+        config_file_locations = default_locations(HOMCC_CLIENT_CONFIG_FILENAME)
 
     for config_file_location in config_file_locations:
         if config_file_location.exists():
             if config_file_location.stat().st_size == 0:
                 logger.info('Config file "%s" appears to be empty.', config_file_location)
-            return parse_config(config_file_location.read_text(encoding="utf-8"))
+            return config_file_location.read_text(encoding="utf-8").splitlines()
 
-    return {}
+    return []
