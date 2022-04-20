@@ -126,7 +126,7 @@ class TCPRequestHandler(socketserver.BaseRequestHandler):
         logger.debug("Needed dependencies: %s", self.needed_dependencies)
 
         self.compression = message.get_compression()
-        if type(self.compression) is not NoCompression:
+        if not isinstance(self.compression, NoCompression):
             logger.info("Using %s compression.", self.compression.name())
 
         # shuffle the keys so we request them at a different order later to avoid

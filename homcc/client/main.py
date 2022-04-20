@@ -27,7 +27,6 @@ from homcc.client.parsing import (  # pylint: disable=wrong-import-position
     parse_cli_args,
     parse_config,
 )
-from homcc.common.arguments import Arguments  # pylint: disable=wrong-import-position
 from homcc.common.logging import (  # pylint: disable=wrong-import-position
     Formatter,
     FormatterConfig,
