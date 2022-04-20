@@ -22,9 +22,9 @@ jobs:
           cache: 'pip'
       - name: Install dependencies
         run: |
+          sudo apt install python3-lzo
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-          sudo apt install python3-lzo
       - name: Execute linters
         run: |
           pylint -v --rcfile=.pylintrc *.py homcc tests
@@ -41,9 +41,9 @@ jobs:
           cache: 'pip'
       - name: Install dependencies
         run: |
+          sudo apt install python3-lzo
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-          sudo apt install python3-lzo
       - name: Execute format-check
         uses: psf/black@stable
         with:
@@ -60,8 +60,8 @@ jobs:
           cache: 'pip'
       - name: Install dependencies
         run: |
+          sudo apt install python3-lzo
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-          sudo apt install python3-lzo
       - name: Run tests
         run: pytest -v -rfEs --cov=homcc
