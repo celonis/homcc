@@ -16,8 +16,13 @@ from homcc.common.logging import (  # pylint: disable=wrong-import-position
     LogLevel,
     setup_logging,
 )
-from homcc.server.parsing import parse_cli_args, parse_config, load_config_file  # pylint: disable=wrong-import-position
-from homcc.server.server import TCPServer, start_server, stop_server  # pylint: disable=wrong-import-position
+from homcc.server.parsing import (  # pylint: disable=wrong-import-position
+    ServerConfig,
+    parse_cli_args,
+    parse_config,
+    load_config_file,
+)
+from homcc.server.server import start_server, stop_server  # pylint: disable=wrong-import-position
 
 logger: logging.Logger = logging.getLogger(__name__)
 
@@ -25,7 +30,7 @@ logger: logging.Logger = logging.getLogger(__name__)
 def main():
     # load and parse arguments and configuration information
     homccd_args_dict: Dict[str, Any] = parse_cli_args(sys.argv[1:])
-    homccd_config: Dict[str, str] = parse_config(load_config_file())
+    homccd_config: ServerConfig = parse_config(load_config_file())
     logging_config: Dict[str, int] = {
         "config": FormatterConfig.COLORED,
         "formatter": Formatter.SERVER,
@@ -37,7 +42,7 @@ def main():
     # LOG_LEVEL and VERBOSITY
     log_level: str = homccd_args_dict["log_level"]
 
-    if homccd_args_dict["verbose"] or log_level == "DEBUG":
+    if homccd_args_dict["verbose"] or log_level == "DEBUG" or homccd_config.log_level == LogLevel.DEBUG:
         logging_config["config"] |= FormatterConfig.DETAILED
         logging_config["level"] = logging.DEBUG
     elif log_level:
@@ -46,50 +51,16 @@ def main():
     setup_logging(**logging_config)
 
     # LIMIT
-    limit: Optional[int] = homccd_args_dict.get("jobs")
-
-    if not limit:
-        limit = int(homccd_config.get("limit", TCPServer.DEFAULT_LIMIT))
-
-    # LIFETIME
-    lifetime: Optional[float] = homccd_args_dict.get("lifetime")
-
-    if not lifetime:
-        lifetime = float(homccd_config.get("lifetime", TCPServer.DEFAULT_LIFETIME))
+    limit: Optional[int] = homccd_args_dict["jobs"] or homccd_config.limit
 
     # PORT
-    port: Optional[int] = homccd_args_dict.get("port")
-
-    if not port:
-        port = int(homccd_config.get("port", TCPServer.DEFAULT_PORT))
+    port: Optional[int] = homccd_args_dict["port"] or homccd_config.port
 
     # ADDRESS
-    address: Optional[str] = homccd_args_dict.get("listen")
-
-    if not address:
-        address = homccd_config.get("listen", "localhost")
-
-    # DENYLIST
-    denylist: Optional[str] = homccd_args_dict.get("denylist")
-
-    if not denylist:
-        denylist = homccd_config.get("denylist")
-
-    # ALLOWLIST
-    allowlist: Optional[str] = homccd_args_dict.get("allowlist")
-
-    if not allowlist:
-        allowlist = homccd_config.get("allowlist")
+    address: Optional[str] = homccd_args_dict["listen"] or homccd_config.address
 
     # start server
-    server, server_thread = start_server(
-        address=address,
-        port=port,
-        limit=limit,
-        lifetime=lifetime,
-        denylist=denylist,
-        allowlist=allowlist,
-    )
+    server, server_thread = start_server(address=address, port=port, limit=limit)
 
     def signal_handler(*_):
         stop_server(server)

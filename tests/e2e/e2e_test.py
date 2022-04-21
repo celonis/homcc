@@ -34,6 +34,22 @@ class TestEndToEnd:
             encoding="utf-8",
         )
 
+    @staticmethod
+    def cpp_end_to_end(compiler: str, unused_tcp_port: int):
+        with TestEndToEnd.start_server(unused_tcp_port) as server_process:
+            result = TestEndToEnd.start_client(compiler, unused_tcp_port)
+
+            # make sure we actually compile at the server (and did not fall back to local compilation),
+            # i.e. look at the log messages if the compilation of the file on the server side was okay
+            assert result.returncode == os.EX_OK
+            assert '"return_code": 0' in result.stdout
+            assert "Compiling locally instead" not in result.stdout
+
+            executable_stdout = subprocess.check_output(["./e2e-test"], encoding="utf-8")
+            assert executable_stdout == "homcc\n"
+
+            server_process.kill()
+
     @pytest.fixture(autouse=True)
     def clean_up(self):
         yield
@@ -41,34 +57,10 @@ class TestEndToEnd:
 
     @pytest.mark.skipif(shutil.which("g++") is None, reason="g++ is not installed")
     @pytest.mark.timeout(10)
-    def test_end_to_end_g_plus_plus(self, unused_tcp_port: int):
-        with self.start_server(unused_tcp_port) as server_process:
-            result = self.start_client("g++", unused_tcp_port)
-
-            # make sure we actually compile at the server (and did not fall back to local compilation),
-            # i.e. look at the log messages if the compilation of the file on the server side was okay
-            assert result.returncode == os.EX_OK
-            assert '"return_code": 0' in result.stdout
-            assert "Compiling locally instead" not in result.stdout
-
-            executable_stdout = subprocess.check_output(["./e2e-test"], encoding="utf-8")
-            assert executable_stdout == "homcc\n"
-
-            server_process.kill()
+    def test_end_to_end_gplusplus(self, unused_tcp_port: int):
+        self.cpp_end_to_end("g++", unused_tcp_port)
 
     @pytest.mark.skipif(shutil.which("clang++") is None, reason="clang++ is not installed")
     @pytest.mark.timeout(10)
-    def test_end_to_end_clang_plus_plus(self, unused_tcp_port: int):
-        with self.start_server(unused_tcp_port) as server_process:
-            result = self.start_client("clang++", unused_tcp_port)
-
-            # make sure we actually compile at the server (and did not fall back to local compilation),
-            # i.e. look at the log messages if the compilation of the file on the server side was okay
-            assert result.returncode == os.EX_OK
-            assert '"return_code": 0' in result.stdout
-            assert "Compiling locally instead" not in result.stdout
-
-            executable_stdout = subprocess.check_output(["./e2e-test"], encoding="utf-8")
-            assert executable_stdout == "homcc\n"
-
-            server_process.kill()
+    def test_end_to_end_clangplusplus(self, unused_tcp_port: int):
+        self.cpp_end_to_end("clang++", unused_tcp_port)

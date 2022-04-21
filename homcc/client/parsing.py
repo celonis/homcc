@@ -13,12 +13,11 @@ from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 from homcc.common.arguments import Arguments
 from homcc.common.compression import Compression
-from homcc.common.parsing import parse_config_keys, load_config_file_from
+from homcc.common.parsing import default_locations, load_config_file_from, parse_config_keys
 
 logger = logging.getLogger(__name__)
 
 HOMCC_HOSTS_ENV_VAR = "$HOMCC_HOSTS"
-HOMCC_DIR_ENV_VAR = "$HOMCC_DIR"
 HOMCC_HOSTS_FILENAME: str = "hosts"
 HOMCC_CLIENT_CONFIG_FILENAME: str = "client.conf"
 
@@ -232,43 +231,6 @@ def parse_cli_args(args: List[str]) -> Tuple[Dict[str, Any], Arguments]:
     return homcc_args_dict, compiler_arguments
 
 
-def default_locations(filename: str) -> List[Path]:
-    """
-    Look for homcc files in the default locations:
-    - File: $HOMCC_DIR/filename
-    - File: ~/.homcc/filename
-    - File: ~/.config/homcc/filename
-    - File: /etc/homcc/filename
-    """
-
-    # HOSTS file locations
-    homcc_dir_env_var = os.getenv(HOMCC_DIR_ENV_VAR)
-    home_dir_homcc_hosts = Path.home() / ".homcc" / filename
-    home_dir_config_homcc_hosts = Path.home() / ".config/homcc" / filename
-    etc_dir_homcc_hosts = Path("/etc/homcc") / filename
-
-    hosts_file_locations: List[Path] = []
-
-    # $HOMCC_DIR/filename
-    if homcc_dir_env_var:
-        homcc_dir_hosts = Path(homcc_dir_env_var) / filename
-        hosts_file_locations.append(homcc_dir_hosts)
-
-    # ~/.homcc/filename
-    if home_dir_homcc_hosts.exists():
-        hosts_file_locations.append(home_dir_homcc_hosts)
-
-    # ~/.config/homcc/filename
-    if home_dir_config_homcc_hosts.exists():
-        hosts_file_locations.append(home_dir_config_homcc_hosts)
-
-    # /etc/homcc/filename
-    if etc_dir_homcc_hosts.exists():
-        hosts_file_locations.append(etc_dir_homcc_hosts)
-
-    return hosts_file_locations
-
-
 def parse_host(host: str) -> Host:
     """
     try to categorize and extract the following information from the host:
@@ -399,15 +361,7 @@ def load_config_file(config_file_locations: Optional[List[Path]] = None) -> List
     Load a homcc config file from the default locations are as parameterized by config_file_locations
     """
 
-    # TODO: load_config_file_from
-
     if not config_file_locations:
-        config_file_locations = default_locations(HOMCC_CLIENT_CONFIG_FILENAME)
+        return load_config_file_from(default_locations(HOMCC_CLIENT_CONFIG_FILENAME))
 
-    for config_file_location in config_file_locations:
-        if config_file_location.exists():
-            if config_file_location.stat().st_size == 0:
-                logger.info('Config file "%s" appears to be empty.', config_file_location)
-            return config_file_location.read_text(encoding="utf-8").splitlines()
-
-    return []
+    return load_config_file_from(config_file_locations)

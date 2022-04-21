@@ -1,8 +1,8 @@
 """ Tests for client/compilation.py"""
 from pathlib import Path
-from typing import Dict, List
+from typing import List
 
-from homcc.server.parsing import parse_config, load_config_file
+from homcc.server.parsing import HOMCC_SERVER_CONFIG_FILENAME, ServerConfig, parse_config, load_config_file
 
 
 class TestParsingConfig:
@@ -16,34 +16,24 @@ class TestParsingConfig:
         "# HOMCC TEST CONFIG COMMENT",
         " # comment with whitespace ",
         "LIMIT=64",
-        "LIFETIME=42  # Answer to the Ultimate Question of Life, the Universe, and Everything",
+        "LOG_LEVEL=DEBUG  # DEBUG",
         " port = 3633 ",
         "\tAdDrEsS=localhost",
     ]
 
     def test_parse_config(self):
-        parsed_config = parse_config(self.config)
-
-        assert parsed_config.pop("limit") == "64"
-        assert parsed_config.pop("lifetime") == "42"
-        assert parsed_config.pop("port") == "3633"
-        assert parsed_config.pop("address") == "localhost"
-        assert not parsed_config
+        assert parse_config(self.config) == ServerConfig(
+            limit="64", port="3633", address="localhost", log_level="DEBUG"
+        )
 
     def test_load_config_file(self, tmp_path: Path):
-        tmp_config_file: Path = tmp_path / "server.conf"
+        tmp_config_file: Path = tmp_path / HOMCC_SERVER_CONFIG_FILENAME
         tmp_config_file.write_text("\n".join(self.config))
 
         config_file_locations: List[Path] = [tmp_config_file]
 
         config: List[str] = load_config_file(config_file_locations)
-
         assert config == self.config
-
-        parsed_config: Dict[str, str] = parse_config(config)
-
-        assert parsed_config.pop("limit") == "64"
-        assert parsed_config.pop("lifetime") == "42"
-        assert parsed_config.pop("port") == "3633"
-        assert parsed_config.pop("address") == "localhost"
-        assert not parsed_config
+        assert parse_config(self.config) == ServerConfig(
+            limit="64", port="3633", address="localhost", log_level="DEBUG"
+        )

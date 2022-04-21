@@ -1,24 +1,20 @@
 """Parsing related functionality regarding the homcc server"""
 import logging
 import os
-import re
 import sys
 
-from argparse import Action, ArgumentParser, RawTextHelpFormatter
+from argparse import Action, ArgumentParser, ArgumentTypeError, RawTextHelpFormatter
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Iterable, List, Optional, Union
 
 from homcc.common.logging import LogLevel
-from homcc.common.parsing import parse_config_keys, load_config_file_from
+from homcc.common.parsing import default_locations, load_config_file_from, parse_config_keys
 from homcc.server.server import TCPServer
 
 logger = logging.getLogger(__name__)
 
-HOMCC_DIR_ENV_VAR = "$HOMCC_DIR"
-
-
-class NoClientsFileFound(Exception):
-    """Error class to indicate a recoverable error when a clients file could not be loaded correctly"""
+HOMCC_SERVER_CONFIG_FILENAME: str = "server.conf"
 
 
 class ShowVersion(Action):
@@ -32,6 +28,32 @@ class ShowVersion(Action):
         sys.exit(os.EX_OK)
 
 
+@dataclass
+class ServerConfig:
+    """Class to encapsulate and default client configuration information"""
+
+    address: Optional[str]
+    port: Optional[int]
+    limit: Optional[int]
+    log_level: Optional[LogLevel]
+
+    def __init__(
+        self,
+        limit: Optional[str] = None,
+        port: Optional[str] = None,
+        address: Optional[str] = None,
+        log_level: Optional[str] = None,
+    ):
+        self.limit = int(limit) if limit else None
+        self.port = int(port) if port else None
+        self.address = address
+        self.log_level = LogLevel[log_level] if log_level else None
+
+    @staticmethod
+    def keys() -> Iterable[str]:
+        return ServerConfig.__annotations__.keys()
+
+
 def parse_cli_args(args: List[str]) -> Dict[str, Any]:
     parser: ArgumentParser = ArgumentParser(
         description="homcc server for compiling cpp files from home.",
@@ -39,6 +61,14 @@ def parse_cli_args(args: List[str]) -> Dict[str, Any]:
         add_help=False,
         formatter_class=RawTextHelpFormatter,
     )
+
+    def limit_range(value: Union[int, str], min_value: int = 1, max_value: int = 200):
+        value = int(value)
+
+        if min_value <= value <= max_value:
+            return value
+
+        raise ArgumentTypeError(f"LIMIT must be between {min_value} and {max_value}")
 
     general_options_group = parser.add_argument_group("Options")
     networking_group = parser.add_argument_group(" Networking")
@@ -53,16 +83,8 @@ def parse_cli_args(args: List[str]) -> Dict[str, Any]:
         "-j",
         required=False,
         metavar="LIMIT",
-        type=int,
-        help="maximum LIMIT of concurrent compilation jobs, defaults to CPU count",
-    )
-
-    general_options_group.add_argument(
-        "--job-lifetime",
-        required=False,
-        metavar="SECONDS",
-        type=float,
-        help=f"maximum lifetime of a compilation request in SECONDS, defaults to {TCPServer.DEFAULT_LIFETIME} seconds",
+        type=limit_range,
+        help="maximum LIMIT [1 - 200] of concurrent compilation jobs, defaults to CPU count",
     )
 
     # networking
@@ -79,24 +101,6 @@ def parse_cli_args(args: List[str]) -> Dict[str, Any]:
         metavar="ADDRESS",
         type=str,
         help='IP ADDRESS to listen on, defaults to "localhost"',
-    )
-
-    networking_group.add_argument(
-        "--denylist",
-        "--blacklist",
-        required=False,
-        metavar="FILE",
-        type=str,
-        help="control of client exclusive access via a denying FILE",
-    )
-
-    networking_group.add_argument(
-        "--allowlist",
-        "--whitelist",
-        required=False,
-        metavar="FILE",
-        type=str,
-        help="control of client inclusive access via an allowing FILE",
     )
 
     # debug
@@ -118,84 +122,16 @@ def parse_cli_args(args: List[str]) -> Dict[str, Any]:
     return vars(parser.parse_args(args))
 
 
-def load_clients(clients_file_location: Path) -> List[str]:
-    """Load client data from clients_file_location"""
-
-    def filtered_lines(text: str) -> List[str]:
-        lines: List[str] = []
-
-        for line in text.splitlines():
-            # remove whitespace
-            line = line.strip().replace(" ", "")
-
-            # remove trailing comment
-            match: Optional[re.Match] = re.match(r"^(\S+)#(\S+)$", line)
-            if match:
-                line, _ = match.groups()
-
-            # filter empty lines and comment lines
-            if len(line) != 0 and not line.startswith("#"):
-                lines.append(line)
-
-        return lines
-
-    if not clients_file_location.exists():
-        logger.warning('File "%s" does not exist!', str(clients_file_location.absolute()))
-        return []
-
-    if clients_file_location.stat().st_size == 0:
-        logger.warning('Clients file appears to be empty "%s"!', clients_file_location)
-
-    return filtered_lines(clients_file_location.read_text(encoding="utf-8"))
-
-
-def parse_config(config_lines: List[str]) -> Dict[str, str]:
-    config_keys: List[str] = ["limit", "lifetime", "port", "address", "denylist", "allowlist", "log_level", "log_file"]
-    return parse_config_keys(config_keys, config_lines)
+def parse_config(config_lines: List[str]) -> ServerConfig:
+    return ServerConfig(**parse_config_keys(ServerConfig.keys(), config_lines))
 
 
 def load_config_file(config_file_locations: Optional[List[Path]] = None) -> List[str]:
-    """load a homcc config file from the default locations are as parameterized by config_file_locations"""
+    """
+    Load a homcc config file from the default locations are as parameterized by config_file_locations
+    """
 
     if not config_file_locations:
-        return load_config_file_from(default_config_file_locations())
+        return load_config_file_from(default_locations(HOMCC_SERVER_CONFIG_FILENAME))
 
     return load_config_file_from(config_file_locations)
-
-
-def default_config_file_locations() -> List[Path]:
-    """
-    Load homcc config from one of the following locations:
-    - File: $HOMCC_DIR/server.conf
-    - File: ~/.homcc/server.conf
-    - File: ~/.config/homcc/server.conf
-    - File: /etc/homcc/server.conf
-    """
-
-    # config file locations
-    config_file_name: str = "server.conf"
-    homcc_dir_env_var = os.getenv(HOMCC_DIR_ENV_VAR)
-    home_dir_homcc_config = Path.home() / ".homcc" / config_file_name
-    home_config_dir_homcc_config = Path.home() / ".config/homcc" / config_file_name
-    etc_dir_homcc_config = Path("/etc/homcc") / config_file_name
-
-    config_file_locations: List[Path] = []
-
-    # $HOMCC_DIR/server.conf
-    if homcc_dir_env_var:
-        homcc_dir_config = Path(homcc_dir_env_var) / config_file_name
-        config_file_locations.append(homcc_dir_config)
-
-    # ~/.homcc/server.conf
-    if home_dir_homcc_config.exists():
-        config_file_locations.append(home_dir_homcc_config)
-
-    # ~/.config/homcc/server.conf
-    if home_config_dir_homcc_config.exists():
-        config_file_locations.append(home_config_dir_homcc_config)
-
-    # /etc/homcc/server.conf
-    if etc_dir_homcc_config.exists():
-        config_file_locations.append(etc_dir_homcc_config)
-
-    return config_file_locations
