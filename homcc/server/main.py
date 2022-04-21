@@ -13,6 +13,7 @@ from homcc.common.logging import (  # pylint: disable=wrong-import-position
     Formatter,
     FormatterConfig,
     FormatterDestination,
+    LoggingConfig,
     LogLevel,
     setup_logging,
 )
@@ -31,24 +32,24 @@ def main():
     # load and parse arguments and configuration information
     homccd_args_dict: Dict[str, Any] = parse_cli_args(sys.argv[1:])
     homccd_config: ServerConfig = parse_config(load_config_file())
-    logging_config: Dict[str, int] = {
-        "config": FormatterConfig.COLORED,
-        "formatter": Formatter.SERVER,
-        "destination": FormatterDestination.STREAM,
-    }
+    logging_config: LoggingConfig = LoggingConfig(
+        config=FormatterConfig.COLORED,
+        formatter=Formatter.SERVER,
+        destination=FormatterDestination.STREAM,
+    )
 
     # LOG_LEVEL and VERBOSITY
     log_level: str = homccd_args_dict["log_level"]
 
     if homccd_args_dict["verbose"] or log_level == "DEBUG" or homccd_config.log_level == LogLevel.DEBUG:
-        logging_config["config"] |= FormatterConfig.DETAILED
-        logging_config["level"] = logging.DEBUG
+        logging_config.config |= FormatterConfig.DETAILED
+        logging_config.level = logging.DEBUG
     elif log_level:
-        logging_config["level"] = LogLevel[homccd_args_dict["log_level"]].value
+        logging_config.level = LogLevel[homccd_args_dict["log_level"]].value
     elif homccd_config.log_level:
-        logging_config["level"] = int(homccd_config.log_level)
+        logging_config.level = int(homccd_config.log_level)
 
-    setup_logging(**logging_config)
+    setup_logging(logging_config)
 
     # LIMIT
     limit: Optional[int] = homccd_args_dict["jobs"] or homccd_config.limit

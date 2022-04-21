@@ -37,7 +37,7 @@ def parse_config_keys(config_keys: Iterable[str], config_lines: List[str]) -> Di
 
             if key in parsed_config:
                 logger.warning(
-                    'Faulty config line "%s" with repeated key "%s" ignored.\n'
+                    'Faulty configuration line "%s" with repeated key "%s" ignored.\n'
                     "To disable this warning, please correct and unify the corresponding lines!",
                     line,
                     key,
@@ -47,7 +47,7 @@ def parse_config_keys(config_keys: Iterable[str], config_lines: List[str]) -> Di
 
         else:
             logger.warning(
-                'Faulty config "%s" ignored.\n'
+                'Faulty configuration line "%s" ignored.\n'
                 "To disable this warning, please correct or comment out the corresponding line!",
                 line,
             )
@@ -93,9 +93,7 @@ def default_locations(filename: str) -> List[Path]:
 
 
 def load_config_file_from(config_file_locations: List[Path]) -> List[str]:
-    """
-    Load and parse a homcc config file from the default locations are as parameterized by config_file_locations
-    """
+    """Load a homcc config file from the default locations or as parameterized by config_file_locations"""
 
     for config_file_location in config_file_locations:
         if config_file_location.exists():

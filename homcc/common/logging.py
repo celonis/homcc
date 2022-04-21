@@ -4,6 +4,7 @@ from __future__ import annotations
 import logging
 
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
 from enum import Enum, Flag, auto
 from typing import Dict, Optional
 
@@ -142,13 +143,16 @@ class _ServerFormatter(_Formatter):
         raise ValueError(f"Unrecognized formatter configuration {self._config}")
 
 
-def setup_logging(
-    formatter: Formatter,
-    config: FormatterConfig,
-    destination: FormatterDestination,
-    level: int = logging.INFO,  # use logging.INFO as default instead of the usual logging.WARNING
-    filename: Optional[str] = None,
-):
+@dataclass
+class LoggingConfig:
+    formatter: Formatter
+    config: FormatterConfig
+    destination: FormatterDestination
+    level: int = logging.INFO  # use logging.INFO as default instead of the usual logging.WARNING
+    filename: Optional[str] = None
+
+
+def setup_logging(logging_config: LoggingConfig):
     """
     Set up basic configuration for the logging system to display homcc messages on the client or the server.
 
@@ -165,24 +169,28 @@ def setup_logging(
     """
 
     # initialize formatter to deduce the correct formatting strings
-    fmt: _Formatter = _ClientFormatter(config) if formatter == Formatter.CLIENT else _ServerFormatter(config)
+    fmt: _Formatter = (
+        _ClientFormatter(logging_config.config)
+        if logging_config.formatter == Formatter.CLIENT
+        else _ServerFormatter(logging_config.config)
+    )
 
     # initialize handlers with the correct formatter
     handler: logging.Handler
 
-    if destination == FormatterDestination.STREAM:
+    if logging_config.destination == FormatterDestination.STREAM:
         handler = logging.StreamHandler()
         handler.setFormatter(fmt)
 
-    elif destination == FormatterDestination.FILE:
-        if not filename:
+    elif logging_config.destination == FormatterDestination.FILE:
+        if not logging_config.filename:
             raise MissingLogFileError
 
-        handler = logging.FileHandler(filename)
+        handler = logging.FileHandler(logging_config.filename)
         handler.setFormatter(fmt)
 
     else:
-        raise ValueError(f'Unrecognized formatter destination "{destination}"')
+        raise ValueError(f'Unrecognized formatter destination "{logging_config.destination}"')
 
     # configure the root logger
-    logging.basicConfig(level=level, handlers=[handler])
+    logging.basicConfig(level=logging_config.level, handlers=[handler])
