@@ -19,10 +19,6 @@ class LogLevel(Enum):
     ERROR = logging.ERROR
     CRITICAL = logging.CRITICAL
 
-    @staticmethod
-    def as_dict():
-        return {level.name: level.value for level in LogLevel}
-
 
 class Formatter(Enum):
     """Enum fields specifying whether to choose the ClientFormatter or ServerFormatter."""

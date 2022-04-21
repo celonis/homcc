@@ -84,7 +84,8 @@ def parse_cli_args(args: List[str]) -> Dict[str, Any]:
         required=False,
         metavar="LIMIT",
         type=limit_range,
-        help="maximum LIMIT [1 - 200] of concurrent compilation jobs, defaults to CPU count",
+        help=f"maximum LIMIT [1 - 200] of concurrent compilation jobs, "
+        f"default value ({TCPServer.DEFAULT_LIMIT + 2}) determined via CPU count",
     )
 
     # networking
@@ -100,7 +101,7 @@ def parse_cli_args(args: List[str]) -> Dict[str, Any]:
         required=False,
         metavar="ADDRESS",
         type=str,
-        help='IP ADDRESS to listen on, defaults to "localhost"',
+        help=f"IP ADDRESS to listen on, defaults to {TCPServer.DEFAULT_ADDRESS}",
     )
 
     # debug
@@ -127,9 +128,7 @@ def parse_config(config_lines: List[str]) -> ServerConfig:
 
 
 def load_config_file(config_file_locations: Optional[List[Path]] = None) -> List[str]:
-    """
-    Load a homcc config file from the default locations are as parameterized by config_file_locations
-    """
+    """Load a homcc config file from the default locations as parameterized by config_file_locations"""
 
     if not config_file_locations:
         return load_config_file_from(default_locations(HOMCC_SERVER_CONFIG_FILENAME))

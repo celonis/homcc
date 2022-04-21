@@ -41,16 +41,10 @@ class TCPServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
     DEFAULT_ADDRESS: str = "localhost"
     DEFAULT_PORT: int = 3633
     DEFAULT_LIMIT: int = (
-        len(os.sched_getaffinity(0))  # number of available CPUs for our process
-        or os.cpu_count()  # total number of physical CPUs
+        len(os.sched_getaffinity(0))  # number of available CPUs for this process
+        or os.cpu_count()  # total number of physical CPUs on the machine
         or -1  # fallback error value
     )
-
-    current_amount_connections: int  # indicates the amount of clients that are currently connected
-    current_amount_connections_mutex: Lock
-    root_temp_folder: TemporaryDirectory
-    cache: Dict[str, str]  # 'Hash' -> 'File path' on server map for holding paths to cached files
-    cache_mutex: Lock
 
     def __init__(self, address: Optional[str], port: Optional[int], limit: Optional[int]):
         address = address or self.DEFAULT_ADDRESS
@@ -67,11 +61,13 @@ class TCPServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
                 "Please provide jobs limit explicitly either via the CLI or the configuration file!"
             )
 
-        self.root_temp_folder = create_root_temp_folder()
-        self.current_amount_connections = 0
-        self.current_amount_connections_mutex = Lock()
-        self.cache = {}
-        self.cache_mutex = Lock()
+        self.root_temp_folder: TemporaryDirectory = create_root_temp_folder()
+
+        self.current_amount_connections: int = 0  # indicates the amount of clients that are currently connected
+        self.current_amount_connections_mutex: Lock = Lock()
+
+        self.cache: Dict[str, str] = {}  # 'Hash' -> 'File path' on server map for holding paths to cached files
+        self.cache_mutex: Lock = Lock()
 
     def verify_request(self, request, _) -> bool:
         with self.current_amount_connections_mutex:

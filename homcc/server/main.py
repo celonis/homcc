@@ -37,8 +37,6 @@ def main():
         "destination": FormatterDestination.STREAM,
     }
 
-    print("HOMCCD ARGS DICT:\n\t", homccd_args_dict)
-
     # LOG_LEVEL and VERBOSITY
     log_level: str = homccd_args_dict["log_level"]
 
@@ -47,6 +45,8 @@ def main():
         logging_config["level"] = logging.DEBUG
     elif log_level:
         logging_config["level"] = LogLevel[homccd_args_dict["log_level"]].value
+    elif homccd_config.log_level:
+        logging_config["level"] = int(homccd_config.log_level)
 
     setup_logging(**logging_config)
 
