@@ -6,7 +6,13 @@ import subprocess
 from pathlib import Path
 from typing import Dict, List, Optional, Set
 
-from homcc.client.client import ClientConnectionError, LoadBalancer, TCPClient, UnexpectedMessageTypeError
+from homcc.client.client import (
+    ClientConnectionError,
+    HostsExhaustedError,
+    HostSelector,
+    TCPClient,
+    UnexpectedMessageTypeError,
+)
 from homcc.client.parsing import ClientConfig, Host
 from homcc.common.arguments import Arguments, ArgumentsExecutionResult
 from homcc.common.hashing import hash_file_with_path
@@ -26,12 +32,9 @@ class CompilerError(subprocess.CalledProcessError):
         super().__init__(err.returncode, err.cmd, err.output, err.stderr)
 
 
-class HostsExhaustedError(Exception):
-    """Error class to indicate that the compilation request was refused by all hosts"""
-
-
 async def compile_remotely(hosts: List[str], config: ClientConfig, arguments: Arguments) -> int:
-    for host in LoadBalancer(hosts):
+    # try to connect to 3 remote compilation servers before giving up
+    for host in HostSelector(hosts, 3):
         compression: Optional[str] = host.compression or config.compression
         timeout: Optional[float] = config.timeout
 

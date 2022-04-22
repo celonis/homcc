@@ -6,31 +6,41 @@ from typing import Dict, Iterator, List, Set
 import pytest
 
 from homcc.common.arguments import Arguments
-from homcc.client.client import LoadBalancer, TCPClient
+from homcc.client.client import HostSelector, HostsExhaustedError, TCPClient
 from homcc.client.compilation import calculate_dependency_dict, find_dependencies
 from homcc.client.parsing import ConnectionType, Host, parse_host
 from homcc.server.server import start_server, stop_server
 
 
-class TestLoadBalancer:
-    """Tests for LoadBalancer"""
+class TestHostSelector:
+    """Tests for HostSelector"""
 
-    def test_load_balancer(self):
-        hosts: List[str] = ["remotehost1/1", "remotehost2/2", "remotehost3/4", "remotehost4/8"]
-        parsed_hosts: List[Host] = [parse_host(host) for host in hosts]
-        tickets: int = 1 + 2 + 4 + 8
-        count: int = -1
+    # first host will be ignored by the host selector due to 0 limit
+    hosts: List[str] = ["remotehost0/0", "remotehost1/1", "remotehost2/2", "remotehost3/4", "remotehost4/8"]
+    parsed_hosts: List[Host] = [parse_host(host) for host in hosts]
 
-        load_balancer: LoadBalancer = LoadBalancer(hosts)
+    def test_host_selector(self):
+        host_selector: HostSelector = HostSelector(self.hosts)
 
-        host_iter: Iterator = iter(load_balancer)
+        host_iter: Iterator = iter(host_selector)
         for count, host in enumerate(host_iter):
-            assert host in parsed_hosts
-            tickets -= host.limit
+            assert host in self.parsed_hosts
+            assert count == len(self.hosts[1:]) - len(host_selector) - 1
 
-        assert tickets == 0
-        assert count == len(hosts) - 1
+        assert len(host_selector) == 0
         with pytest.raises(StopIteration):
+            assert next(host_iter)
+
+    def test_host_selector_with_tries(self):
+        host_selector: HostSelector = HostSelector(self.hosts, 3)
+
+        host_iter: Iterator = iter(host_selector)
+        for _ in range(3):
+            host: Host = next(host_iter)
+            assert host in self.parsed_hosts
+
+        assert len(host_selector) == 1
+        with pytest.raises(HostsExhaustedError):
             assert next(host_iter)
 
 
