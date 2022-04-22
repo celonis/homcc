@@ -112,7 +112,7 @@ class Host:
     host: str
     port: Optional[int]
     user: Optional[str]
-    limit: Optional[int]
+    limit: int
     compression: Optional[str]
 
     def __init__(
@@ -129,7 +129,7 @@ class Host:
         self.host = host
         self.port = int(port) if port else None
         self.user = user
-        self.limit = int(limit) if limit else None
+        self.limit = int(limit) if limit else 2  # allow 2 connections per default to enable minor level of concurrency
         self.compression = compression
 
 

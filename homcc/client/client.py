@@ -6,9 +6,10 @@ import asyncio
 import logging
 
 from pathlib import Path
-from typing import Dict, Optional
+from random import randrange
+from typing import Dict, Iterable, Iterator, List, Optional
 
-from homcc.client.parsing import ConnectionType, Host
+from homcc.client.parsing import ConnectionType, Host, HostParsingError, parse_host
 from homcc.common.arguments import Arguments
 from homcc.common.messages import ArgumentMessage, DependencyReplyMessage, Message
 
@@ -37,6 +38,57 @@ class ReceiveTimedOutError(TCPClientError):
 
 class UnexpectedMessageTypeError(TCPClientError):
     """Exception for receiving a message with an unexpected type"""
+
+
+class LoadBalancer:
+    """Class to enable server job limit agnostic load balancing for the client"""
+
+    def __init__(self, hosts: List[str]):
+        def parsed_hosts() -> Iterable[Host]:
+            for host in hosts:
+                try:
+                    yield parse_host(host)
+                except HostParsingError as error:
+                    logger.warning("%s", error)
+
+        self.__hosts: List[Host] = list(parsed_hosts())
+        self.__pots: List[range] = []
+        self.__tickets: int = -1
+        self.__removed_host_index: int = 0
+
+    def __iter__(self) -> Iterator[Host]:
+        return self
+
+    def __next__(self) -> Host:
+        if self.__hosts:
+            return self.__get_random_host()
+        raise StopIteration
+
+    def __calculate(self):
+        # find new base ticket amount of remaining pots
+        self.__pots = self.__pots[: self.__removed_host_index]
+        self.__tickets = self.__pots[-1].stop if self.__pots else 0
+
+        # recalculate trailing pots
+        for host in self.__hosts[self.__removed_host_index :]:
+            limit: int = host.limit
+            self.__pots.append(range(self.__tickets, self.__tickets + limit))
+            self.__tickets += limit
+
+    def __get_random_host(self) -> Host:
+        """return a random host where hosts with higher limits are more likely to be selected"""
+        self.__calculate()
+
+        # draw a random ticket and look which host pot the ticket falls into
+        ticket: int = randrange(0, self.__tickets)
+
+        for i, pot in enumerate(self.__pots):
+            if ticket in pot:
+                host: Host = self.__hosts.pop(i)
+                self.__removed_host_index = i
+                return host
+
+        raise NotImplementedError("Unreachable!")
 
 
 class TCPClient:

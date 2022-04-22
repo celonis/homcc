@@ -6,8 +6,8 @@ import subprocess
 from pathlib import Path
 from typing import Dict, List, Optional, Set
 
-from homcc.client.client import TCPClient, ClientConnectionError, UnexpectedMessageTypeError
-from homcc.client.parsing import ClientConfig, Host, HostParsingError, parse_host
+from homcc.client.client import ClientConnectionError, LoadBalancer, TCPClient, UnexpectedMessageTypeError
+from homcc.client.parsing import ClientConfig, Host
 from homcc.common.arguments import Arguments, ArgumentsExecutionResult
 from homcc.common.hashing import hash_file_with_path
 from homcc.common.messages import ObjectFile
@@ -31,16 +31,14 @@ class HostsExhaustedError(Exception):
 
 
 async def compile_remotely(hosts: List[str], config: ClientConfig, arguments: Arguments) -> int:
-    # TODO(s.pirsch): smart host selection with heuristic (CPL-6470)
-    for host in hosts:
-        try:
-            parsed_host: Host = parse_host(host)
-            compression: Optional[str] = parsed_host.compression or config.compression
-            return await compile_remotely_at(parsed_host, compression, config.timeout, arguments)
+    for host in LoadBalancer(hosts):
+        compression: Optional[str] = host.compression or config.compression
+        timeout: Optional[float] = config.timeout
 
-        except (ClientConnectionError, HostParsingError) as error:
+        try:
+            return await compile_remotely_at(host, compression, timeout, arguments)
+        except ClientConnectionError as error:
             logger.warning("%s", error)
-            continue
 
     raise HostsExhaustedError(f"All hosts {hosts} are exhausted!")
 

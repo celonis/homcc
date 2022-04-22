@@ -1,19 +1,41 @@
 """ Tests for client/client.py"""
 
 from pathlib import Path
-from typing import Dict, List, Set
+from typing import Dict, Iterator, List, Set
 
 import pytest
 
 from homcc.common.arguments import Arguments
-from homcc.client.client import TCPClient
+from homcc.client.client import LoadBalancer, TCPClient
 from homcc.client.compilation import calculate_dependency_dict, find_dependencies
-from homcc.client.parsing import ConnectionType, Host
+from homcc.client.parsing import ConnectionType, Host, parse_host
 from homcc.server.server import start_server, stop_server
 
 
-class TestClient:
-    """Tests for client/client.py"""
+class TestLoadBalancer:
+    """Tests for LoadBalancer"""
+
+    def test_load_balancer(self):
+        hosts: List[str] = ["remotehost1/1", "remotehost2/2", "remotehost3/4", "remotehost4/8"]
+        parsed_hosts: List[Host] = [parse_host(host) for host in hosts]
+        tickets: int = 1 + 2 + 4 + 8
+        count: int = -1
+
+        load_balancer: LoadBalancer = LoadBalancer(hosts)
+
+        host_iter: Iterator = iter(load_balancer)
+        for count, host in enumerate(host_iter):
+            assert host in parsed_hosts
+            tickets -= host.limit
+
+        assert tickets == 0
+        assert count == len(hosts) - 1
+        with pytest.raises(StopIteration):
+            assert next(host_iter)
+
+
+class TestTCPClient:
+    """Tests for TCPClient"""
 
     @pytest.fixture(autouse=True)
     def _init(self, unused_tcp_port: int):

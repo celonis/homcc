@@ -90,9 +90,7 @@ class Arguments:
 
     def __iter__(self) -> Iterator:
         yield self.compiler
-
-        for arg in self.args:
-            yield arg
+        yield from self.args
 
     def __len__(self) -> int:
         return len(self.args) + 1
