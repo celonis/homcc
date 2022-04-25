@@ -38,6 +38,9 @@ async def compile_remotely(hosts: List[str], config: ClientConfig, arguments: Ar
         compression: Optional[str] = host.compression or config.compression
         timeout: Optional[float] = config.timeout
 
+        if host.is_localhost():
+            return compile_locally(arguments)
+
         try:
             return await compile_remotely_at(host, compression, timeout, arguments)
         except ClientConnectionError as error:

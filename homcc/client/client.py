@@ -56,7 +56,7 @@ class HostSelector:
         if tries and tries <= 0:
             raise ValueError("")
 
-        self.__hosts: List[Host] = list(self.__usable_parsed_hosts(hosts))
+        self.__hosts: List[Host] = [host for host in self.__parsed_hosts(hosts) if host.limit > 0]
         self.__pots: List[range] = []
 
         self.__tickets: int
@@ -77,12 +77,10 @@ class HostSelector:
         raise StopIteration
 
     @staticmethod
-    def __usable_parsed_hosts(hosts: List[str]) -> Iterable[Host]:
+    def __parsed_hosts(hosts: List[str]) -> Iterable[Host]:
         for host in hosts:
             try:
-                parsed_host: Host = parse_host(host)
-                if parsed_host.limit != 0:
-                    yield parsed_host
+                yield parse_host(host)
             except HostParsingError as error:
                 logger.warning("%s", error)
 

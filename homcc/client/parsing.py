@@ -132,6 +132,10 @@ class Host:
         self.limit = int(limit) if limit else 2  # allow 2 connections per default to enable minor level of concurrency
         self.compression = compression
 
+    def is_localhost(self) -> bool:
+        # this check could be more complex e.g. testing for 127.0.0.1 and ::1 IP addresses and other looping interfaces
+        return self.host == "localhost"
+
 
 @dataclass
 class ClientConfig:

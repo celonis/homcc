@@ -20,7 +20,7 @@ class TestEndToEnd:
             [
                 "./homcc/client/main.py",
                 "g++",
-                f"--host=localhost:{unused_tcp_port}",
+                f"--host=127.0.0.1:{unused_tcp_port}",  # avoid "localhost" here in order to ensure remote compilation
                 "--verbose",
                 "-Iexample/include",
                 "example/src/foo.cpp",
