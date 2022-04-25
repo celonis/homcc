@@ -40,16 +40,16 @@ class TestCompressedBytes:
         assert compressed_bytes.from_wire(test_data, NoCompression()).get_data() == test_data
 
     def compression_test(self, compression):
-        lzo_compressed_data = compression.compress(test_data)
+        compressed_data = compression.compress(test_data)
 
         compressed_bytes = CompressedBytes(test_data, compression)
 
         assert compressed_bytes.get_data() == test_data
         assert compressed_bytes.compression == compression
-        assert compressed_bytes.to_wire() == lzo_compressed_data
-        assert len(compressed_bytes) == len(lzo_compressed_data)
+        assert compressed_bytes.to_wire() == compressed_data
+        assert len(compressed_bytes) == len(compressed_data)
 
-        assert compressed_bytes.from_wire(lzo_compressed_data, compression).get_data() == test_data
+        assert compressed_bytes.from_wire(compressed_data, compression).get_data() == test_data
 
     def test_lzma(self):
         self.compression_test(LZMA())

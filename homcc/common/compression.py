@@ -4,7 +4,7 @@ from abc import ABC, abstractmethod
 from typing import Optional, List, Type
 
 import lzma
-import lzo  # type: ignore
+import lzo
 import logging
 
 logger = logging.getLogger(__name__)
