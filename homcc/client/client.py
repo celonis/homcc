@@ -66,7 +66,7 @@ class TCPClient:
 
     async def connect(self):
         """connect to specified server at host:port"""
-        logger.debug("Connecting to %s:%s", self.host, self.port)
+        logger.debug("Connecting to %s:%i", self.host, self.port)
 
         try:
             self._reader, self._writer = await asyncio.open_connection(
@@ -77,7 +77,7 @@ class TCPClient:
 
     async def _send(self, message: Message):
         """send a message to homcc server"""
-        logger.debug("Sending %s to %s:%s:\n%s", message.message_type, self.host, self.port, message.get_json_str())
+        logger.debug("Sending %s to %s:%i:\n%s", message.message_type, self.host, self.port, message.get_json_str())
         self._writer.write(message.to_bytes())  # type: ignore[union-attr]
         await self._writer.drain()  # type: ignore[union-attr]
 
@@ -123,7 +123,7 @@ class TCPClient:
             raise ClientParsingError("Received data could not be parsed to a message!")
 
         logger.debug(
-            "Received %s message from %s:%s:\n%s",
+            "Received %s message from %s:%i:\n%s",
             parsed_message.message_type,
             self.host,
             self.port,
@@ -133,6 +133,6 @@ class TCPClient:
 
     async def close(self):
         """disconnect from server and close client socket"""
-        logger.debug("Disconnecting from %s:%s", self.host, self.port)
+        logger.debug("Disconnecting from %s:%i", self.host, self.port)
         self._writer.close()
         await self._writer.wait_closed()

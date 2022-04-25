@@ -7,7 +7,7 @@
 ## Installation
 1. Download or build (see below) the Debian packages
 1. To install either the server or the client, use:
-  ```sudo apt install ./homcc.deb```
+  ```sudo apt install ./homcc.deb```<br/>
   For the server use the `homcc_server.deb` package.
 
 Note: currently, installing both packages leads to an issue with conflicting files. Therefore, to install the second package, use `sudo dpkg -i --force-overwrite {package.deb}`
@@ -15,7 +15,7 @@ Note: currently, installing both packages leads to an issue with conflicting fil
 ## Development
 
 ### Setup
-- Install the `liblzo2-dev` apt package (needed for LZO compression):
+- Install the `liblzo2-dev` apt package (needed for LZO compression):<br/>
   `sudo apt install liblzo2-dev`
 
 - Install required dependencies:<br/>
