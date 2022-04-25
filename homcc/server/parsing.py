@@ -62,13 +62,13 @@ def parse_cli_args(args: List[str]) -> Dict[str, Any]:
         formatter_class=RawTextHelpFormatter,
     )
 
-    def limit_range(value: Union[int, str], min_value: int = 1, max_value: int = 200):
+    def min_job_limit(value: Union[int, str], minimum: int = 0) -> int:
         value = int(value)
 
-        if min_value <= value <= max_value:
+        if minimum < value:
             return value
 
-        raise ArgumentTypeError(f"LIMIT must be between {min_value} and {max_value}")
+        raise ArgumentTypeError(f"LIMIT must be more than {minimum}")
 
     general_options_group = parser.add_argument_group("Options")
     networking_group = parser.add_argument_group(" Networking")
@@ -83,9 +83,9 @@ def parse_cli_args(args: List[str]) -> Dict[str, Any]:
         "-j",
         required=False,
         metavar="LIMIT",
-        type=limit_range,
-        help=f"maximum LIMIT [1 - 200] of concurrent compilation jobs, "
-        f"default value ({TCPServer.DEFAULT_LIMIT + 2}) determined via CPU count",
+        type=min_job_limit,
+        help=f"maximum LIMIT of concurrent compilation jobs, might default to {TCPServer.DEFAULT_LIMIT + 2} as "
+        "determined via the CPU count",
     )
 
     # networking

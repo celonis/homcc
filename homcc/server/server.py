@@ -57,8 +57,9 @@ class TCPServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
 
         if self.DEFAULT_LIMIT == -1:
             logger.error(
-                "Meaningful CPU count could not be determined and maximum job limit is set to 1.\n"
-                "Please provide jobs limit explicitly either via the CLI or the configuration file!"
+                "A meaningful CPU count could not be determined and the maximum job limit is set to %i.\n"
+                "Please provide the job limit explicitly either via the CLI or the configuration file!",
+                self.connections_limit,
             )
 
         self.root_temp_folder: TemporaryDirectory = create_root_temp_folder()
