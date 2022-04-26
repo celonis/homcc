@@ -4,9 +4,9 @@ TCPClient class and related Exception classes for the homcc client
 
 import asyncio
 import logging
+import random
 
 from pathlib import Path
-from random import randrange
 from typing import Dict, Iterable, Iterator, List, Optional
 
 from homcc.client.parsing import ConnectionType, Host, HostParsingError, parse_host
@@ -56,11 +56,8 @@ class HostSelector:
         if tries and tries <= 0:
             raise ValueError("")
 
-        self.__hosts: List[Host] = [host for host in self.__parsed_hosts(hosts) if host.limit > 0]
-        self.__pots: List[range] = []
-
-        self.__tickets: int
-        self.__index: int = 0
+        self.__hosts: List[Host] = [host for host in self._parsed_hosts(hosts) if host.limit > 0]
+        self.__limits: List[int] = [host.limit for host in self.__hosts]
 
         self.__count: int = 0
         self.__tries: Optional[int] = tries
@@ -73,45 +70,32 @@ class HostSelector:
 
     def __next__(self) -> Host:
         if self.__hosts:
-            return self.__get_random_host()
+            return self._get_random_host()
         raise StopIteration
 
     @staticmethod
-    def __parsed_hosts(hosts: List[str]) -> Iterable[Host]:
+    def _parsed_hosts(hosts: List[str]) -> Iterable[Host]:
         for host in hosts:
             try:
                 yield parse_host(host)
             except HostParsingError as error:
                 logger.warning("%s", error)
 
-    def __calculate(self):
-        """manage internal state before a host can be selected"""
-        # check if we reached maximum connection attempts
+    def _get_random_host(self) -> Host:
+        """return a random host where hosts with higher limits are more likely to be selected"""
         self.__count += 1
-        if self.__tries and self.__count > self.__tries:
+        if self.__tries is not None and self.__count > self.__tries:
             raise HostsExhaustedError(f"{self.__tries} hosts refused the connection")
 
-        # find ticket amount of remaining pots
-        self.__pots = self.__pots[: self.__index]
-        self.__tickets = self.__pots[-1].stop if self.__pots else 0
+        # select host and find its index
+        host: Host = random.choices(self.__hosts, self.__limits)[0]
+        index: int = self.__hosts.index(host)
 
-        # recalculate trailing pots and tickets
-        for host in self.__hosts[self.__index :]:
-            self.__pots.append(range(self.__tickets, self.__tickets + host.limit))
-            self.__tickets += host.limit
+        # remove chosen host from being picked again
+        del self.__limits[index]
+        del self.__hosts[index]
 
-    def __get_random_host(self) -> Host:
-        """return a random host where hosts with higher limits are more likely to be selected"""
-        self.__calculate()
-
-        # draw a random ticket and look which host-pot the ticket falls into
-        ticket: int = randrange(0, self.__tickets)
-
-        for self.__index, pot in enumerate(self.__pots):
-            if ticket in pot:
-                return self.__hosts.pop(self.__index)
-
-        raise NotImplementedError("Unreachable!")
+        return host
 
 
 class TCPClient:
