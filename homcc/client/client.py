@@ -56,20 +56,20 @@ class HostSelector:
         if tries and tries <= 0:
             raise ValueError("")
 
-        self.__hosts: List[Host] = [host for host in self._parsed_hosts(hosts) if host.limit > 0]
-        self.__limits: List[int] = [host.limit for host in self.__hosts]
+        self._hosts: List[Host] = [host for host in self._parsed_hosts(hosts) if host.limit > 0]
+        self._limits: List[int] = [host.limit for host in self._hosts]
 
-        self.__count: int = 0
-        self.__tries: Optional[int] = tries
+        self._count: int = 0
+        self._tries: Optional[int] = tries
 
     def __len__(self):
-        return len(self.__hosts)
+        return len(self._hosts)
 
     def __iter__(self) -> Iterator[Host]:
         return self
 
     def __next__(self) -> Host:
-        if self.__hosts:
+        if self._hosts:
             return self._get_random_host()
         raise StopIteration
 
@@ -83,17 +83,17 @@ class HostSelector:
 
     def _get_random_host(self) -> Host:
         """return a random host where hosts with higher limits are more likely to be selected"""
-        self.__count += 1
-        if self.__tries is not None and self.__count > self.__tries:
-            raise HostsExhaustedError(f"{self.__tries} hosts refused the connection")
+        self._count += 1
+        if self._tries is not None and self._count > self._tries:
+            raise HostsExhaustedError(f"{self._tries} hosts refused the connection")
 
         # select host and find its index
-        host: Host = random.choices(self.__hosts, self.__limits)[0]
-        index: int = self.__hosts.index(host)
+        host: Host = random.choices(self._hosts, self._limits)[0]
+        index: int = self._hosts.index(host)
 
         # remove chosen host from being picked again
-        del self.__limits[index]
-        del self.__hosts[index]
+        del self._limits[index]
+        del self._hosts[index]
 
         return host
 
