@@ -2,11 +2,13 @@
 import threading
 import socketserver
 import logging
+import os
 import random
-from tempfile import TemporaryDirectory
-from typing import List, Dict, Tuple
-from threading import Lock
+
 from functools import singledispatchmethod
+from tempfile import TemporaryDirectory
+from threading import Lock
+from typing import Dict, List, Optional, Tuple
 from socket import SHUT_RD
 
 from homcc.common.messages import (
@@ -17,9 +19,7 @@ from homcc.common.messages import (
     DependencyRequestMessage,
     CompilationResultMessage,
 )
-
 from homcc.common.hashing import hash_file_with_bytes
-
 from homcc.server.environment import (
     create_root_temp_folder,
     create_instance_folder,
@@ -38,32 +38,46 @@ logger = logging.getLogger(__name__)
 class TCPServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
     """TCP Server instance, holding data relevant across compilations."""
 
-    MAX_AMOUNT_CONNECTIONS = 48
+    DEFAULT_ADDRESS: str = "localhost"
+    DEFAULT_PORT: int = 3633
+    DEFAULT_LIMIT: int = (
+        len(os.sched_getaffinity(0))  # number of available CPUs for this process
+        or os.cpu_count()  # total number of physical CPUs on the machine
+        or -1  # fallback error value
+    )
 
-    current_amount_connections: int
-    """Indicates the amount of clients that are currently connected."""
-    current_amount_connections_mutex: Lock
-    root_temp_folder: TemporaryDirectory
-    cache: Dict[str, str]
-    """'Hash' -> 'File path' on server map for holding paths to cached files."""
-    cache_mutex: Lock
+    def __init__(self, address: Optional[str], port: Optional[int], limit: Optional[int]):
+        address = address or self.DEFAULT_ADDRESS
+        port = port or self.DEFAULT_PORT
 
-    def __init__(self, server_address, RequestHandlerClass) -> None:
-        super().__init__(server_address, RequestHandlerClass)
-        self.root_temp_folder = create_root_temp_folder()
-        self.current_amount_connections = 0
-        self.current_amount_connections_mutex = Lock()
-        self.cache = {}
-        self.cache_mutex = Lock()
+        super().__init__((address, port), TCPRequestHandler)
+
+        # default 1 job per (available) CPU, +2 to enable more concurrency while waiting for disk or network IO
+        self.connections_limit: int = limit or (self.DEFAULT_LIMIT + 2)
+
+        if self.DEFAULT_LIMIT == -1:
+            logger.error(
+                "A meaningful CPU count could not be determined and the maximum job limit is set to %i.\n"
+                "Please provide the job limit explicitly either via the CLI or the configuration file!",
+                self.connections_limit,
+            )
+
+        self.root_temp_folder: TemporaryDirectory = create_root_temp_folder()
+
+        self.current_amount_connections: int = 0  # indicates the amount of clients that are currently connected
+        self.current_amount_connections_mutex: Lock = Lock()
+
+        self.cache: Dict[str, str] = {}  # 'Hash' -> 'File path' on server map for holding paths to cached files
+        self.cache_mutex: Lock = Lock()
 
     def verify_request(self, request, _) -> bool:
         with self.current_amount_connections_mutex:
-            accept_connection = self.current_amount_connections < self.MAX_AMOUNT_CONNECTIONS
+            accept_connection = self.current_amount_connections < self.connections_limit
 
         if not accept_connection:
             logger.info(
                 "Not accepting new connection, as max limit of #%i connections is already reached.",
-                self.MAX_AMOUNT_CONNECTIONS,
+                self.connections_limit,
             )
 
             connection_refused_message = ConnectionRefusedMessage()
@@ -73,7 +87,7 @@ class TCPServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
 
         return accept_connection
 
-    def __del__(self) -> None:
+    def __del__(self):
         self.root_temp_folder.cleanup()
 
 
@@ -198,7 +212,7 @@ class TCPRequestHandler(socketserver.BaseRequestHandler):
 
         return len(self.needed_dependencies) > 0
 
-    def check_dependencies_exist(self) -> None:
+    def check_dependencies_exist(self):
         """Checks if all dependencies exist. If yes, starts compiling. If no, requests missing dependencies."""
         if not self._request_next_dependency():
             # no further dependencies needed, compile now
@@ -268,11 +282,12 @@ class TCPRequestHandler(socketserver.BaseRequestHandler):
                 self.server.current_amount_connections -= 1
 
 
-def start_server(port: int = 0) -> Tuple[TCPServer, threading.Thread]:
-    server: TCPServer = TCPServer(("localhost", port), TCPRequestHandler)
+def start_server(
+    address: Optional[str], port: Optional[int], limit: Optional[int]
+) -> Tuple[TCPServer, threading.Thread]:
+    server: TCPServer = TCPServer(address, port, limit)
 
-    server_thread = threading.Thread(target=server.serve_forever)
-    server_thread.daemon = True
+    server_thread = threading.Thread(target=server.serve_forever, daemon=True)
     server_thread.start()
 
     return server, server_thread
