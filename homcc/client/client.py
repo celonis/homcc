@@ -53,8 +53,8 @@ class HostSelector:
     """
 
     def __init__(self, hosts: List[str], tries: Optional[int] = None):
-        if tries and tries <= 0:
-            raise ValueError("")
+        if tries is not None and tries <= 0:
+            raise ValueError(f"Amount of tries must be greater than 0, but was {tries}")
 
         self._hosts: List[Host] = [host for host in self._parsed_hosts(hosts) if host.limit > 0]
         self._limits: List[int] = [host.limit for host in self._hosts]
@@ -87,13 +87,13 @@ class HostSelector:
         if self._tries is not None and self._count > self._tries:
             raise HostsExhaustedError(f"{self._tries} hosts refused the connection")
 
-        # select host and find its index
-        host: Host = random.choices(self._hosts, self._limits)[0]
+        # select one host and find its index
+        host: Host = random.choices(population=self._hosts, weights=self._limits, k=1)[0]
         index: int = self._hosts.index(host)
 
         # remove chosen host from being picked again
-        del self._limits[index]
         del self._hosts[index]
+        del self._limits[index]
 
         return host
 
