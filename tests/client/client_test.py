@@ -9,6 +9,7 @@ from homcc.common.arguments import Arguments
 from homcc.client.client import HostSelector, HostsExhaustedError, TCPClient
 from homcc.client.compilation import calculate_dependency_dict, find_dependencies
 from homcc.client.parsing import ConnectionType, Host, parse_host
+from homcc.common.compression import NoCompression
 from homcc.server.server import start_server, stop_server
 
 
@@ -49,9 +50,11 @@ class TestTCPClient:
 
     @pytest.fixture(autouse=True)
     def _init(self, unused_tcp_port: int):
-        server, server_thread = start_server(port=unused_tcp_port)
+        server, server_thread = start_server(address="localhost", port=unused_tcp_port, limit=1)
 
-        self.client: TCPClient = TCPClient(Host(type=ConnectionType.TCP, host="localhost", port=str(unused_tcp_port)))
+        self.client: TCPClient = TCPClient(
+            Host(type=ConnectionType.TCP, host="localhost", port=str(unused_tcp_port)), NoCompression()
+        )
 
         self.example_base_dir: Path = Path("example")
         self.example_main_cpp: Path = self.example_base_dir / "src" / "main.cpp"

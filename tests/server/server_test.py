@@ -2,6 +2,7 @@
 import socket
 import pytest
 from typing import List
+from homcc.common.compression import NoCompression
 
 from homcc.common.messages import (
     ArgumentMessage,
@@ -35,29 +36,31 @@ class TestServerReceive:
         self.received_messages.append(message)
 
     @pytest.mark.timeout(1)
-    def test_receive_multiple_messages(self):
+    def test_receive_multiple_messages(self, unused_tcp_port):
         # pylint: disable=protected-access
         # justification: needed for monkey patching
         # monkey patch the server's handler, so that we can compare
         # messages sent by the client with messages that the server deserialized
         TCPRequestHandler._handle_message = self.patched_handle_message
 
-        server, _ = start_server()
+        server, _ = start_server(address="localhost", port=unused_tcp_port, limit=1)
         with server:
             arguments = ["-a", "-b", "--help"]
             cwd = "/home/o.layer/test"
             dependencies = {"server.c": "1239012890312903", "server.h": "testsha1"}
-            self.messages.append(ArgumentMessage(arguments, cwd, dependencies))
+            self.messages.append(ArgumentMessage(arguments, cwd, dependencies, NoCompression()))
 
             self.messages.append(DependencyRequestMessage("asd123"))
 
-            self.messages.append(DependencyReplyMessage(bytearray([0x1, 0x2, 0x3, 0x4, 0x5])))
+            self.messages.append(DependencyReplyMessage(bytearray([0x1, 0x2, 0x3, 0x4, 0x5]), NoCompression()))
 
-            result1 = ObjectFile("foo.o", bytearray([0x1, 0x3, 0x2, 0x4, 0x5, 0x6]))
-            result2 = ObjectFile("dir/other_foo.o", bytearray([0xA, 0xFF, 0xAA]))
-            self.messages.append(CompilationResultMessage([result1, result2], "stdout-foo", "stderr-foo", 0))
+            result1 = ObjectFile("foo.o", bytearray([0x1, 0x3, 0x2, 0x4, 0x5, 0x6]), NoCompression())
+            result2 = ObjectFile("dir/other_foo.o", bytearray([0xA, 0xFF, 0xAA]), NoCompression())
+            self.messages.append(
+                CompilationResultMessage([result1, result2], "stdout-foo", "stderr-foo", 0, NoCompression())
+            )
 
-            self.messages.append(DependencyReplyMessage(bytearray(13337)))
+            self.messages.append(DependencyReplyMessage(bytearray(13337), NoCompression()))
 
             _, port = server.server_address
             self.client_create(port)

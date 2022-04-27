@@ -11,5 +11,5 @@ log_cli = true
 log_cli_level = "DEBUG"
 
 [[tool.mypy.overrides]]
-module = ["setuptools"]
+module = ["setuptools", "lzo"]
 ignore_missing_imports = true

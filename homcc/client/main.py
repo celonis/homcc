@@ -7,7 +7,7 @@ import logging
 import os
 import sys
 
-from typing import Dict, List, Optional
+from typing import List, Optional
 
 sys.path.append(os.path.join(os.path.dirname(__file__), "../.."))
 
@@ -31,6 +31,7 @@ from homcc.common.logging import (  # pylint: disable=wrong-import-position
     Formatter,
     FormatterConfig,
     FormatterDestination,
+    LoggingConfig,
     setup_logging,
 )
 
@@ -41,18 +42,18 @@ def main():
     # load and parse arguments and configuration information
     homcc_args_dict, compiler_arguments = parse_cli_args(sys.argv[1:])
     client_config: ClientConfig = parse_config(load_config_file())
-    logging_config: Dict[str, int] = {
-        "config": FormatterConfig.COLORED,
-        "formatter": Formatter.CLIENT,
-        "destination": FormatterDestination.STREAM,
-    }
+    logging_config: LoggingConfig = LoggingConfig(
+        config=FormatterConfig.COLORED,
+        formatter=Formatter.CLIENT,
+        destination=FormatterDestination.STREAM,
+    )
 
     # VERBOSE; enables verbose mode
     if homcc_args_dict["verbose"] or client_config.verbose:
-        logging_config["config"] |= FormatterConfig.DETAILED
-        logging_config["level"] = logging.DEBUG
+        logging_config.config |= FormatterConfig.DETAILED
+        logging_config.level = logging.DEBUG
 
-    setup_logging(**logging_config)
+    setup_logging(logging_config)
 
     # COMPILER; default: "cc"
     compiler: Optional[str] = compiler_arguments.compiler

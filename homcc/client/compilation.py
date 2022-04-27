@@ -16,8 +16,14 @@ from homcc.client.client import (
 from homcc.client.parsing import ClientConfig, Host
 from homcc.common.arguments import Arguments, ArgumentsExecutionResult
 from homcc.common.hashing import hash_file_with_path
-from homcc.common.messages import ObjectFile
-from homcc.common.messages import Message, CompilationResultMessage, ConnectionRefusedMessage, DependencyRequestMessage
+from homcc.common.messages import (
+    Message,
+    CompilationResultMessage,
+    ConnectionRefusedMessage,
+    DependencyRequestMessage,
+    ObjectFile,
+)
+from homcc.common.compression import Compression, NoCompression
 
 logger = logging.getLogger(__name__)
 
@@ -49,11 +55,15 @@ async def compile_remotely(hosts: List[str], config: ClientConfig, arguments: Ar
     raise HostsExhaustedError(f"All hosts {hosts} are exhausted!")
 
 
-async def compile_remotely_at(host: Host, _: Optional[str], timeout: Optional[float], arguments: Arguments) -> int:
+async def compile_remotely_at(
+    host: Host, compression_name: Optional[str], timeout: Optional[float], arguments: Arguments
+) -> int:
     """main function for the communication between client and the remote compilation server"""
 
+    compression = get_compression(compression_name)
+
     # connect TCP client
-    client: TCPClient = TCPClient(host)
+    client: TCPClient = TCPClient(host, compression)
     await client.connect()
 
     # send arguments and dependency information to server and provide requested dependencies
@@ -104,7 +114,7 @@ async def compile_remotely_at(host: Host, _: Optional[str], timeout: Optional[fl
 
     for object_file in server_response.get_object_files():
         logger.debug("Writing file %s", object_file.file_name)
-        Path(object_file.file_name).write_bytes(object_file.content)
+        Path(object_file.file_name).write_bytes(object_file.get_data())
 
     # link and delete object files if required
     if arguments.is_linking():
@@ -175,6 +185,13 @@ def calculate_dependency_dict(dependencies: Set[str]) -> Dict[str, str]:
 
 def invert_dict(to_invert: Dict) -> Dict:
     return {v: k for k, v in to_invert.items()}
+
+
+def get_compression(compression_name: Optional[str]) -> Compression:
+    if compression_name is None:
+        return NoCompression()
+
+    return Compression.from_name(compression_name)
 
 
 def link_object_files(arguments: Arguments, object_files: List[ObjectFile]) -> int:

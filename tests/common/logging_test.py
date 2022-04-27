@@ -1,7 +1,14 @@
 """Tests regarding the logging module of homcc."""
 import pytest
 
-from homcc.common.logging import Formatter, FormatterConfig, FormatterDestination, MissingLogFile, setup_logging
+from homcc.common.logging import (
+    Formatter,
+    FormatterConfig,
+    FormatterDestination,
+    LoggingConfig,
+    MissingLogFileError,
+    setup_logging,
+)
 
 
 class TestLogging:
@@ -29,9 +36,11 @@ class TestLogging:
             assert FormatterConfig.ALL | flag == FormatterConfig.ALL
 
     def test_missing_log_file(self):
-        with pytest.raises(MissingLogFile):
+        with pytest.raises(MissingLogFileError):
             setup_logging(
-                formatter=Formatter.CLIENT,
-                config=FormatterConfig.ALL,
-                destination=FormatterDestination.FILE,
+                LoggingConfig(
+                    formatter=Formatter.CLIENT,
+                    config=FormatterConfig.ALL,
+                    destination=FormatterDestination.FILE,
+                )
             )

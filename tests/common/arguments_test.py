@@ -9,6 +9,9 @@ from homcc.common.arguments import Arguments, ArgumentsOutputError
 class TestArguments:
     """Tests for common/arguments.py"""
 
+    compiler_candidates: List[str] = ["cc", "gcc", "g++", "clang", "clang++"]
+    compilers: List[str] = list(filter(lambda compiler: shutil.which(compiler) is not None, compiler_candidates))
+
     def test_is_source_file(self):
         source_files: List[str] = ["foo.c", "bar.cpp"]
         for source_file in source_files:
@@ -26,15 +29,9 @@ class TestArguments:
         for not_object_file in not_object_files:
             assert not Arguments.is_object_file(not_object_file)
 
+    @pytest.mark.skipif(len(compilers) == 0, reason=f"No compiler of {compiler_candidates} installed to test")
     def test_is_compiler(self):
-        compilers: List[str] = list(
-            filter(lambda _compiler: shutil.which(_compiler) is not None, ["cc", "gcc", "g++", "clang", "clang++"])
-        )
-
-        if not compilers:
-            assert not "No compilers installed to test"
-
-        for compiler in compilers:
+        for compiler in self.compilers:
             assert Arguments.is_compiler(compiler)
 
     def test_from_args(self):

@@ -225,6 +225,7 @@ class TestParsingHosts:
         # $HOMCC_HOSTS
         monkeypatch.setenv(HOMCC_HOSTS_ENV_VAR, "\n".join(hosts))
         assert load_hosts() == hosts_no_whitespace
+        monkeypatch.delenv(HOMCC_HOSTS_ENV_VAR)
 
         # HOSTS file
         tmp_hosts_file: Path = tmp_path / HOMCC_HOSTS_FILENAME
@@ -262,6 +263,6 @@ class TestParsingConfig:
 
         config_file_locations: List[Path] = [tmp_config_file]
 
-        assert parse_config(load_config_file(config_file_locations)) == ClientConfig(
-            compiler="g++", compression="lzo", verbose="True", timeout="180"
-        )
+        config: List[str] = load_config_file(config_file_locations)
+        assert config == self.config
+        assert parse_config(config) == ClientConfig(compiler="g++", compression="lzo", verbose="True", timeout="180")

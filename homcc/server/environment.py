@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Dict, List
 
 from homcc.common.arguments import Arguments
+from homcc.common.compression import Compression
 from homcc.common.messages import CompilationResultMessage, ObjectFile
 
 logger = logging.getLogger(__name__)
@@ -180,7 +181,9 @@ def invoke_compiler(mapped_cwd: str, arguments: List[str]) -> CompilerResult:
     return CompilerResult(result.returncode, stdout, stderr)
 
 
-def do_compilation(instance_path: str, mapped_cwd: str, args: List[str]) -> CompilationResultMessage:
+def do_compilation(
+    instance_path: str, mapped_cwd: str, args: List[str], compression: Compression
+) -> CompilationResultMessage:
     """Does the compilation and returns the filled result message."""
     logger.info("Compiling...")
 
@@ -200,7 +203,7 @@ def do_compilation(instance_path: str, mapped_cwd: str, args: List[str]) -> Comp
 
             client_output_path = unmap_path(instance_path, object_file_path)
 
-            object_file = ObjectFile(client_output_path, bytearray(object_file_content))
+            object_file = ObjectFile(client_output_path, bytearray(object_file_content), compression)
             object_files.append(object_file)
 
             logger.info("Compiled '%s'.", object_file.file_name)
@@ -210,4 +213,4 @@ def do_compilation(instance_path: str, mapped_cwd: str, args: List[str]) -> Comp
         result.return_code,
         len(object_files),
     )
-    return CompilationResultMessage(object_files, result.stdout, result.stderr, result.return_code)
+    return CompilationResultMessage(object_files, result.stdout, result.stderr, result.return_code, compression)
