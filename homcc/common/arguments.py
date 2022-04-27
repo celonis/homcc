@@ -90,9 +90,7 @@ class Arguments:
 
     def __iter__(self) -> Iterator:
         yield self.compiler
-
-        for arg in self.args:
-            yield arg
+        yield from self.args
 
     def __len__(self) -> int:
         return len(self.args) + 1
@@ -105,7 +103,7 @@ class Arguments:
 
     @classmethod
     def from_args(cls, args: List[str]) -> Arguments:
-        if len(args) == 0:
+        if not args:
             raise ValueError("Not enough arguments supplied to construct Arguments")
 
         # compiler without arguments, e.g. ["g++"]
@@ -207,15 +205,11 @@ class Arguments:
 
     def is_linking(self) -> bool:
         """check whether the linking flag is present"""
-        return not self.has_arg(self.no_linking_arg)
+        return self.no_linking_arg not in self.args
 
     @property
     def args(self) -> List[str]:
         return self._args
-
-    def has_arg(self, arg: str) -> bool:
-        """check whether a specific arg is present"""
-        return arg in self.args
 
     def add_arg(self, arg: str) -> Arguments:
         """add argument, may introduce duplicated arguments"""
