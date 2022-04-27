@@ -1,12 +1,8 @@
 """ Tests for common/compression.py"""
-import pytest
+from homcc.common.compression import LZO, LZMA, CompressedBytes, NoCompression
 
-from inspect import getmembers, isfunction
-from typing import Callable, List, Tuple
 
-from homcc.common.compression import Compression, lzo, lzma
-
-from homcc.common import compression
+test_data = bytearray([0x1, 0x2, 0x3, 0x4, 0x5, 0x6, 0x6, 0x6, 0x9])
 
 
 class TestCompression:
@@ -14,23 +10,49 @@ class TestCompression:
     Tests for parsing related to compression
     """
 
-    # Tuple (name, function) of all functions in homcc.common.compression
-    compression_functions: List[Tuple[str, Callable[[bytes, bool], bytes]]] = getmembers(compression, isfunction)
-
-    def test_if_all_compression_functions_are_in_compression_enum(self):
-        for name, function in self.compression_functions:
-            assert Compression.get(name).value.name == function.__name__
-
     def test_lzo(self):
-        data: bytes = bytes()
-
-        with pytest.raises(NotImplementedError):
-            compressed_data: bytes = lzo(data, True)
-            assert lzo(compressed_data, False) == data
+        lzo = LZO()
+        compressed_data = lzo.compress(test_data)
+        assert lzo.decompress(compressed_data) == test_data
 
     def test_lzma(self):
-        data: bytes = bytes()
+        lzma = LZMA()
+        compressed_data = lzma.compress(test_data)
+        assert lzma.decompress(compressed_data) == test_data
 
-        with pytest.raises(NotImplementedError):
-            compressed_data: bytes = lzma(data, True)
-            assert lzma(compressed_data, False) == data
+    def test_no_compression(self):
+        no_compression = NoCompression()
+        compressed_data = no_compression.compress(test_data)
+        assert no_compression.decompress(compressed_data) == test_data
+
+
+class TestCompressedBytes:
+    """Tests for the CompressedBytes data structure."""
+
+    def test_no_compression(self):
+        compressed_bytes = CompressedBytes(test_data, NoCompression())
+
+        assert compressed_bytes.get_data() == test_data
+        assert compressed_bytes.compression == NoCompression()
+        assert compressed_bytes.to_wire() == test_data
+        assert len(compressed_bytes) == len(test_data)
+
+        assert compressed_bytes.from_wire(test_data, NoCompression()).get_data() == test_data
+
+    def compression_test(self, compression):
+        compressed_data = compression.compress(test_data)
+
+        compressed_bytes = CompressedBytes(test_data, compression)
+
+        assert compressed_bytes.get_data() == test_data
+        assert compressed_bytes.compression == compression
+        assert compressed_bytes.to_wire() == compressed_data
+        assert len(compressed_bytes) == len(compressed_data)
+
+        assert compressed_bytes.from_wire(compressed_data, compression).get_data() == test_data
+
+    def test_lzma(self):
+        self.compression_test(LZMA())
+
+    def test_lzo(self):
+        self.compression_test(LZO())

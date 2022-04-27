@@ -20,6 +20,9 @@ from homcc.common.messages import (
     CompilationResultMessage,
 )
 from homcc.common.hashing import hash_file_with_bytes
+
+from homcc.common.compression import Compression, NoCompression
+
 from homcc.server.environment import (
     create_root_temp_folder,
     create_instance_folder,
@@ -110,6 +113,8 @@ class TCPRequestHandler(socketserver.BaseRequestHandler):
     """Absolute path to the working directory."""
     server: TCPServer
     """The TCP server belonging to this handler. (redefine for typing)"""
+    compression: Compression
+    """The compression algorithm requested by the client."""
 
     @singledispatchmethod
     def _handle_message(self, message):
@@ -134,6 +139,10 @@ class TCPRequestHandler(socketserver.BaseRequestHandler):
             self.mapped_dependencies, self.server.cache, self.server.cache_mutex
         )
         logger.debug("Needed dependencies: %s", self.needed_dependencies)
+
+        self.compression = message.get_compression()
+        if not isinstance(self.compression, NoCompression):
+            logger.info("Using %s compression.", self.compression.name())
 
         # shuffle the keys so we request them at a different order later to avoid
         # transmitting the same files for simultaneous requests
@@ -216,7 +225,9 @@ class TCPRequestHandler(socketserver.BaseRequestHandler):
         """Checks if all dependencies exist. If yes, starts compiling. If no, requests missing dependencies."""
         if not self._request_next_dependency():
             # no further dependencies needed, compile now
-            result_message = do_compilation(self.instance_path, self.mapped_cwd, self.compiler_arguments)
+            result_message = do_compilation(
+                self.instance_path, self.mapped_cwd, self.compiler_arguments, self.compression
+            )
 
             self.request.sendall(result_message.to_bytes())
 

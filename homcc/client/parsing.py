@@ -264,7 +264,7 @@ def parse_host(host: str) -> Host:
     if host_compression_match:  # HOST,COMPRESSION
         host, compression = host_compression_match.groups()
 
-        if Compression.get(compression):
+        if Compression.from_name(compression):
             host_dict["compression"] = compression
         else:
             logger.error(
