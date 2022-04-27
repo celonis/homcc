@@ -18,7 +18,7 @@ class TestClient:
 
     @pytest.fixture(autouse=True)
     def _init(self, unused_tcp_port: int):
-        server, server_thread = start_server(port=unused_tcp_port)
+        server, server_thread = start_server(address="localhost", port=unused_tcp_port, limit=1)
 
         self.client: TCPClient = TCPClient(
             Host(type=ConnectionType.TCP, host="localhost", port=str(unused_tcp_port)), NoCompression()

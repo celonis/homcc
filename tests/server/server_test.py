@@ -36,14 +36,14 @@ class TestServerReceive:
         self.received_messages.append(message)
 
     @pytest.mark.timeout(1)
-    def test_receive_multiple_messages(self):
+    def test_receive_multiple_messages(self, unused_tcp_port):
         # pylint: disable=protected-access
         # justification: needed for monkey patching
         # monkey patch the server's handler, so that we can compare
         # messages sent by the client with messages that the server deserialized
         TCPRequestHandler._handle_message = self.patched_handle_message
 
-        server, _ = start_server()
+        server, _ = start_server(address="localhost", port=unused_tcp_port, limit=1)
         with server:
             arguments = ["-a", "-b", "--help"]
             cwd = "/home/o.layer/test"
