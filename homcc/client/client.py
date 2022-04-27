@@ -4,11 +4,12 @@ TCPClient class and related Exception classes for the homcc client
 
 import asyncio
 import logging
+import random
 
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Dict, Iterable, Iterator, List, Optional
 
-from homcc.client.parsing import ConnectionType, Host
+from homcc.client.parsing import ConnectionType, Host, HostParsingError, parse_host
 from homcc.common.arguments import Arguments
 from homcc.common.messages import ArgumentMessage, DependencyReplyMessage, Message
 from homcc.common.compression import Compression
@@ -38,6 +39,64 @@ class ReceiveTimedOutError(TCPClientError):
 
 class UnexpectedMessageTypeError(TCPClientError):
     """Exception for receiving a message with an unexpected type"""
+
+
+class HostsExhaustedError(Exception):
+    """Error class to indicate that the compilation request was refused by all hosts"""
+
+
+class HostSelector:
+    """
+    Class to enable random but weighted host selection on a load balancing principle. Hosts with more capacity have a
+    higher probability of being chosen for remote compilation. The selection policy is agnostic to the server job
+    limit and only relies on the limit information provided on the client side via the host format. If parameter tries
+    is not provided, a host will be randomly selected until all hosts are exhausted.
+    """
+
+    def __init__(self, hosts: List[str], tries: Optional[int] = None):
+        if tries is not None and tries <= 0:
+            raise ValueError(f"Amount of tries must be greater than 0, but was {tries}")
+
+        self._hosts: List[Host] = [host for host in self._parsed_hosts(hosts) if host.limit > 0]
+        self._limits: List[int] = [host.limit for host in self._hosts]
+
+        self._count: int = 0
+        self._tries: Optional[int] = tries
+
+    def __len__(self):
+        return len(self._hosts)
+
+    def __iter__(self) -> Iterator[Host]:
+        return self
+
+    def __next__(self) -> Host:
+        if self._hosts:
+            return self._get_random_host()
+        raise StopIteration
+
+    @staticmethod
+    def _parsed_hosts(hosts: List[str]) -> Iterable[Host]:
+        for host in hosts:
+            try:
+                yield parse_host(host)
+            except HostParsingError as error:
+                logger.warning("%s", error)
+
+    def _get_random_host(self) -> Host:
+        """return a random host where hosts with higher limits are more likely to be selected"""
+        self._count += 1
+        if self._tries is not None and self._count > self._tries:
+            raise HostsExhaustedError(f"{self._tries} hosts refused the connection")
+
+        # select one host and find its index
+        host: Host = random.choices(population=self._hosts, weights=self._limits, k=1)[0]
+        index: int = self._hosts.index(host)
+
+        # remove chosen host from being picked again
+        del self._hosts[index]
+        del self._limits[index]
+
+        return host
 
 
 class TCPClient:

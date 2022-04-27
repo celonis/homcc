@@ -94,7 +94,16 @@ class TestParsingHosts:
     """
 
     def test_parse_host_failing(self):
-        failing_hosts: List[str] = ["", " ", "#", ","]
+        failing_hosts: List[str] = [
+            "",
+            " ",
+            "#",
+            ",",
+            "remotehost/-1",
+            "remotehost:3633/-1",
+            "@remotehost/-1",
+            "user@remotehost/-1",
+        ]
 
         for failing_host in failing_hosts:
             with pytest.raises(HostParsingError):
