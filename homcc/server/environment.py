@@ -16,7 +16,8 @@ from homcc.common.messages import CompilationResultMessage, ObjectFile
 logger = logging.getLogger(__name__)
 
 # arguments of which the path should be translated
-_path_argument_prefixes = ["-I", "-isysroot", "-isystem", "-o"]
+PATH_ARGUMENT_PREFIXES = ["-I", "-isysroot", "-isystem", "-o"]
+FLAGS = ["-c", "-S", "-E"]
 
 
 def create_root_temp_folder() -> TemporaryDirectory:
@@ -87,17 +88,19 @@ def map_arguments(instance_path: str, mapped_cwd: str, arguments: List[str]) -> 
     open_prefix = False
     for argument in arguments[1:]:
         if argument.startswith("-"):
-            open_prefix = True
-            for path_argument_prefix in _path_argument_prefixes:
-                if argument.startswith(path_argument_prefix):
-                    open_path_argument_prefix = True
+            # we do not need to handle a flag such as -c specifically
+            if argument not in FLAGS:
+                open_prefix = True
+                for path_argument_prefix in PATH_ARGUMENT_PREFIXES:
+                    if argument.startswith(path_argument_prefix):
+                        open_path_argument_prefix = True
 
-                    if argument == path_argument_prefix:
-                        break
-                    else:
-                        argument_path = argument[len(path_argument_prefix) :]
-                        mapped_path = _map_path(instance_path, mapped_cwd, argument_path)
-                        argument = path_argument_prefix + mapped_path
+                        if argument == path_argument_prefix:
+                            break
+                        else:
+                            argument_path = argument[len(path_argument_prefix) :]
+                            mapped_path = _map_path(instance_path, mapped_cwd, argument_path)
+                            argument = path_argument_prefix + mapped_path
         elif open_path_argument_prefix or not open_prefix:
             # 'open_path_argument_prefix': must be an argument which requires path translation
             # not 'open_prefix': must be 'infile' argument (source files), also translate paths
