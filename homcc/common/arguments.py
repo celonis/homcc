@@ -39,21 +39,73 @@ class Arguments:
 
     # if the compiler is neither specified by the callee nor defined in the config file use this as fallback
     default_compiler: str = "cc"
+    preprocessor_target: str = "$(homcc)"
 
     no_linking_arg: str = "-c"
     output_arg: str = "-o"
 
     include_args: List[str] = ["-I", "-isysroot", "-isystem"]
 
-    preprocessor_target: str = "$(homcc)"
+    class Local:
+        """
+        Class to encapsulate all argument types that are only meaningful for local compilation and should therefore be
+        removed before being sent to the server.
+        """
+
+        # arguments with options
+        option_args: List[str] = [
+            "-D",
+            "-I",
+            "-U",
+            "-L",
+            "-l",
+            "-MF",
+            "-MT",
+            "-MQ",
+            "-include",
+            "-imacros",
+            "-iprefix",
+            "-iwithprefix",
+            "-isystem",
+            "-iwithprefixbefore",
+            "-idirafter",
+        ]
+
+        # prefixed arguments
+        arg_prefixes: List[str] = [
+            "-Wp,",
+            "-Wl,",
+            "-D",
+            "-U",
+            "-I",
+            "-l",
+            "-L",
+            "-MF",
+            "-MT",
+            "-MQ",
+            "-isystem",
+            "-stdlib",
+        ]
+
+        # arguments that only affect cpp compilation
+        cpp_args: List[str] = [
+            "-undef",
+            "-nostdinc",
+            "-nostdinc++",
+            "-MD",
+            "-MMD",
+            "-MG",
+            "-MP",
+        ]
 
     class Unsendable:
         """
-        Class to encapsulate all args that imply unsendability.
-
-        Note: Respect the naming scheme as listed in the comments below when additional arguments are added, so that the
-        sendability test can deduce them automatically!
+        Class to encapsulate all argument types that would lead to errors during remote compilation and should therefore
+        only be executed locally.
         """
+
+        # Note: Respect the naming scheme as listed in the comments below when adding more arguments, so that tests can
+        # be deduced automatically!
 
         # arg prefixes: naming ends on _prefix
         assembler_options_prefix: str = "-Wa,"
@@ -98,7 +150,7 @@ class Arguments:
         return len(self.args) + 1
 
     def __str__(self) -> str:
-        return f'[{self.compiler} {" ".join(self.args[1:])}]'
+        return f'[{self.compiler} {" ".join(self.args)}]'
 
     def __repr__(self) -> str:
         return f"{self.__class__}({str(self)})"
@@ -118,90 +170,96 @@ class Arguments:
     @classmethod
     def from_cli(cls, compiler_or_argument: str, args: List[str]) -> Arguments:
         # explicit compiler argument, e.g.: "homcc [OPTIONAL ARGUMENTS] g++ -c foo.cpp"
-        if cls.is_compiler(compiler_or_argument):
+        if cls.is_compiler_arg(compiler_or_argument):
             return cls(compiler_or_argument, args)
 
         # missing compiler argument, e.g.: "homcc [OPTIONAL ARGUMENTS] -c foo.cpp"
         return cls(None, [compiler_or_argument] + args)
 
     @staticmethod
-    def is_source_file(arg: str) -> bool:
+    def is_source_file_arg(arg: str) -> bool:
         """check whether an argument looks like a source file"""
         # if we enable remote assembly, additionally allow file extension ".s"
         source_file_pattern: str = r"^\S+\.(i|ii|c|cc|cp|cpp|cxx|c\+\+|m|mm|mi|mii)$"  # e.g. "foo.cpp"
         return re.match(source_file_pattern, arg, re.IGNORECASE) is not None
 
     @staticmethod
-    def is_object_file(arg: str) -> bool:
+    def is_object_file_arg(arg: str) -> bool:
         """check whether an argument looks like an object file"""
         object_file_pattern: str = r"^\S+\.o$"  # e.g. "foo.o"
         return re.match(object_file_pattern, arg, re.IGNORECASE) is not None
 
     @staticmethod
-    def is_executable(arg: str) -> bool:
+    def is_executable_arg(arg: str) -> bool:
         """check whether an argument is executable"""
         return shutil.which(arg) is not None
 
     @staticmethod
-    def is_compiler(arg: str) -> bool:
-        """check if an argument looks like a compiler"""
-        if not arg.startswith("-") and not Arguments.is_source_file(arg) and not Arguments.is_object_file(arg):
+    def is_compiler_arg(arg: str) -> bool:
+        """check whether an argument looks like a compiler"""
+        if not arg.startswith("-") and not Arguments.is_source_file_arg(arg) and not Arguments.is_object_file_arg(arg):
             logger.debug("%s is used as compiler", arg)
 
-            if not Arguments.is_executable(arg):
+            if not Arguments.is_executable_arg(arg):
                 logger.warning("Specified compiler %s is not an executable", arg)
             return True
         return False
 
+    @staticmethod
+    def is_sendable_arg(arg: str) -> bool:
+        """check whether an argument is sendable"""
+        if not arg.startswith("-"):
+            return True
+
+        # prefix args
+        if arg.startswith(Arguments.Unsendable.assembler_options_prefix):  # "-Wa,"
+            logger.info("[%s] must be local", arg)  # TODO(s.pirsch): this is more detailed, fix in separate PR
+            return False
+
+        if arg.startswith(Arguments.Unsendable.specs_prefix):  # "-specs="
+            logger.info("[%s] overwrites spec strings", arg)
+            return False
+
+        if arg.startswith(Arguments.Unsendable.profile_generate_prefix):  # "-fprofile-generate="
+            logger.info("[%s]  will emit profile info", arg)
+            return False
+
+        # single args
+        if arg == Arguments.Unsendable.no_assembly_arg:  # "-S"
+            logger.info("[%s] implies a no assembly call", arg)
+            return False
+
+        if arg == Arguments.Unsendable.rpo_arg:  # "-frepo"
+            logger.info("[%s] will emit .rpo files", arg)
+            return False
+
+        # arg families
+        if arg in Arguments.Unsendable.native_args:
+            logger.info("[%s] optimizes for local machine", arg)
+            return False
+
+        if arg in Arguments.Unsendable.preprocessor_args:
+            logger.info("[%s] implies a preprocessor only call", arg)
+            return False
+
+        for profile_arg in Arguments.Unsendable.profile_args:
+            if arg.startswith(profile_arg):
+                logger.info("[%s] will emit or use profile info", arg)
+                return False
+
+        return True
+
     def is_sendable(self) -> bool:
         """determine if the Arguments lead to a meaningful remote compilation"""
-
-        def log_unsendable(message: str):
-            logger.info("%s; cannot compile remotely", message)
-
         if not self.source_files:
-            log_unsendable("no source files given")
+            logger.warning("no source files given")
+            logger.info("cannot compile %s remotely", self)
             return False
 
         for arg in self.args:
-            if not arg.startswith("-"):
-                continue
-
-            # prefix args
-            if arg.startswith(self.Unsendable.assembler_options_prefix):  # "-Wa,"
-                log_unsendable(f"[{arg}] must be local")  # TODO(s.pirsch): this is more detailed, fix in separate PR
+            if not self.is_sendable_arg(arg):
+                logger.info("cannot compile %s remotely due to argument [%s]", self, arg)
                 return False
-
-            if arg.startswith(self.Unsendable.specs_prefix):  # "-specs="
-                log_unsendable(f"[{arg}] overwrites spec strings")
-                return False
-
-            if arg.startswith(self.Unsendable.profile_generate_prefix):  # "-fprofile-generate="
-                log_unsendable(f"[{arg}]  will emit profile info")
-                return False
-
-            # single args
-            if arg == self.Unsendable.no_assembly_arg:  # "-S"
-                log_unsendable(f"[{arg}] implies a no assembly call")
-                return False
-
-            if arg == self.Unsendable.rpo_arg:  # "-frepo"
-                log_unsendable(f"[{arg}] will emit .rpo files")
-                return False
-
-            # arg families
-            if arg in self.Unsendable.native_args:
-                log_unsendable(f"[{arg}] optimizes for local machine")
-                return False
-
-            if arg in self.Unsendable.preprocessor_args:
-                log_unsendable(f"[{arg}] implies a preprocessor only call")
-                return False
-
-            for profile_arg in self.Unsendable.profile_args:
-                if arg.startswith(profile_arg):
-                    log_unsendable(f"[{arg}] will emit or use profile info")
-                    return False
 
         return True
 
@@ -257,8 +315,8 @@ class Arguments:
 
         it: Iterator[str] = iter(self.args)
         for arg in it:
-            if arg.startswith("-o"):
-                if arg == "-o":  # output argument with output target following: e.g.: -o out
+            if arg.startswith(self.output_arg):
+                if arg == self.output_arg:  # output argument with output target following: e.g.: -o out
                     try:
                         output = next(it)  # skip output target argument
                     except StopIteration as error:
@@ -270,33 +328,57 @@ class Arguments:
 
     @output.setter
     def output(self, output: str):
-        self.remove_output_args().add_arg(f"-o{output}")
+        self.remove_output_args().add_arg(f"{self.output_arg}{output}")
 
     @property
     def source_files(self) -> List[str]:
         """extract files to be compiled and returns their paths"""
-        source_file_paths: List[str] = []
-        other_open_arg: bool = False
+        source_files: List[str] = []
 
-        for arg in self.args:
+        it: Iterator[str] = iter(self.args)
+        for arg in it:
             if arg.startswith("-"):
                 for arg_prefix in [self.output_arg] + self.include_args:
                     if arg == arg_prefix:
-                        other_open_arg = True
-                        break
+                        next(it, None)
 
-                if other_open_arg:
-                    continue
+            elif self.is_source_file_arg(arg):
+                source_files.append(arg)
 
-            elif not other_open_arg:
-                if self.is_source_file(arg):
-                    source_file_paths.append(arg)
-                else:
-                    logger.debug('Not adding "%s" as source file, as it doesn\'t match source file regex.', arg)
+            else:
+                logger.debug('Not adding "%s" as source file, as it does not match source file regex.', arg)
 
-            other_open_arg = False
+        return source_files
 
-        return source_file_paths
+    def remove_local_args(self) -> Arguments:
+        """return modified Arguments with all local related arguments removed"""
+        arguments: Arguments = Arguments(self.compiler, [])
+
+        it: Iterator[str] = iter(self.args)
+        for arg in it:
+            # keep object and source files
+            if not arg.startswith("-"):
+                arguments.add_arg(arg)
+                continue
+
+            # skip local args and its following option
+            if arg in Arguments.Local.option_args:
+                next(it, None)
+                continue
+
+            # skip prefixed local args
+            if arg.startswith(tuple(Arguments.Local.arg_prefixes)):
+                continue
+
+            # skip local args that only affect cpp
+            if arg in Arguments.Local.cpp_args:
+                continue
+
+            # keep remaining types of args
+            arguments.add_arg(arg)
+
+        self._args = arguments.args
+        return self
 
     def remove_output_args(self) -> Arguments:
         """return modified Arguments with all output related arguments removed"""
@@ -304,12 +386,13 @@ class Arguments:
 
         it: Iterator[str] = iter(self.args)
         for arg in it:
-            if arg.startswith("-o"):
-                # skip output related args
-                if arg == "-o":
-                    next(it, None)  # skip output target argument without raising an exception
-            else:
-                arguments.add_arg(arg)
+            # skip output related args
+            if arg.startswith(self.output_arg):
+                if arg == self.output_arg:
+                    next(it, None)  # skip output target
+                continue
+
+            arguments.add_arg(arg)
 
         self._args = arguments.args
         return self
@@ -323,11 +406,9 @@ class Arguments:
 
     def execute(self, **kwargs) -> ArgumentsExecutionResult:
         """
-        execute the current arguments as command and return its execution result
-
-        parameters:
-        - check: enables the raising of CalledProcessError
-        - cwd: changes the current working directory
+        Execute Arguments by forwarding it as a list of args to subprocess and return the result as an
+        ArgumentsExecutionResult. All parameters to this method will also be forwarded as parameters to the subprocess
+        function call if possible.
         """
         check: bool = kwargs.pop("check", False)
         capture_output: bool = kwargs.pop("capture_output", True)
@@ -339,6 +420,6 @@ class Arguments:
             logger.error("Arguments currently does not support shell execution!")
 
         result: subprocess.CompletedProcess = subprocess.run(
-            list(self), check=check, encoding="utf-8", capture_output=capture_output, **kwargs
+            args=list(self), check=check, encoding="utf-8", capture_output=capture_output, **kwargs
         )
         return ArgumentsExecutionResult.from_process_result(result)

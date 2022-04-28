@@ -12,27 +12,27 @@ class TestArguments:
     compiler_candidates: List[str] = ["cc", "gcc", "g++", "clang", "clang++"]
     compilers: List[str] = list(filter(lambda compiler: shutil.which(compiler) is not None, compiler_candidates))
 
-    def test_is_source_file(self):
+    def test_is_source_file_arg(self):
         source_files: List[str] = ["foo.c", "bar.cpp"]
         for source_file in source_files:
-            assert Arguments.is_source_file(source_file)
+            assert Arguments.is_source_file_arg(source_file)
 
         not_source_files: List[str] = ["", ".", ".cpp", "foo.hpp"]
         for not_source_file in not_source_files:
-            assert not Arguments.is_source_file(not_source_file)
+            assert not Arguments.is_source_file_arg(not_source_file)
 
-    def test_is_object_file(self):
+    def test_is_object_file_arg(self):
         object_file: str = "foo.o"
-        assert Arguments.is_object_file(object_file)
+        assert Arguments.is_object_file_arg(object_file)
 
         not_object_files: List[str] = ["", ".", ".o"]
         for not_object_file in not_object_files:
-            assert not Arguments.is_object_file(not_object_file)
+            assert not Arguments.is_object_file_arg(not_object_file)
 
     @pytest.mark.skipif(len(compilers) == 0, reason=f"No compiler of {compiler_candidates} installed to test")
-    def test_is_compiler(self):
+    def test_is_compiler_arg(self):
         for compiler in self.compilers:
-            assert Arguments.is_compiler(compiler)
+            assert Arguments.is_compiler_arg(compiler)
 
     def test_from_args(self):
         with pytest.raises(ValueError):
@@ -134,6 +134,21 @@ class TestArguments:
         assert multiple_output_arguments.output == "bar"
         multiple_output_arguments.output = output
         assert multiple_output_arguments.output == output
+
+    def test_remove_local_args(self):
+        args: List[str] = ["g++", "foo.cpp", "-O0"]
+        assert Arguments.from_args(args).remove_local_args() == args
+
+        local_option_args: List[str] = args.copy()
+        for local_option_arg in Arguments.Local.option_args:
+            local_option_args.extend([local_option_arg, "option"])
+        assert Arguments.from_args(local_option_args).remove_local_args() == args
+
+        local_prefixed_args: List[str] = args + [f"{arg_prefix}suffix" for arg_prefix in Arguments.Local.arg_prefixes]
+        assert Arguments.from_args(local_prefixed_args).remove_local_args() == args
+
+        local_cpp_args: List[str] = args + Arguments.Local.cpp_args
+        assert Arguments.from_args(local_cpp_args).remove_local_args() == args
 
     def test_remove_output_args(self):
         args: List[str] = ["g++", "foo.cpp", "-O0"]
