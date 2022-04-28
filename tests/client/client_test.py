@@ -1,6 +1,5 @@
 """ Tests for client/client.py"""
 
-from pathlib import Path
 from typing import Dict, Iterator, List, Set
 
 import pytest
@@ -9,7 +8,6 @@ from homcc.common.arguments import Arguments
 from homcc.client.client import HostSelector, HostsExhaustedError, TCPClient
 from homcc.client.compilation import calculate_dependency_dict, find_dependencies
 from homcc.client.parsing import ConnectionType, Host, parse_host
-from homcc.common.compression import NoCompression
 from homcc.server.server import start_server, stop_server
 
 
@@ -48,20 +46,13 @@ class TestHostSelector:
 class TestTCPClient:
     """Tests for TCPClient"""
 
+    output: str = "tcp_client_test"
+
     @pytest.fixture(autouse=True)
     def _init(self, unused_tcp_port: int):
         server, server_thread = start_server(address="localhost", port=unused_tcp_port, limit=1)
 
-        self.client: TCPClient = TCPClient(
-            Host(type=ConnectionType.TCP, host="localhost", port=str(unused_tcp_port)), NoCompression()
-        )
-
-        self.example_base_dir: Path = Path("example")
-        self.example_main_cpp: Path = self.example_base_dir / "src" / "main.cpp"
-        self.example_foo_cpp: Path = self.example_base_dir / "src" / "foo.cpp"
-        self.example_inc_dir: Path = self.example_base_dir / "include"
-        self.example_out_dir: Path = self.example_base_dir / "build"
-        self.example_out_file: Path = self.example_out_dir / "foo"
+        self.client: TCPClient = TCPClient(Host(type=ConnectionType.TCP, host="127.0.0.1", port=str(unused_tcp_port)))
 
         yield  # individual tests run here
 
@@ -73,16 +64,14 @@ class TestTCPClient:
     async def test_connectivity_and_send_argument_message(self):
         args: List[str] = [
             "g++",
-            str(self.example_main_cpp.absolute()),
-            str(self.example_foo_cpp.absolute()),
-            f"-I{str(self.example_inc_dir.absolute())}",
-            "-o",
-            str(self.example_out_file.absolute()),
+            "-Iexample/include",
+            "example/src/foo.cpp",
+            "example/src/main.cpp",
+            f"-o{TestTCPClient.output}",
         ]
-        cwd: str = ""
+        cwd: str = "/home/user/homcc_tcp_client_test"
         dependencies: Set[str] = find_dependencies(Arguments.from_args(args))
         dependency_dict: Dict[str, str] = calculate_dependency_dict(dependencies)
 
-        await self.client.connect()
-        await self.client.send_argument_message(Arguments.from_args(args), cwd, dependency_dict)
-        await self.client.close()
+        async with self.client as client:
+            await client.send_argument_message(Arguments.from_args(args), cwd, dependency_dict)

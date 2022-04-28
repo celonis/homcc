@@ -36,6 +36,7 @@ class HostParsingError(Exception):
 class ConnectionType(str, Enum):
     """Helper class to distinguish between different host connection types"""
 
+    LOCAL = "localhost"
     TCP = "TCP"
     SSH = "SSH"
 
@@ -125,16 +126,12 @@ class Host:
         limit: Optional[str] = None,
         compression: Optional[str] = None,
     ):
-        self.type = type
+        self.type = ConnectionType.LOCAL if host == ConnectionType.LOCAL else type
         self.host = host
-        self.port = int(port) if port else None
+        self.port = int(port) if port is not None else None
         self.user = user
-        self.limit = int(limit) if limit else 2  # allow 2 connections per default to enable minor level of concurrency
+        self.limit = int(limit) if limit is not None else 2  # 2 default connections to enable some level of concurrency
         self.compression = compression
-
-    def is_localhost(self) -> bool:
-        # this check could be more complex e.g. testing for 127.0.0.1 and ::1 IP addresses and other looping interfaces
-        return self.host == "localhost"
 
 
 @dataclass

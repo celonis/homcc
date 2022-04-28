@@ -9,7 +9,6 @@ from typing import List, Set
 
 from homcc.common.arguments import Arguments
 from homcc.client.compilation import (
-    CompilerError,
     compile_locally,
     find_dependencies,
     scan_includes,
@@ -74,8 +73,10 @@ class TestCompilation:
             "-OError",
         ]
 
-        with pytest.raises(CompilerError):
+        with pytest.raises(SystemExit) as sys_exit:
             _: Set[str] = find_dependencies(Arguments.from_args(args))
+
+        assert sys_exit.value.code == 1
 
     def test_local_compilation(self):
         time_str: str = datetime.now().strftime("%Y%m%d-%H%M%S")

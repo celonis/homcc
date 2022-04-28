@@ -1,6 +1,7 @@
 """
 TCPClient class and related Exception classes for the homcc client
 """
+from __future__ import annotations
 
 import asyncio
 import logging
@@ -12,7 +13,8 @@ from typing import Dict, Iterable, Iterator, List, Optional
 from homcc.client.parsing import ConnectionType, Host, HostParsingError, parse_host
 from homcc.common.arguments import Arguments
 from homcc.common.messages import ArgumentMessage, DependencyReplyMessage, Message
-from homcc.common.compression import Compression
+from homcc.common.compression import Compression, NoCompression
+
 
 logger = logging.getLogger(__name__)
 
@@ -21,20 +23,12 @@ class TCPClientError(Exception):
     """Base class for TCPClient exceptions to indicate recoverability for the client main function"""
 
 
-class ClientConnectionError(TCPClientError):
-    """Exception for failing to connect with the server"""
-
-
 class ClientParsingError(TCPClientError):
     """Exception for failing to parse message from the server"""
 
 
 class SendTimedOutError(TCPClientError):
     """Exception for time-outing during sending messages"""
-
-
-class ReceiveTimedOutError(TCPClientError):
-    """Exception for time-outing during receiving messages"""
 
 
 class UnexpectedMessageTypeError(TCPClientError):
@@ -105,7 +99,7 @@ class TCPClient:
     DEFAULT_PORT: int = 3633
     DEFAULT_TIMEOUT: float = 180
 
-    def __init__(self, host: Host, compression: Compression, buffer_limit: Optional[int] = None):
+    def __init__(self, host: Host, buffer_limit: Optional[int] = None):
         connection_type: ConnectionType = host.type
 
         if connection_type != ConnectionType.TCP:
@@ -117,22 +111,25 @@ class TCPClient:
         # default buffer size limit of StreamReader is 64 KiB
         self.buffer_limit: int = buffer_limit or 65_536
 
-        self.compression = compression
+        self.compression = Compression.from_name(host.compression) if host.compression is not None else NoCompression()
 
         self._data: bytes = bytes()
-        self._reader: Optional[asyncio.StreamReader] = None
-        self._writer: Optional[asyncio.StreamWriter] = None
+        self._reader: asyncio.StreamReader
+        self._writer: asyncio.StreamWriter
 
-    async def connect(self):
+    async def __aenter__(self) -> TCPClient:
         """connect to specified server at host:port"""
         logger.debug("Connecting to %s:%i", self.host, self.port)
+        self._reader, self._writer = await asyncio.open_connection(
+            host=self.host, port=self.port, limit=self.buffer_limit
+        )
+        return self
 
-        try:
-            self._reader, self._writer = await asyncio.open_connection(
-                host=self.host, port=self.port, limit=self.buffer_limit
-            )
-        except ConnectionError as error:
-            raise ClientConnectionError(f"Failed to establish connection: {error}") from error
+    async def __aexit__(self, *_):
+        """disconnect from server and close client socket"""
+        logger.debug("Disconnecting from %s:%i", self.host, self.port)
+        self._writer.close()
+        await self._writer.wait_closed()
 
     async def _send(self, message: Message):
         """send a message to homcc server"""
@@ -149,23 +146,16 @@ class TCPClient:
         content: bytearray = bytearray(Path(dependency).read_bytes())
         await self._send(DependencyReplyMessage(content, self.compression))
 
-    async def receive(self, timeout: Optional[float]) -> Message:
-        """receive data from homcc server with timeout limit and convert to message"""
-        try:
-            return await asyncio.wait_for(self._timed_receive(), timeout=timeout or self.DEFAULT_TIMEOUT)
-
-        except asyncio.TimeoutError as error:
-            raise ReceiveTimedOutError(f"Waiting for server {self.host}:{self.port} response timed out!") from error
-
-    async def _timed_receive(self) -> Message:
+    async def receive(self) -> Message:
+        """receive data from homcc server and convert it to Message"""
         #  read stream into internal buffer
-        self._data += await self._reader.read(self.buffer_limit)  # type: ignore[union-attr]
+        self._data += await self._reader.read(self.buffer_limit)
         bytes_needed, parsed_message = Message.from_bytes(bytearray(self._data))
 
         # if message is incomplete, continue reading from stream until no more bytes are missing
         while bytes_needed > 0:
             logger.debug("Message is incomplete by %i bytes", bytes_needed)
-            self._data += await self._reader.read(bytes_needed)  # type: ignore[union-attr]
+            self._data += await self._reader.read(bytes_needed)
             bytes_needed, parsed_message = Message.from_bytes(bytearray(self._data))
 
         # manage internal buffer consistency
@@ -189,9 +179,3 @@ class TCPClient:
             parsed_message.get_json_str(),
         )
         return parsed_message
-
-    async def close(self):
-        """disconnect from server and close client socket"""
-        logger.debug("Disconnecting from %s:%i", self.host, self.port)
-        self._writer.close()
-        await self._writer.wait_closed()

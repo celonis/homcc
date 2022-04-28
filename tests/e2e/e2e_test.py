@@ -11,6 +11,8 @@ from pathlib import Path
 class TestEndToEnd:
     """End to end integration tests."""
 
+    output: str = "e2e_test"
+
     @staticmethod
     def start_server(unused_tcp_port: int) -> subprocess.Popen:
         return subprocess.Popen(["./homcc/server/main.py", f"--port={unused_tcp_port}"], stdout=subprocess.PIPE)
@@ -26,7 +28,7 @@ class TestEndToEnd:
                 "-Iexample/include",
                 "example/src/foo.cpp",
                 "example/src/main.cpp",
-                "-oe2e-test",
+                f"-o{TestEndToEnd.output}",
             ],
             check=True,
             stdout=subprocess.PIPE,
@@ -45,7 +47,7 @@ class TestEndToEnd:
             assert '"return_code": 0' in result.stdout
             assert "Compiling locally instead" not in result.stdout
 
-            executable_stdout = subprocess.check_output(["./e2e-test"], encoding="utf-8")
+            executable_stdout = subprocess.check_output([f"./{TestEndToEnd.output}"], encoding="utf-8")
             assert executable_stdout == "homcc\n"
 
             server_process.kill()
@@ -53,7 +55,7 @@ class TestEndToEnd:
     @pytest.fixture(autouse=True)
     def clean_up(self):
         yield
-        Path("e2e-test").unlink(missing_ok=True)
+        Path(TestEndToEnd.output).unlink(missing_ok=True)
 
     @pytest.mark.skipif(shutil.which("g++") is None, reason="g++ is not installed")
     @pytest.mark.timeout(10)

@@ -2,8 +2,8 @@
 import pytest
 import shutil
 
-from typing import Dict, List, Optional, Union
-from homcc.common.arguments import Arguments, ArgumentsOutputError
+from typing import List, Optional
+from homcc.common.arguments import Arguments
 
 
 class TestArguments:
@@ -29,7 +29,7 @@ class TestArguments:
         for not_object_file in not_object_files:
             assert not Arguments.is_object_file_arg(not_object_file)
 
-    @pytest.mark.skipif(len(compilers) == 0, reason=f"No compiler of {compiler_candidates} installed to test")
+    @pytest.mark.skipif(not compilers, reason=f"No compiler of {compiler_candidates} installed to test")
     def test_is_compiler_arg(self):
         for compiler in self.compilers:
             assert Arguments.is_compiler_arg(compiler)
@@ -54,51 +54,45 @@ class TestArguments:
         assert arguments == Arguments(None, unspecified_compiler_cli_args)
 
     def test_is_sendable(self):
-        args: List[str] = ["g++", "foo.cpp"]
+        args: List[str] = ["g++", "foo.cpp", "-O0", "-Iexample/include/", "-Wall", "-m64"]
         assert Arguments.from_args(args).is_sendable()
 
         sendable_args: List[str] = args + ["-c", "-ofoo"]
         assert Arguments.from_args(sendable_args).is_sendable()
 
         # unsendability
-        unsendable_args_dict: Dict[str, Union[str, List[str]]] = {
-            # extract all relevant argument fields from Argument.Unsendable
-            k: v
-            for k, v in vars(Arguments.Unsendable).items()
-            if not (k.startswith("__") and k.endswith("__"))
-        }
+        no_source_files_args: List[str] = args[1:]
+        assert not Arguments.from_args(no_source_files_args).is_sendable()
 
-        # unsendable prefix args: naming ends on "_prefix"
-        unsendable_prefix_args: List[str] = [v for k, v in unsendable_args_dict.items() if k.endswith("_prefix")]
+        ambiguous_output_args: List[str] = args + ["-o", "-"]
+        assert not Arguments.from_args(ambiguous_output_args).is_sendable()
 
-        for prefix_arg in unsendable_prefix_args:
-            unsendable_args: List[str] = args + [f"{prefix_arg}dummy_suffix"]
-            assert not Arguments.from_args(unsendable_args).is_sendable()
+        unknown_language_args: List[str] = args + ["-x", "unsendable"]
+        assert not Arguments.from_args(unknown_language_args).is_sendable()
 
-        # unsendable single args: naming ends on "_arg"
-        unsendable_single_args: List[str] = [v for k, v in unsendable_args_dict.items() if k.endswith("_arg")]
-
-        for single_arg in unsendable_single_args:
-            unsendable_args: List[str] = args + [single_arg]
-            assert not Arguments.from_args(unsendable_args).is_sendable()
-
-        # unsendable arg families: naming ends on "_args"
-        unsendable_arg_families: List[List[str]] = [v for k, v in unsendable_args_dict.items() if k.endswith("_args")]
-
-        for arg_family in unsendable_arg_families:
-            for arg in arg_family:
-                unsendable_args: List[str] = args + [arg]
-                assert not Arguments.from_args(unsendable_args).is_sendable()
+        complex_unsendable_args: List[str] = [
+            "-E",
+            "-MM",
+            "-march=native",
+            "-mtune=native",
+            "-Wa,-a",
+            "-specs=unsendable",
+            "-fprofile-generate=unsendable",
+            "-frepo",
+            "-drunsendable",
+        ]
+        for complex_unsendable_arg in complex_unsendable_args:
+            assert not Arguments.from_args(args + [complex_unsendable_arg]).is_sendable()
 
     def test_is_linking(self):
-        linking_args: List[str] = ["g++", "foo.cpp", "-ofoo"]
+        linking_args: List[str] = ["g++", "foo.cpp", "-O0", "-Iexample/include/", "-Wall", "-m64", "-ofoo"]
         assert Arguments.from_args(linking_args).is_linking()
 
         not_linking_args: List[str] = ["g++", "foo.cpp", "-c"]
         assert not Arguments.from_args(not_linking_args).is_linking()
 
     def test_output_target(self):
-        args: List[str] = ["g++", "foo.cpp", "-O0"]
+        args: List[str] = ["g++", "foo.cpp", "-O0", "-Iexample/include/", "-Wall", "-m64"]
         assert Arguments.from_args(args).output is None
 
         single_output_args: List[str] = args + ["-o", "foo"]
@@ -117,14 +111,14 @@ class TestArguments:
         assert Arguments.from_args(long_output_path_args).output == "long/path/to/output"
 
         # failing output extraction as 2nd output argument has no specified target
-        with pytest.raises(ArgumentsOutputError):
+        with pytest.raises(StopIteration):
             ill_formed_output_args: List[str] = args + ["-ofoo", "-o"]
             _: Optional[str] = Arguments.from_args(ill_formed_output_args).output
 
     def test_add_output_arg(self):
         output: str = "foo"
 
-        args: List[str] = ["g++", "foo.cpp", "-O0"]
+        args: List[str] = ["g++", "foo.cpp", "-O0", "-Iexample/include/", "-Wall", "-m64"]
         arguments: Arguments = Arguments.from_args(args)
         arguments.output = output
         assert arguments.output == output
@@ -136,7 +130,7 @@ class TestArguments:
         assert multiple_output_arguments.output == output
 
     def test_remove_local_args(self):
-        args: List[str] = ["g++", "foo.cpp", "-O0"]
+        args: List[str] = ["g++", "foo.cpp", "-O0", "-Iexample/include/", "-Wall", "-m64"]
         assert Arguments.from_args(args).remove_local_args() == args
 
         local_option_args: List[str] = args.copy()
@@ -151,7 +145,7 @@ class TestArguments:
         assert Arguments.from_args(local_cpp_args).remove_local_args() == args
 
     def test_remove_output_args(self):
-        args: List[str] = ["g++", "foo.cpp", "-O0"]
+        args: List[str] = ["g++", "foo.cpp", "-O0", "-Iexample/include/", "-Wall", "-m64"]
         assert Arguments.from_args(args).remove_output_args() == args
 
         single_output_args: List[str] = args + ["-o", "foo"]
@@ -166,9 +160,10 @@ class TestArguments:
         output_flag_as_output_target_args: List[str] = args + ["-ofoo", "-o", "-o"]
         assert Arguments.from_args(output_flag_as_output_target_args).remove_output_args() == args
 
-        # ignore ill-formed output arguments
-        ill_formed_output_args: List[str] = args + ["-ofoo", "-o"]
-        assert Arguments.from_args(ill_formed_output_args).remove_output_args() == args
+        # failing output removal as 2nd output argument has no specified target
+        with pytest.raises(StopIteration):
+            ill_formed_output_args: List[str] = args + ["-ofoo", "-o"]
+            _: Arguments = Arguments.from_args(ill_formed_output_args).remove_output_args()
 
     def test_single_source_file_args(self):
         source_file_arg: List[str] = ["some/relative/path.c"]

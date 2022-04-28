@@ -13,8 +13,8 @@ sys.path.append(os.path.join(os.path.dirname(__file__), "../.."))
 
 from homcc.client.client import TCPClientError  # pylint: disable=wrong-import-position
 from homcc.client.compilation import (  # pylint: disable=wrong-import-position
-    CompilerError,
     HostsExhaustedError,
+    RemoteCompilationError,
     compile_locally,
     compile_remotely,
     scan_includes,
@@ -64,12 +64,7 @@ def main():
 
     # SCAN-INCLUDES; and exit
     if homcc_args_dict["scan_includes"]:
-        try:
-            includes: List[str] = scan_includes(compiler_arguments)
-        except CompilerError as e:
-            sys.exit(e.returncode)
-
-        for include in includes:
+        for include in scan_includes(compiler_arguments):
             print(include)
 
         sys.exit(os.EX_OK)
@@ -90,8 +85,11 @@ def main():
             sys.exit(asyncio.run(compile_remotely(hosts, client_config, compiler_arguments)))
 
         # exit on unrecoverable errors
-        except CompilerError as error:
-            sys.exit(error.returncode)
+        except RemoteCompilationError as error:
+            # TODO(s.pirsch): remove local compilation fallback after extensive testing
+            # for now, we try to recover from server compilation errors via local compilation to track bugs
+            logger.error("%s", error.message)
+            sys.exit(error.return_code)
 
         # recoverable errors
         except (HostsExhaustedError, NoHostsFoundError, TCPClientError) as error:
