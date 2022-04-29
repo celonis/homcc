@@ -55,43 +55,41 @@ async def compile_remotely_at(arguments: Arguments, host: Host) -> int:
     dependency_dict: Dict[str, str] = calculate_dependency_dict(find_dependencies(arguments))
     remote_arguments: Arguments = arguments.copy().remove_local_args()
 
-    # connect to remote host, send arguments and dependency information and provide requested dependencies
     async with TCPClient(host) as client:
         await client.send_argument_message(remote_arguments, os.getcwd(), dependency_dict)
 
         # invert dependency dictionary
         dependency_dict = {file_hash: dependency for dependency, file_hash in dependency_dict.items()}
 
-        remote_response: Message = await client.receive()
+        host_response: Message = await client.receive()
 
-        if isinstance(remote_response, ConnectionRefusedMessage):
+        if isinstance(host_response, ConnectionRefusedMessage):
             raise ConnectionRefusedError(f"Host {client.host}:{client.port} refused the connection!")
 
-        while isinstance(remote_response, DependencyRequestMessage):
-            requested_dependency: str = dependency_dict[remote_response.get_sha1sum()]
+        # provide requested dependencies
+        while isinstance(host_response, DependencyRequestMessage):
+            requested_dependency: str = dependency_dict[host_response.get_sha1sum()]
             await client.send_dependency_reply_message(requested_dependency)
 
-            remote_response = await client.receive()
+            host_response = await client.receive()
 
     # extract and use compilation result if possible
-    if not isinstance(remote_response, CompilationResultMessage):
-        raise UnexpectedMessageTypeError(f'Received message of unexpected type "{remote_response.message_type}"!')
+    if not isinstance(host_response, CompilationResultMessage):
+        raise UnexpectedMessageTypeError(f'Received message of unexpected type "{host_response.message_type}"!')
 
-    remote_result: ArgumentsExecutionResult = remote_response.get_compilation_result()
+    host_result: ArgumentsExecutionResult = host_response.get_compilation_result()
 
-    if remote_result.stdout:
-        logger.debug("Remote output:\n%s", remote_result.stdout)
+    if host_result.stdout:
+        logger.debug("Host stdout:\n%s", host_result.stdout)
 
-    if remote_result.return_code != os.EX_OK:
+    if host_result.return_code != os.EX_OK:
         raise RemoteCompilationError(
-            f"{remote_arguments} produced error {remote_result.return_code}:\n"
-            f"stdout:\n{remote_result.stdout}\n"
-            f"stderr:\n{remote_result.stderr}",
-            remote_result.return_code,
+            f"Host stderr of {remote_arguments}:\n{host_result.stderr}",
+            host_result.return_code,
         )
 
-    for object_file in remote_response.get_object_files():
-        output_path = object_file.file_name
+    for object_file in host_response.get_object_files():
+        output_path: str = object_file.file_name
 
         if not arguments.is_linking() and arguments.output is not None:
             # if we do not want to link, respect the -o flag for the object file
@@ -103,9 +101,9 @@ async def compile_remotely_at(arguments: Arguments, host: Host) -> int:
 
     # link and delete object files if required
     if arguments.is_linking():
-        linker_return_code: int = link_object_files(arguments, remote_response.get_object_files())
+        linker_return_code: int = link_object_files(arguments, host_response.get_object_files())
 
-        for object_file in remote_response.get_object_files():
+        for object_file in host_response.get_object_files():
             logger.debug("Deleting file %s", object_file.file_name)
             Path(object_file.file_name).unlink()
 
@@ -172,7 +170,7 @@ def link_object_files(arguments: Arguments, object_files: List[ObjectFile]) -> i
     """link all remotely compiled object files"""
     if len(arguments.source_files) != len(object_files):
         logger.error(
-            "Wanted to build #%i source files, but only got #%i object files back from the host.",
+            "Wanted to build #%i source files, but only got #%i object files back from the server.",
             len(arguments.source_files),
             len(object_files),
         )

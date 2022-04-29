@@ -8,6 +8,7 @@ import shutil
 import subprocess
 
 from dataclasses import dataclass
+from functools import cached_property
 from typing import Any, Iterator, List, Optional
 
 logger = logging.getLogger(__name__)
@@ -262,12 +263,17 @@ class Arguments:
         return self._args
 
     def add_arg(self, arg: str) -> Arguments:
-        """add argument, this may introduce duplicated arguments"""
+        """
+        add the specified arg, this may introduce duplicated args and break cached properties when used inconsiderately
+        """
         self._args.append(arg)
         return self
 
     def remove_arg(self, arg: str) -> Arguments:
-        """if present, remove the specified arg, this may remove multiple instances of this arg"""
+        """
+        if present, remove the specified arg, this may remove multiple occurrences of this arg and break cached
+        properties when used inconsiderately
+        """
         self._args = list(filter(lambda _arg: _arg != arg, self.args))
         return self
 
@@ -280,7 +286,7 @@ class Arguments:
     def compiler(self, compiler: str):
         self._compiler = compiler
 
-    @property
+    @cached_property
     def output(self) -> Optional[str]:
         """if present, return the last specified output target"""
         output: Optional[str] = None
@@ -294,11 +300,7 @@ class Arguments:
                     output = arg[2:]
         return output
 
-    @output.setter
-    def output(self, output: str):
-        self.remove_output_args().add_arg(f"{self.output_arg}{output}")
-
-    @property
+    @cached_property
     def source_files(self) -> List[str]:
         """extract and return all source files that will be compiled"""
         source_files: List[str] = []
@@ -318,7 +320,7 @@ class Arguments:
 
         return source_files
 
-    @property
+    @cached_property
     def specified_language(self) -> Optional[str]:
         """if present, return the specified language"""
         it: Iterator[str] = iter(self.args)
@@ -331,9 +333,8 @@ class Arguments:
     def is_sendable(self) -> bool:
         """check whether the remote execution of Arguments would be successful"""
         # "-o -" might be treated as "write result to stdout" by some compilers
-        output: Optional[str] = self.output
-        if output == "-":
-            logger.info('cannot compile %s remotely because output "%s" is ambiguous', self, output)
+        if self.output == "-":
+            logger.info('cannot compile %s remotely because output "%s" is ambiguous', self, self.output)
             return False
 
         # no source files
@@ -342,12 +343,13 @@ class Arguments:
             return False
 
         # unknown language
-        specified_language: Optional[str] = self.specified_language
-        if specified_language is not None and not specified_language.startswith(
+        if self.specified_language is not None and not self.specified_language.startswith(
             tuple(Arguments.allowed_language_prefixes)
         ):
             logger.info(
-                'cannot compile %s remotely because handling of language "%s" is too complex', self, specified_language
+                'cannot compile %s remotely because handling of language "%s" is too complex',
+                self,
+                self.specified_language,
             )
             return False
 
@@ -381,14 +383,12 @@ class Arguments:
     def map(self, instance_path: str, mapped_cwd: str) -> Arguments:
         """modify and return Arguments by mapping relevant paths"""
 
-        source_files: List[str] = self.source_files
-        path_option_prefix_args: List[str] = [self.output_arg] + self.include_args
-
         arguments: Arguments = Arguments(self.compiler, [])
+        path_option_prefix_args: List[str] = [self.output_arg] + self.include_args
 
         it: Iterator[str] = iter(self.args)
         for arg in it:
-            if arg in source_files:
+            if arg in self.source_files:
                 arg = self.map_path_arg(arg, instance_path, mapped_cwd)
 
             elif arg.startswith("-"):
@@ -411,25 +411,21 @@ class Arguments:
 
         it: Iterator[str] = iter(self.args)
         for arg in it:
-            # keep object and source files
-            if not arg.startswith("-"):
-                arguments.add_arg(arg)
-                continue
+            if arg.startswith("-"):
+                # skip preprocessing args
+                if arg in Arguments.Local.preprocessing_args:
+                    continue
 
-            # skip preprocessing args
-            if arg in Arguments.Local.preprocessing_args:
-                continue
+                if arg.startswith(tuple(Arguments.Local.preprocessing_option_prefix_args)):
+                    if arg in Arguments.Local.preprocessing_option_prefix_args:
+                        next(it)
+                    continue
 
-            if arg.startswith(tuple(Arguments.Local.preprocessing_option_prefix_args)):
-                if arg in Arguments.Local.preprocessing_option_prefix_args:
-                    next(it)
-                continue
-
-            # skip linking related args
-            if arg.startswith(tuple(Arguments.Local.linking_option_prefix_args)):
-                if arg in Arguments.Local.linking_option_prefix_args:
-                    next(it)
-                continue
+                # skip linking related args
+                if arg.startswith(tuple(Arguments.Local.linking_option_prefix_args)):
+                    if arg in Arguments.Local.linking_option_prefix_args:
+                        next(it)
+                    continue
 
             # keep remaining types of args
             arguments.add_arg(arg)
@@ -451,14 +447,14 @@ class Arguments:
 
             arguments.add_arg(arg)
 
+        self.__dict__.pop("output", None)  # remove cached_property output
         self._args = arguments.args
         return self
 
     def remove_source_file_args(self) -> Arguments:
         """modify and return Arguments by removing all source file args"""
-        for source_file in self.source_files:
-            self.remove_arg(source_file)
-
+        self.__dict__.pop("source_files", None)  # remove cached_property source_files
+        self._args = [arg for arg in self.args if not self.is_source_file_arg(arg)]
         return self
 
     def execute(self, **kwargs) -> ArgumentsExecutionResult:

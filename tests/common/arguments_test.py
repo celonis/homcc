@@ -12,6 +12,15 @@ class TestArguments:
     compiler_candidates: List[str] = ["cc", "gcc", "g++", "clang", "clang++"]
     compilers: List[str] = list(filter(lambda compiler: shutil.which(compiler) is not None, compiler_candidates))
 
+    def test_arguments(self):
+        args: List[str] = ["g++", "foo.cpp", "-O0", "-Iexample/include/"]
+        arguments: Arguments = Arguments.from_args(args)
+        assert arguments != Arguments.from_args(args + ["-ofoo"])
+        assert str(arguments) == "[g++ foo.cpp -O0 -Iexample/include/]"
+        assert repr(arguments) == f"{Arguments}([g++ foo.cpp -O0 -Iexample/include/])"
+        arguments.compiler = "clang++"
+        assert arguments.compiler == "clang++"
+
     def test_is_source_file_arg(self):
         source_files: List[str] = ["foo.c", "bar.cpp"]
         for source_file in source_files:
@@ -60,6 +69,9 @@ class TestArguments:
         sendable_args: List[str] = args + ["-c", "-ofoo"]
         assert Arguments.from_args(sendable_args).is_sendable()
 
+        sendable_preprocessor_args: List[str] = args + ["-MD", "-MF", "sendable"]
+        assert Arguments.from_args(sendable_preprocessor_args).is_sendable()
+
         # unsendability
         no_source_files_args: List[str] = args[1:]
         assert not Arguments.from_args(no_source_files_args).is_sendable()
@@ -75,6 +87,7 @@ class TestArguments:
             "-MM",
             "-march=native",
             "-mtune=native",
+            "-S",
             "-Wa,-a",
             "-specs=Unsendable",
             "-fprofile-generate=Unsendable",
@@ -115,20 +128,6 @@ class TestArguments:
             ill_formed_output_args: List[str] = args + ["-ofoo", "-o"]
             _: Optional[str] = Arguments.from_args(ill_formed_output_args).output
 
-    def test_add_output_arg(self):
-        output: str = "foo"
-
-        args: List[str] = ["g++", "foo.cpp", "-O0", "-Iexample/include/"]
-        arguments: Arguments = Arguments.from_args(args)
-        arguments.output = output
-        assert arguments.output == output
-
-        multiple_output_args: List[str] = args + ["-o", "foo", "-o", "bar"]
-        multiple_output_arguments: Arguments = Arguments.from_args(multiple_output_args)
-        assert multiple_output_arguments.output == "bar"
-        multiple_output_arguments.output = output
-        assert multiple_output_arguments.output == output
-
     def test_remove_local_args(self):
         args: List[str] = ["g++", "foo.cpp", "-O0", "-Iexample/include/"]
         assert Arguments.from_args(args).remove_local_args() == args
@@ -136,6 +135,9 @@ class TestArguments:
         local_args: List[str] = (
             Arguments.Local.linking_option_prefix_args + Arguments.Local.preprocessing_option_prefix_args
         )
+
+        for preprocessing_arg in Arguments.Local.preprocessing_args:
+            assert Arguments.from_args(args + [preprocessing_arg]).remove_local_args() == args
 
         local_option_args: List[str] = args.copy()
         for local_option_arg in local_args:
@@ -165,6 +167,32 @@ class TestArguments:
         with pytest.raises(StopIteration):
             ill_formed_output_args: List[str] = args + ["-ofoo", "-o"]
             _: Arguments = Arguments.from_args(ill_formed_output_args).remove_output_args()
+
+        # test cached_property of output
+        single_output_remove_args: List[str] = args + ["-o", "foo"]
+        single_output_remove_arguments: Arguments = Arguments.from_args(single_output_remove_args)
+        assert single_output_remove_arguments.output == "foo"
+        assert single_output_remove_arguments.add_arg("-obar").output == "foo"  # no change as property is cached
+        assert single_output_remove_arguments.remove_output_args().output is None
+        assert single_output_remove_arguments.add_arg("-obar").output is None  # no change as property is cached
+
+        multiple_output_remove_args: List[str] = args + ["-o", "foo", "-o", "bar"]
+        multiple_output_remove_arguments: Arguments = Arguments.from_args(multiple_output_remove_args)
+        assert multiple_output_remove_arguments.output == "bar"
+        assert multiple_output_remove_arguments.add_arg("-obaz").output == "bar"  # no change as property is cached
+        assert multiple_output_remove_arguments.remove_output_args().output is None
+        assert multiple_output_remove_arguments.add_arg("-obaz").output is None  # no change as property is cached
+
+    def test_remove_source_file_args(self):
+        args: List[str] = ["g++", "-O0", "-Iexample/include/"]
+        source_files: List[str] = ["foo.cpp", "bar.cpp"]
+
+        source_file_args: List[str] = args + source_files
+        source_file_arguments: Arguments = Arguments.from_args(source_file_args)
+        assert source_file_arguments.source_files == source_files
+        assert source_file_arguments.add_arg("baz.cpp").source_files == source_files  # no change as property is cached
+        assert not source_file_arguments.remove_source_file_args().source_files
+        assert not source_file_arguments.add_arg("baz.cpp").source_files  # no change as property is cached
 
     def test_single_source_file_args(self):
         source_file_arg: List[str] = ["some/relative/path.c"]

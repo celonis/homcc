@@ -145,13 +145,12 @@ def do_compilation(
     Path(mapped_cwd).mkdir(parents=True, exist_ok=True)
 
     arguments: Arguments = Arguments.from_args(args).no_linking()
-    source_files: List[str] = arguments.source_files
 
     result = invoke_compiler(mapped_cwd, list(arguments))
 
     object_files: List[ObjectFile] = []
     if result.return_code == 0:
-        for source_file in source_files:
+        for source_file in arguments.source_files:
             object_file_path: str = map_source_file_to_object_file(mapped_cwd, source_file)
             object_file_content = Path.read_bytes(Path(object_file_path))
 
