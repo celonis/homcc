@@ -49,51 +49,12 @@ class Arguments:
         be removed before being sent.
         """
 
-        # arguments with options
-        option_args: List[str] = [
-            "-D",
-            # "-I",
-            "-U",
-            "-L",
-            "-l",
-            "-MF",
-            "-MT",
-            "-MQ",
-            "-include",
-            "-imacros",
-            "-iprefix",
-            "-iwithprefix",
-            "-isystem",
-            "-iwithprefixbefore",
-            "-idirafter",
-        ]
+        # preprocessor args
+        preprocessing_args: List[str] = ["-MD", "-MMD", "-MG", "-MP"]
+        preprocessing_option_prefix_args: List[str] = ["-MF", "-MT", "-MQ"]
 
-        # prefixed arguments
-        arg_prefixes: List[str] = [
-            "-Wp,",
-            "-Wl,",
-            "-D",
-            "-U",
-            # "-I",
-            "-l",
-            "-L",
-            "-MF",
-            "-MT",
-            "-MQ",
-            "-isystem",
-            "-stdlib",
-        ]
-
-        # arguments that only affect C++ compilation
-        cpp_args: List[str] = [
-            "-undef",
-            "-nostdinc",
-            "-nostdinc++",
-            "-MD",
-            "-MMD",
-            "-MG",
-            "-MP",
-        ]
+        # linking args
+        linking_option_prefix_args: List[str] = ["-L", "-l", "-Wl,"]
 
     class Unsendable:
         """
@@ -108,8 +69,6 @@ class Arguments:
         # preprocessing args
         preprocessing_only_arg: str = "-E"
         preprocessing_dependency_arg: str = "-M"
-        allowed_preprocessing_args: List[str] = ["-MD", "-MMD", "-MG", "-MP"]
-        allowed_preprocessing_option_args: List[str] = ["-MF", "-MT", "-MQ"]
 
         # args that rely on native machine
         native_args: List[str] = ["-march=native", "-mtune=native"]
@@ -165,8 +124,13 @@ class Arguments:
     def __repr__(self) -> str:
         return f"{self.__class__}({str(self)})"
 
+    def copy(self) -> Arguments:
+        """return an Arguments copy"""
+        return Arguments(self.compiler, self.args.copy())
+
     @classmethod
     def from_args(cls, args: List[str]) -> Arguments:
+        """construct Arguments from a list of args"""
         if not args:
             raise ValueError("Not enough arguments supplied to construct Arguments")
 
@@ -179,6 +143,7 @@ class Arguments:
 
     @classmethod
     def from_cli(cls, compiler_or_argument: str, args: List[str]) -> Arguments:
+        """construct Arguments from args given via the CLI"""
         # explicit compiler argument, e.g.: "homcc [OPTIONAL ARGUMENTS] g++ -c foo.cpp"
         if cls.is_compiler_arg(compiler_or_argument):
             return cls(compiler_or_argument, args)
@@ -226,15 +191,16 @@ class Arguments:
             logger.debug("[%s] implies a preprocessor only call", arg)
             return False
 
-        if arg in Arguments.Unsendable.allowed_preprocessing_args:
+        if arg in Arguments.Local.preprocessing_args:
             return True
 
-        if arg.startswith(tuple(Arguments.Unsendable.allowed_preprocessing_option_args)):
+        if arg.startswith(tuple(Arguments.Local.preprocessing_option_prefix_args)):
             return True
 
-        if arg.startswith(Arguments.Unsendable.preprocessing_dependency_arg):  # -Moption
+        # all remaining preprocessing arg types with prefix "-M" imply Unsendability
+        if arg.startswith(Arguments.Unsendable.preprocessing_dependency_arg):
             logger.debug("[%s] implies [%s] and must be local", arg, Arguments.Unsendable.preprocessing_only_arg)
-            return False  # all remaining preprocessing arg options imply Unsendability
+            return False
 
         # native args
         if arg in Arguments.Unsendable.native_args:
@@ -275,20 +241,22 @@ class Arguments:
 
     @property
     def args(self) -> List[str]:
+        """return all non-compiler args"""
         return self._args
 
     def add_arg(self, arg: str) -> Arguments:
-        """add argument, may introduce duplicated arguments"""
+        """add argument, this may introduce duplicated arguments"""
         self._args.append(arg)
         return self
 
     def remove_arg(self, arg: str) -> Arguments:
-        """remove argument if present, may remove multiple matching arguments"""
+        """if present, remove the specified arg, this may remove multiple instances of this arg"""
         self._args = list(filter(lambda _arg: _arg != arg, self.args))
         return self
 
     @property
     def compiler(self) -> Optional[str]:
+        """if present, return the specified compiler"""
         return self._compiler
 
     @compiler.setter
@@ -315,7 +283,7 @@ class Arguments:
 
     @property
     def source_files(self) -> List[str]:
-        """extract files to be compiled and returns their paths"""
+        """extract and return all source files that will be compiled"""
         source_files: List[str] = []
 
         it: Iterator[str] = iter(self.args)
@@ -335,6 +303,7 @@ class Arguments:
 
     @property
     def specified_language(self) -> Optional[str]:
+        """if present, return the specified language"""
         it: Iterator[str] = iter(self.args)
         for arg in it:
             if arg.startswith(self.language_arg):
@@ -343,7 +312,7 @@ class Arguments:
         return None
 
     def is_sendable(self) -> bool:
-        """check whether executing Arguments leads to a successful remote compilation"""
+        """check whether the remote execution of Arguments would be successful"""
         # "-o -" might be treated as write result to stdout by some compilers
         output: Optional[str] = self.output
         if output == "-":
@@ -360,7 +329,9 @@ class Arguments:
         if specified_language is not None and not specified_language.startswith(
             tuple(Arguments.Unsendable.allowed_language_prefixes)
         ):
-            logger.info("language handling is too complex for %s", specified_language)
+            logger.info(
+                'cannot compile %s remotely because handling of language "%s" is too complex', self, specified_language
+            )
             return False
 
         # complex unsendable arguments
@@ -372,13 +343,13 @@ class Arguments:
         return True
 
     def is_linking(self) -> bool:
-        """check whether the linking flag is present"""
+        """check whether the linking arg is present"""
         return self.no_linking_arg not in self.args
 
     def dependency_finding(self) -> Arguments:
-        """return Arguments with which to find dependencies via the preprocessor"""
+        """return a copy of Arguments with which to find dependencies via the preprocessor"""
         return (
-            Arguments(self.compiler, self.args)
+            self.copy()
             .remove_arg(self.no_linking_arg)
             .remove_output_args()
             .add_arg("-M")  # output dependencies
@@ -387,11 +358,11 @@ class Arguments:
         )
 
     def no_linking(self) -> Arguments:
-        """return copy of Arguments with output arguments removed and no linking argument added"""
-        return Arguments(self.compiler, self.args).remove_output_args().add_arg(self.no_linking_arg)
+        """return a copy of Arguments where all output args are removed and the no linking arg is added"""
+        return self.copy().remove_output_args().add_arg(self.no_linking_arg)
 
     def remove_local_args(self) -> Arguments:
-        """return modified Arguments with all local related arguments removed"""
+        """modify and return Arguments by removing all remote compilation irrelevant args"""
         arguments: Arguments = Arguments(self.compiler, [])
 
         it: Iterator[str] = iter(self.args)
@@ -401,17 +372,19 @@ class Arguments:
                 arguments.add_arg(arg)
                 continue
 
-            # skip local args and its following option
-            if arg in Arguments.Local.option_args:
-                next(it)
+            # skip some preprocessing args
+            if arg in Arguments.Local.preprocessing_args:
                 continue
 
-            # skip prefixed local args
-            if arg.startswith(tuple(Arguments.Local.arg_prefixes)):
+            if arg.startswith(tuple(Arguments.Local.preprocessing_option_prefix_args)):
+                if arg in Arguments.Local.preprocessing_option_prefix_args:
+                    next(it)
                 continue
 
-            # skip local args that only affect cpp
-            if arg in Arguments.Local.cpp_args:
+            # skip linking related args
+            if arg.startswith(tuple(Arguments.Local.linking_option_prefix_args)):
+                if arg in Arguments.Local.linking_option_prefix_args:
+                    next(it)
                 continue
 
             # keep remaining types of args
@@ -421,7 +394,7 @@ class Arguments:
         return self
 
     def remove_output_args(self) -> Arguments:
-        """return modified Arguments with all output related arguments removed"""
+        """modify and return Arguments by removing all output related args"""
         arguments: Arguments = Arguments(self.compiler, [])
 
         it: Iterator[str] = iter(self.args)
@@ -438,7 +411,7 @@ class Arguments:
         return self
 
     def remove_source_file_args(self) -> Arguments:
-        """remove source file args"""
+        """modify and return Arguments by removing all source file args"""
         for source_file in self.source_files:
             self.remove_arg(source_file)
 

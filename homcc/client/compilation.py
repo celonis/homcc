@@ -7,16 +7,14 @@ import os
 import subprocess
 import sys
 
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Set
 
 from homcc.client.client import (
-    HostsExhaustedError,
     HostSelector,
     TCPClient,
-    UnexpectedMessageTypeError,
 )
+from homcc.client.errors import HostsExhaustedError, RemoteCompilationError, UnexpectedMessageTypeError
 from homcc.client.parsing import ConnectionType, ClientConfig, Host
 from homcc.common.arguments import Arguments, ArgumentsExecutionResult
 from homcc.common.hashing import hash_file_with_path
@@ -31,18 +29,10 @@ from homcc.common.messages import (
 logger = logging.getLogger(__name__)
 
 
-@dataclass
-class RemoteCompilationError(Exception):
-    """
-    Error class to indicate an error encountered during remote compilation
-    """
+async def compile_remotely(arguments: Arguments, hosts: List[str], config: ClientConfig) -> int:
+    """main function to control remote compilation"""
 
-    message: str
-    return_code: int
-
-
-async def compile_remotely(hosts: List[str], config: ClientConfig, arguments: Arguments) -> int:
-    # try to connect to 3 remote compilation servers before giving up
+    # try to connect to 3 different remote compilation hosts before giving up
     for host in HostSelector(hosts, 3):
         timeout: float = config.timeout or 180
         host.compression = host.compression or config.compression
@@ -51,7 +41,7 @@ async def compile_remotely(hosts: List[str], config: ClientConfig, arguments: Ar
             return compile_locally(arguments)
 
         try:
-            return await asyncio.wait_for(compile_remotely_at(host, arguments), timeout=timeout)
+            return await asyncio.wait_for(compile_remotely_at(arguments, host), timeout=timeout)
 
         except (asyncio.TimeoutError, ConnectionError) as error:
             logger.warning("%s", error)
@@ -59,57 +49,56 @@ async def compile_remotely(hosts: List[str], config: ClientConfig, arguments: Ar
     raise HostsExhaustedError(f"All hosts {hosts} are exhausted!")
 
 
-async def compile_remotely_at(host: Host, arguments: Arguments) -> int:
-    """main function for the communication between client and the remote compilation server"""
+async def compile_remotely_at(arguments: Arguments, host: Host) -> int:
+    """main function for the communication between client and a remote compilation host"""
 
     dependency_dict: Dict[str, str] = calculate_dependency_dict(find_dependencies(arguments))
+    remote_arguments: Arguments = arguments.copy().remove_local_args()
 
-    # connect to remote host, send arguments and dependency information to server and provide requested dependencies
+    # connect to remote host, send arguments and dependency information and provide requested dependencies
     async with TCPClient(host) as client:
-        # TODO: check if we want to remove args or not
-        # await client.send_argument_message(arguments.remove_local_args(), os.getcwd(), dependency_dict)
-        await client.send_argument_message(arguments, os.getcwd(), dependency_dict)
+        await client.send_argument_message(remote_arguments, os.getcwd(), dependency_dict)
 
         # invert dependency dictionary
         dependency_dict = {file_hash: dependency for dependency, file_hash in dependency_dict.items()}
 
-        server_response: Message = await client.receive()
+        remote_response: Message = await client.receive()
 
-        if isinstance(server_response, ConnectionRefusedMessage):
-            raise ConnectionRefusedError(f"Server {client.host}:{client.port} refused the connection!")
+        if isinstance(remote_response, ConnectionRefusedMessage):
+            raise ConnectionRefusedError(f"Host {client.host}:{client.port} refused the connection!")
 
-        while isinstance(server_response, DependencyRequestMessage):
-            requested_dependency: str = dependency_dict[server_response.get_sha1sum()]
+        while isinstance(remote_response, DependencyRequestMessage):
+            requested_dependency: str = dependency_dict[remote_response.get_sha1sum()]
             await client.send_dependency_reply_message(requested_dependency)
 
-            server_response = await client.receive()
+            remote_response = await client.receive()
 
     # extract and use compilation result if possible
-    if not isinstance(server_response, CompilationResultMessage):
-        raise UnexpectedMessageTypeError(f'Received message of unexpected type "{server_response.message_type}"!')
+    if not isinstance(remote_response, CompilationResultMessage):
+        raise UnexpectedMessageTypeError(f'Received message of unexpected type "{remote_response.message_type}"!')
 
-    server_result: ArgumentsExecutionResult = server_response.get_compilation_result()
+    remote_result: ArgumentsExecutionResult = remote_response.get_compilation_result()
 
-    if server_result.stdout:
-        logger.debug("Server output:\n%s", server_result.stdout)
+    if remote_result.stdout:
+        logger.debug("Remote output:\n%s", remote_result.stdout)
 
-    if server_result.return_code != os.EX_OK:
+    if remote_result.return_code != os.EX_OK:
         raise RemoteCompilationError(
-            f"{arguments} produced error {server_result.return_code}:\n"
-            f"stdout:\n{server_result.stdout}\n"
-            f"stderr:\n{server_result.stderr}",
-            server_result.return_code,
+            f"{remote_arguments} produced error {remote_result.return_code}:\n"
+            f"stdout:\n{remote_result.stdout}\n"
+            f"stderr:\n{remote_result.stderr}",
+            remote_result.return_code,
         )
 
-    for object_file in server_response.get_object_files():
+    for object_file in remote_response.get_object_files():
         logger.debug("Writing file %s", object_file.file_name)
         Path(object_file.file_name).write_bytes(object_file.get_data())
 
     # link and delete object files if required
     if arguments.is_linking():
-        linker_return_code: int = link_object_files(arguments, server_response.get_object_files())
+        linker_return_code: int = link_object_files(arguments, remote_response.get_object_files())
 
-        for object_file in server_response.get_object_files():
+        for object_file in remote_response.get_object_files():
             logger.debug("Deleting file %s", object_file.file_name)
             Path(object_file.file_name).unlink()
 
@@ -173,10 +162,10 @@ def calculate_dependency_dict(dependencies: Set[str]) -> Dict[str, str]:
 
 
 def link_object_files(arguments: Arguments, object_files: List[ObjectFile]) -> int:
-    """link all object files compiled by the server"""
+    """link all remotely compiled object files"""
     if len(arguments.source_files) != len(object_files):
         logger.error(
-            "Wanted to build #%i source files, but only got #%i object files back from the server.",
+            "Wanted to build #%i source files, but only got #%i object files back from the host.",
             len(arguments.source_files),
             len(object_files),
         )

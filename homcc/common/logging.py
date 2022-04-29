@@ -96,7 +96,6 @@ class _ClientFormatter(_Formatter):
     """
 
     def _level_format(self, level_format: str) -> str:
-        # TODO(s.pirsch): replace this with pattern matching in python3.10
         # colored logging messages with debug information
         if self._config.is_colored() and self._config.is_detailed():
             return f"[{level_format}HOMCC-%(levelname)s{self.RESET}] %(pathname)s:%(lineno)d:\n%(message)s"
@@ -123,7 +122,6 @@ class _ServerFormatter(_Formatter):
     """
 
     def _level_format(self, level_format: str) -> str:
-        # TODO(s.pirsch): replace this with pattern matching in python3.10
         # colored logging messages with debug information
         if self._config.is_colored() and self._config.is_detailed():
             return f"[{level_format}%(levelname)s{self.RESET}] %(asctime)s - %(pathname)s:%(lineno)d:\n%(message)s"

@@ -14,23 +14,13 @@ from typing import Any, Dict, Iterable, List, Optional, Tuple
 from homcc.common.arguments import Arguments
 from homcc.common.compression import Compression
 from homcc.common.parsing import default_locations, load_config_file_from, parse_config_keys
+from homcc.client.errors import HostParsingError, NoHostsFoundError
 
 logger = logging.getLogger(__name__)
 
-HOMCC_HOSTS_ENV_VAR = "$HOMCC_HOSTS"
+HOMCC_HOSTS_ENV_VAR: str = "$HOMCC_HOSTS"
 HOMCC_HOSTS_FILENAME: str = "hosts"
 HOMCC_CLIENT_CONFIG_FILENAME: str = "client.conf"
-
-
-class NoHostsFoundError(Exception):
-    """
-    Error class to indicate a recoverable error when hosts could neither be determined from the environment variable nor
-    from the default hosts file locations
-    """
-
-
-class HostParsingError(Exception):
-    """Class to indicate an error during parsing a host"""
 
 
 class ConnectionType(str, Enum):
@@ -130,7 +120,7 @@ class Host:
         self.host = host
         self.port = int(port) if port is not None else None
         self.user = user
-        self.limit = int(limit) if limit is not None else 2  # 2 default connections to enable some level of concurrency
+        self.limit = int(limit) if limit is not None else 2  # enable minor level of concurrency on default
         self.compression = compression
 
 
@@ -152,7 +142,7 @@ class ClientConfig:
     ):
         self.compiler = compiler or Arguments.default_compiler
         self.compression = compression
-        self.timeout = float(timeout) if timeout else None
+        self.timeout = float(timeout) if timeout is not None else None
 
         # additional parsing step for verbosity
         self.verbose = verbose is not None and re.match(r"^true$", verbose, re.IGNORECASE) is not None
@@ -234,7 +224,7 @@ def parse_cli_args(args: List[str]) -> Tuple[Dict[str, Any], Arguments]:
 
 def parse_host(host: str) -> Host:
     """
-    try to categorize and extract the following information from the host:
+    Try to categorize and extract the following information from the host in the general order of:
     - Compression
     - ConnectionType:
         - TCP:
@@ -329,7 +319,7 @@ def load_hosts(hosts_file_locations: Optional[List[Path]] = None) -> List[str]:
             line = line.strip().replace(" ", "")
 
             # filter empty lines and comment lines
-            if len(line) != 0 and not line.startswith("#"):
+            if line and not line.startswith("#"):
                 lines.append(line)
 
         return lines

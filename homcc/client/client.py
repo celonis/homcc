@@ -10,33 +10,14 @@ import random
 from pathlib import Path
 from typing import Dict, Iterable, Iterator, List, Optional
 
-from homcc.client.parsing import ConnectionType, Host, HostParsingError, parse_host
+from homcc.client.errors import ClientParsingError, HostsExhaustedError, HostParsingError
+from homcc.client.parsing import ConnectionType, Host, parse_host
 from homcc.common.arguments import Arguments
 from homcc.common.messages import ArgumentMessage, DependencyReplyMessage, Message
 from homcc.common.compression import Compression, NoCompression
 
 
 logger = logging.getLogger(__name__)
-
-
-class TCPClientError(Exception):
-    """Base class for TCPClient exceptions to indicate recoverability for the client main function"""
-
-
-class ClientParsingError(TCPClientError):
-    """Exception for failing to parse message from the server"""
-
-
-class SendTimedOutError(TCPClientError):
-    """Exception for time-outing during sending messages"""
-
-
-class UnexpectedMessageTypeError(TCPClientError):
-    """Exception for receiving a message with an unexpected type"""
-
-
-class HostsExhaustedError(Exception):
-    """Error class to indicate that the compilation request was refused by all hosts"""
 
 
 class HostSelector:

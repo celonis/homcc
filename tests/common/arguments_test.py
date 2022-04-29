@@ -41,11 +41,11 @@ class TestArguments:
         compiler_args: List[str] = ["g++"]
         assert Arguments.from_args(compiler_args) == compiler_args
 
-        args: List[str] = ["g++", "-c", "foo.cpp"]
+        args: List[str] = ["g++", "foo.cpp", "-O0", "-Iexample/include/"]
         assert Arguments.from_args(args) == args
 
     def test_from_cli(self):
-        specified_compiler_cli_args: List[str] = ["g++", "-c", "foo.cpp"]
+        specified_compiler_cli_args: List[str] = ["g++", "foo.cpp", "-O0", "-Iexample/include/"]
         arguments = Arguments.from_cli(specified_compiler_cli_args[0], specified_compiler_cli_args[1:])
         assert arguments == specified_compiler_cli_args
 
@@ -54,7 +54,7 @@ class TestArguments:
         assert arguments == Arguments(None, unspecified_compiler_cli_args)
 
     def test_is_sendable(self):
-        args: List[str] = ["g++", "foo.cpp", "-O0", "-Iexample/include/", "-Wall", "-m64"]
+        args: List[str] = ["g++", "foo.cpp", "-O0", "-Iexample/include/"]
         assert Arguments.from_args(args).is_sendable()
 
         sendable_args: List[str] = args + ["-c", "-ofoo"]
@@ -70,29 +70,29 @@ class TestArguments:
         unknown_language_args: List[str] = args + ["-x", "unsendable"]
         assert not Arguments.from_args(unknown_language_args).is_sendable()
 
-        complex_unsendable_args: List[str] = [
+        unsendable_args: List[str] = [
             "-E",
             "-MM",
             "-march=native",
             "-mtune=native",
             "-Wa,-a",
-            "-specs=unsendable",
-            "-fprofile-generate=unsendable",
+            "-specs=Unsendable",
+            "-fprofile-generate=Unsendable",
             "-frepo",
-            "-drunsendable",
+            "-drUnsendable",
         ]
-        for complex_unsendable_arg in complex_unsendable_args:
-            assert not Arguments.from_args(args + [complex_unsendable_arg]).is_sendable()
+        for unsendable_arg in unsendable_args:
+            assert not Arguments.from_args(args + [unsendable_arg]).is_sendable()
 
     def test_is_linking(self):
-        linking_args: List[str] = ["g++", "foo.cpp", "-O0", "-Iexample/include/", "-Wall", "-m64", "-ofoo"]
+        linking_args: List[str] = ["g++", "foo.cpp", "-O0", "-Iexample/include/", "-ofoo"]
         assert Arguments.from_args(linking_args).is_linking()
 
-        not_linking_args: List[str] = ["g++", "foo.cpp", "-c"]
+        not_linking_args: List[str] = linking_args + ["-c"]
         assert not Arguments.from_args(not_linking_args).is_linking()
 
     def test_output_target(self):
-        args: List[str] = ["g++", "foo.cpp", "-O0", "-Iexample/include/", "-Wall", "-m64"]
+        args: List[str] = ["g++", "foo.cpp", "-O0", "-Iexample/include/"]
         assert Arguments.from_args(args).output is None
 
         single_output_args: List[str] = args + ["-o", "foo"]
@@ -118,7 +118,7 @@ class TestArguments:
     def test_add_output_arg(self):
         output: str = "foo"
 
-        args: List[str] = ["g++", "foo.cpp", "-O0", "-Iexample/include/", "-Wall", "-m64"]
+        args: List[str] = ["g++", "foo.cpp", "-O0", "-Iexample/include/"]
         arguments: Arguments = Arguments.from_args(args)
         arguments.output = output
         assert arguments.output == output
@@ -130,22 +130,23 @@ class TestArguments:
         assert multiple_output_arguments.output == output
 
     def test_remove_local_args(self):
-        args: List[str] = ["g++", "foo.cpp", "-O0", "-Iexample/include/", "-Wall", "-m64"]
+        args: List[str] = ["g++", "foo.cpp", "-O0", "-Iexample/include/"]
         assert Arguments.from_args(args).remove_local_args() == args
 
+        local_args: List[str] = (
+            Arguments.Local.linking_option_prefix_args + Arguments.Local.preprocessing_option_prefix_args
+        )
+
         local_option_args: List[str] = args.copy()
-        for local_option_arg in Arguments.Local.option_args:
+        for local_option_arg in local_args:
             local_option_args.extend([local_option_arg, "option"])
         assert Arguments.from_args(local_option_args).remove_local_args() == args
 
-        local_prefixed_args: List[str] = args + [f"{arg_prefix}suffix" for arg_prefix in Arguments.Local.arg_prefixes]
+        local_prefixed_args: List[str] = args + [f"{arg_prefix}suffix" for arg_prefix in local_args]
         assert Arguments.from_args(local_prefixed_args).remove_local_args() == args
 
-        local_cpp_args: List[str] = args + Arguments.Local.cpp_args
-        assert Arguments.from_args(local_cpp_args).remove_local_args() == args
-
     def test_remove_output_args(self):
-        args: List[str] = ["g++", "foo.cpp", "-O0", "-Iexample/include/", "-Wall", "-m64"]
+        args: List[str] = ["g++", "foo.cpp", "-O0", "-Iexample/include/"]
         assert Arguments.from_args(args).remove_output_args() == args
 
         single_output_args: List[str] = args + ["-o", "foo"]

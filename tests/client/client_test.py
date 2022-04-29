@@ -5,8 +5,9 @@ from typing import Dict, Iterator, List, Set
 import pytest
 
 from homcc.common.arguments import Arguments
-from homcc.client.client import HostSelector, HostsExhaustedError, TCPClient
+from homcc.client.client import HostSelector, TCPClient
 from homcc.client.compilation import calculate_dependency_dict, find_dependencies
+from homcc.client.errors import HostsExhaustedError
 from homcc.client.parsing import ConnectionType, Host, parse_host
 from homcc.server.server import start_server, stop_server
 
