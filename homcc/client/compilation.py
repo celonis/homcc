@@ -91,8 +91,15 @@ async def compile_remotely_at(arguments: Arguments, host: Host) -> int:
         )
 
     for object_file in remote_response.get_object_files():
-        logger.debug("Writing file %s", object_file.file_name)
-        Path(object_file.file_name).write_bytes(object_file.get_data())
+        output_path = object_file.file_name
+
+        if not arguments.is_linking() and arguments.output is not None:
+            # if we do not want to link, respect the -o flag for the object file
+            output_path = arguments.output
+
+        logger.debug("Writing file %s", output_path)
+
+        Path(output_path).write_bytes(object_file.get_data())
 
     # link and delete object files if required
     if arguments.is_linking():

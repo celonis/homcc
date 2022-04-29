@@ -69,6 +69,8 @@ class TestServerEnvironment:
             ".././../include/sys.h",
             "../main.cpp",
             "./relative.cpp",
+            "-c",
+            "some_file.cpp",
         ]
 
         mapped_arguments = map_arguments(instance_path, mapped_cwd, arguments)
@@ -85,6 +87,8 @@ class TestServerEnvironment:
         assert mapped_arguments.pop(0) == "/client1/include/sys.h"
         assert mapped_arguments.pop(0) == "/client1/test/main.cpp"
         assert mapped_arguments.pop(0) == f"{mapped_cwd}/relative.cpp"
+        assert mapped_arguments.pop(0) == "-c"
+        assert mapped_arguments.pop(0) == f"{mapped_cwd}/some_file.cpp"
 
     def test_map_cwd(self):
         instance_path = "/client1/"
