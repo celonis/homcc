@@ -43,6 +43,19 @@ class TestHostSelector:
         with pytest.raises(HostsExhaustedError):
             assert next(host_iter)
 
+    def test_host_selector_with_tries_not_enough_hosts(self):
+        host_selector: HostSelector = HostSelector([self.hosts[1]], 3)
+
+        assert len(host_selector) == 1
+
+        host_iter: Iterator = iter(host_selector)
+        host: Host = next(host_iter)
+        assert host == self.parsed_hosts[1]
+
+        assert len(host_selector) == 0
+        with pytest.raises(StopIteration):
+            assert next(host_iter)
+
 
 class TestTCPClient:
     """Tests for TCPClient"""

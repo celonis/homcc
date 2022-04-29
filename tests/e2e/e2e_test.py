@@ -15,7 +15,9 @@ class TestEndToEnd:
 
     @staticmethod
     def start_server(unused_tcp_port: int) -> subprocess.Popen:
-        return subprocess.Popen(["./homcc/server/main.py", f"--port={unused_tcp_port}"], stdout=subprocess.PIPE)
+        return subprocess.Popen(
+            ["./homcc/server/main.py", "--listen=127.0.0.1", f"--port={unused_tcp_port}"], stdout=subprocess.PIPE
+        )
 
     @staticmethod
     def start_client(compiler: str, unused_tcp_port: int, linking: bool = True) -> subprocess.CompletedProcess:
@@ -27,7 +29,7 @@ class TestEndToEnd:
             "-Iexample/include",
             "example/src/foo.cpp",
             "example/src/main.cpp",
-            "-oe2e-test",
+            f"-o{TestEndToEnd.output}",
         ]
 
         if not linking:
@@ -55,7 +57,7 @@ class TestEndToEnd:
 
             self.check_remote_compilation_assertions(result)
 
-            executable_stdout = subprocess.check_output([f"./{TestEndToEnd.output}"], encoding="utf-8")
+            executable_stdout: str = subprocess.check_output([f"./{self.output}"], encoding="utf-8")
             assert executable_stdout == "homcc\n"
 
             server_process.kill()
@@ -66,31 +68,31 @@ class TestEndToEnd:
 
             self.check_remote_compilation_assertions(result)
 
-            assert os.path.exists("e2e-test")
+            assert os.path.exists(self.output)
 
             server_process.kill()
 
     @pytest.fixture(autouse=True)
     def clean_up(self):
         yield
-        Path(TestEndToEnd.output).unlink(missing_ok=True)
+        Path(self.output).unlink(missing_ok=True)
 
     @pytest.mark.skipif(shutil.which("g++") is None, reason="g++ is not installed")
-    @pytest.mark.timeout(10)
+    @pytest.mark.timeout(5)
     def test_end_to_end_gplusplus(self, unused_tcp_port: int):
         self.cpp_end_to_end("g++", unused_tcp_port)
 
     @pytest.mark.skipif(shutil.which("g++") is None, reason="g++ is not installed")
-    @pytest.mark.timeout(10)
+    @pytest.mark.timeout(5)
     def test_end_to_end_gplusplus_no_linking(self, unused_tcp_port: int):
         self.cpp_end_to_end_no_linking("g++", unused_tcp_port)
 
     @pytest.mark.skipif(shutil.which("clang++") is None, reason="clang++ is not installed")
-    @pytest.mark.timeout(10)
+    @pytest.mark.timeout(5)
     def test_end_to_end_clangplusplus(self, unused_tcp_port: int):
         self.cpp_end_to_end("clang++", unused_tcp_port)
 
     @pytest.mark.skipif(shutil.which("clang++") is None, reason="clang++ is not installed")
-    @pytest.mark.timeout(10)
+    @pytest.mark.timeout(5)
     def test_end_to_end_clangplusplus_no_linking(self, unused_tcp_port: int):
         self.cpp_end_to_end_no_linking("clang++", unused_tcp_port)

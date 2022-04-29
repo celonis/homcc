@@ -15,10 +15,6 @@ from homcc.common.messages import CompilationResultMessage, ObjectFile
 
 logger = logging.getLogger(__name__)
 
-# arguments of which the path should be translated
-PATH_ARGUMENT_PREFIXES = ["-I", "-isysroot", "-isystem", "-o"]
-FLAGS = ["-c", "-S", "-E"]
-
 
 def create_root_temp_folder() -> TemporaryDirectory:
     """Creates and returns the root folder of homcc inside /tmp."""
@@ -82,52 +78,7 @@ def get_needed_dependencies(dependencies: Dict[str, str], cache: Dict[str, str],
 def map_arguments(instance_path: str, mapped_cwd: str, arguments: List[str]) -> List[str]:
     """Maps arguments that should be translated (e.g. -I{dir}, .cpp files,
     or the -o argument) to paths valid on the server."""
-    mapped_arguments = [arguments[0]]
-
-    open_path_argument_prefix = False
-    open_prefix = False
-    for argument in arguments[1:]:
-        if argument.startswith("-"):
-            # we do not need to handle a flag such as -c specifically
-            if argument not in FLAGS:
-                open_prefix = True
-                for path_argument_prefix in PATH_ARGUMENT_PREFIXES:
-                    if argument.startswith(path_argument_prefix):
-                        open_path_argument_prefix = True
-
-                        if argument == path_argument_prefix:
-                            break
-                        else:
-                            argument_path = argument[len(path_argument_prefix) :]
-                            mapped_path = _map_path(instance_path, mapped_cwd, argument_path)
-                            argument = path_argument_prefix + mapped_path
-        elif open_path_argument_prefix or not open_prefix:
-            # 'open_path_argument_prefix': must be an argument which requires path translation
-            # not 'open_prefix': must be 'infile' argument (source files), also translate paths
-            argument = _map_path(instance_path, mapped_cwd, argument)
-            open_path_argument_prefix = False
-            open_prefix = False
-        else:
-            open_prefix = False
-
-        mapped_arguments.append(argument)
-
-    return mapped_arguments
-
-
-def _map_path(instance_path: str, mapped_cwd: str, path: str) -> str:
-    """Maps absolute or relative path from client to
-    absolute path on the server."""
-    joined_path: str
-    if os.path.isabs(path):
-        # in case of an absolute path we have to remove the first /
-        # (else os.path.join ignores the paths previous to this)
-        joined_path = os.path.join(instance_path, path[1:])
-    else:
-        joined_path = os.path.join(mapped_cwd, path)
-
-    # remove any '..' or '.' inside paths
-    return os.path.realpath(joined_path)
+    return list(Arguments.from_args(arguments).map(instance_path, mapped_cwd))
 
 
 def unmap_path(instance_path: str, server_path: str) -> str:
@@ -139,7 +90,7 @@ def map_dependency_paths(instance_path: str, mapped_cwd: str, dependencies: Dict
     """Maps dependency paths that the client sent to paths valid at the server."""
     mapped_dependencies = {}
     for path, sha1sum in dependencies.items():
-        mapped_path = _map_path(instance_path, mapped_cwd, path)
+        mapped_path = Arguments.map_path_arg(path, instance_path, mapped_cwd)
         mapped_dependencies[mapped_path] = sha1sum
 
     return mapped_dependencies

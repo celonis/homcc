@@ -138,7 +138,7 @@ def scan_includes(arguments: Arguments) -> List[str]:
 def find_dependencies(arguments: Arguments) -> Set[str]:
     """get unique set of dependencies by calling the preprocessor and filtering the result"""
     try:
-        # execute preprocessor command, e.g.: "g++ main.cpp -M -MT $(homcc)"
+        # execute preprocessor command, e.g.: "g++ foo.cpp -M -MT $(homcc)"
         result: ArgumentsExecutionResult = arguments.dependency_finding().execute(check=True)
     except subprocess.CalledProcessError as error:
         logger.error("Preprocessor error:\n%s", error.stderr)

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import re
 import shutil
 import subprocess
@@ -43,6 +44,9 @@ class Arguments:
 
     include_args: List[str] = ["-I", "-isysroot", "-isystem"]
 
+    # languages
+    allowed_language_prefixes: List[str] = ["c", "c++", "objective-c", "objective-c++", "go"]
+
     class Local:
         """
         Class to encapsulate all argument types that are not meaningful during remote compilation and should therefore
@@ -62,9 +66,6 @@ class Arguments:
         harmfulness during remote compilation, therefore if an Arguments instance does not fulfil Sendability, it should
         only be executed locally.
         """
-
-        # languages
-        allowed_language_prefixes: List[str] = ["c", "c++", "objective-c", "objective-c++", "go"]
 
         # preprocessing args
         preprocessing_only_arg: str = "-E"
@@ -199,7 +200,9 @@ class Arguments:
 
         # all remaining preprocessing arg types with prefix "-M" imply Unsendability
         if arg.startswith(Arguments.Unsendable.preprocessing_dependency_arg):
-            logger.debug("[%s] implies [%s] and must be local", arg, Arguments.Unsendable.preprocessing_only_arg)
+            logger.debug(
+                "[%s] implies [%s] and must be executed locally", arg, Arguments.Unsendable.preprocessing_only_arg
+            )
             return False
 
         # native args
@@ -214,7 +217,7 @@ class Arguments:
         if arg.startswith(Arguments.Unsendable.assembler_options_prefix):  # "-Wa,"
             for assembler_option in Arguments.Unsendable.assembler_options:
                 if assembler_option in arg:
-                    logger.debug("[%s] must be local", arg)
+                    logger.debug("[%s] must be executed locally", arg)
                     return False
 
         # specs
@@ -238,6 +241,20 @@ class Arguments:
             return False
 
         return True
+
+    @staticmethod
+    def map_path_arg(path_arg: str, instance_path: str, mapped_cwd: str) -> str:
+        """Maps absolute or relative path from client to absolute path on the server."""
+        joined_path: str = (
+            # in case of an absolute path we have to remove the first "/"
+            # otherwise os.path.join ignores the paths previous to this
+            os.path.join(instance_path, path_arg[1:])
+            if os.path.isabs(path_arg)
+            else os.path.join(mapped_cwd, path_arg)
+        )
+
+        # remove any ".." or "." inside paths
+        return os.path.realpath(joined_path)
 
     @property
     def args(self) -> List[str]:
@@ -313,7 +330,7 @@ class Arguments:
 
     def is_sendable(self) -> bool:
         """check whether the remote execution of Arguments would be successful"""
-        # "-o -" might be treated as write result to stdout by some compilers
+        # "-o -" might be treated as "write result to stdout" by some compilers
         output: Optional[str] = self.output
         if output == "-":
             logger.info('cannot compile %s remotely because output "%s" is ambiguous', self, output)
@@ -327,7 +344,7 @@ class Arguments:
         # unknown language
         specified_language: Optional[str] = self.specified_language
         if specified_language is not None and not specified_language.startswith(
-            tuple(Arguments.Unsendable.allowed_language_prefixes)
+            tuple(Arguments.allowed_language_prefixes)
         ):
             logger.info(
                 'cannot compile %s remotely because handling of language "%s" is too complex', self, specified_language
@@ -361,6 +378,33 @@ class Arguments:
         """return a copy of Arguments where all output args are removed and the no linking arg is added"""
         return self.copy().remove_output_args().add_arg(self.no_linking_arg)
 
+    def map(self, instance_path: str, mapped_cwd: str) -> Arguments:
+        """modify and return Arguments by mapping relevant paths"""
+
+        source_files: List[str] = self.source_files
+        path_option_prefix_args: List[str] = [self.output_arg] + self.include_args
+
+        arguments: Arguments = Arguments(self.compiler, [])
+
+        it: Iterator[str] = iter(self.args)
+        for arg in it:
+            if arg in source_files:
+                arg = self.map_path_arg(arg, instance_path, mapped_cwd)
+
+            elif arg.startswith("-"):
+                for path_arg in path_option_prefix_args:
+                    if arg.startswith(path_arg):
+                        path: str = next(it) if arg == path_arg else arg[len(path_arg) :]
+                        arg = f"{path_arg}{self.map_path_arg(path, instance_path, mapped_cwd)}"
+
+            else:
+                logger.warning("Unmapped and possibly erroneous arg [%s]", arg)
+
+            arguments.add_arg(arg)
+
+        self._args = arguments.args
+        return self
+
     def remove_local_args(self) -> Arguments:
         """modify and return Arguments by removing all remote compilation irrelevant args"""
         arguments: Arguments = Arguments(self.compiler, [])
@@ -372,7 +416,7 @@ class Arguments:
                 arguments.add_arg(arg)
                 continue
 
-            # skip some preprocessing args
+            # skip preprocessing args
             if arg in Arguments.Local.preprocessing_args:
                 continue
 
@@ -420,8 +464,8 @@ class Arguments:
     def execute(self, **kwargs) -> ArgumentsExecutionResult:
         """
         Execute Arguments by forwarding it as a list of args to subprocess and return the result as an
-        ArgumentsExecutionResult. All parameters to this method will also be forwarded as parameters to the subprocess
-        function call if possible.
+        ArgumentsExecutionResult. If possible, all parameters to this method will also be forwarded directly to the
+        subprocess function call.
         """
         check: bool = kwargs.pop("check", False)
         capture_output: bool = kwargs.pop("capture_output", True)
