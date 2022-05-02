@@ -365,6 +365,10 @@ class Arguments:
         """check whether the linking arg is present"""
         return self.no_linking_arg not in self.args
 
+    def is_linking_only(self) -> bool:
+        """check whether the execution of arguments leads to calling only the linker"""
+        return not self.source_files and self.is_linking()
+
     def dependency_finding(self) -> Arguments:
         """return a copy of arguments with which to find dependencies via the preprocessor"""
         return (

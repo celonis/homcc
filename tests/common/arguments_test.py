@@ -104,6 +104,16 @@ class TestArguments:
         not_linking_args: List[str] = linking_args + ["-c"]
         assert not Arguments.from_args(not_linking_args).is_linking()
 
+    def test_is_linking_only(self):
+        compile_and_link_args: List[str] = ["g++", "foo.cpp", "-O0", "-Iexample/include/"]
+        assert not Arguments.from_args(compile_and_link_args).is_linking_only()
+
+        compile_and_no_link_args: List[str] = compile_and_link_args + ["-c"]
+        assert not Arguments.from_args(compile_and_no_link_args).is_linking_only()
+
+        linking_only_args: List[str] = ["g++", "foo.o", "bar.o", "-ofoobar"]
+        assert Arguments.from_args(linking_only_args).is_linking_only()
+
     def test_output_target(self):
         args: List[str] = ["g++", "foo.cpp", "-O0", "-Iexample/include/"]
         assert Arguments.from_args(args).output is None

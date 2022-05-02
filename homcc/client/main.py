@@ -14,6 +14,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), "../.."))
 from homcc.client.compilation import (  # pylint: disable=wrong-import-position
     compile_locally,
     compile_remotely,
+    execute_arguments,
     scan_includes,
 )
 from homcc.client.errors import RecoverableClientError, RemoteCompilationError  # pylint: disable=wrong-import-position
@@ -75,6 +76,9 @@ def main():
 
     if timeout:
         client_config.timeout = timeout
+
+    if compiler_arguments.is_linking_only():
+        sys.exit(execute_arguments(compiler_arguments))
 
     # try to compile remotely
     if compiler_arguments.is_sendable():

@@ -51,7 +51,6 @@ async def compile_remotely(arguments: Arguments, hosts: List[str], config: Clien
 
 async def compile_remotely_at(arguments: Arguments, host: Host) -> int:
     """main function for the communication between client and a remote compilation host"""
-
     dependency_dict: Dict[str, str] = calculate_dependency_dict(find_dependencies(arguments))
     remote_arguments: Arguments = arguments.copy().remove_local_args()
 
@@ -112,9 +111,8 @@ async def compile_remotely_at(arguments: Arguments, host: Host) -> int:
     return os.EX_OK
 
 
-def compile_locally(arguments: Arguments) -> int:
-    """execute local compilation"""
-    logger.warning("Compiling locally instead!")
+def execute_arguments(arguments: Arguments) -> int:
+    """error-handled execution of arguments"""
     try:
         # execute compile command, e.g.: "g++ foo.cpp -o foo"
         result: ArgumentsExecutionResult = arguments.execute(check=True)
@@ -128,7 +126,14 @@ def compile_locally(arguments: Arguments) -> int:
     return result.return_code
 
 
+def compile_locally(arguments: Arguments) -> int:
+    """execute local compilation"""
+    logger.warning("Compiling locally instead!")
+    return execute_arguments(arguments)
+
+
 def scan_includes(arguments: Arguments) -> List[str]:
+    """find all included dependencies"""
     dependencies: Set[str] = find_dependencies(arguments)
     return [dependency for dependency in dependencies if dependency not in arguments.source_files]
 
