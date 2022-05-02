@@ -38,6 +38,7 @@ async def compile_remotely(arguments: Arguments, hosts: List[str], config: Clien
         host.compression = host.compression or config.compression
 
         if host.type == ConnectionType.LOCAL:
+            logger.info("Compiling locally!")
             return compile_locally(arguments)
 
         try:
@@ -111,8 +112,8 @@ async def compile_remotely_at(arguments: Arguments, host: Host) -> int:
     return os.EX_OK
 
 
-def execute_arguments(arguments: Arguments) -> int:
-    """error-handled execution of arguments"""
+def compile_locally(arguments: Arguments) -> int:
+    """execute local compilation"""
     try:
         # execute compile command, e.g.: "g++ foo.cpp -o foo"
         result: ArgumentsExecutionResult = arguments.execute(check=True)
@@ -124,12 +125,6 @@ def execute_arguments(arguments: Arguments) -> int:
         logger.debug("Compiler result:\n%s", result.stdout)
 
     return result.return_code
-
-
-def compile_locally(arguments: Arguments) -> int:
-    """execute local compilation"""
-    logger.warning("Compiling locally instead!")
-    return execute_arguments(arguments)
 
 
 def scan_includes(arguments: Arguments) -> List[str]:
@@ -154,7 +149,7 @@ def find_dependencies(arguments: Arguments) -> Set[str]:
 
     # create unique set of dependencies by filtering the preprocessor result
     def is_sendable_dependency(dependency: str) -> bool:
-        if dependency in [f"{Arguments.preprocessor_target}:", "\\"]:
+        if dependency in [f"{Arguments.PREPROCESSOR_TARGET}:", "\\"]:
             return False
 
         for excluded_prefix in excluded_dependency_prefixes:

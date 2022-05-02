@@ -28,13 +28,13 @@ from homcc.client.parsing import (
 class TestCLI:
     """Tests for client.parsing.parse_cli_args"""
 
-    mocked_hosts: List[str] = ["localhost/8", "remotehost/64"]
+    MOCKED_HOSTS: List[str] = ["localhost/8", "remotehost/64"]
 
     @pytest.fixture(autouse=True)
     def setup_mock(self, mocker: MockerFixture):
         mocker.patch(
             "homcc.client.parsing.load_hosts",
-            return_value=self.mocked_hosts,
+            return_value=self.MOCKED_HOSTS,
         )
 
     def test_version(self, capfd: CaptureFixture):
@@ -55,8 +55,8 @@ class TestCLI:
 
         assert sys_exit.value.code == os.EX_OK
         assert not cap.err
-        assert len(cap.out.splitlines()) == len(self.mocked_hosts)
-        for host in self.mocked_hosts:
+        assert len(cap.out.splitlines()) == len(self.MOCKED_HOSTS)
+        for host in self.MOCKED_HOSTS:
             assert host in cap.out
 
     def test_show_concurrency_level(self, capfd: CaptureFixture):

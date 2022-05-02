@@ -9,8 +9,8 @@ from homcc.common.arguments import Arguments
 class TestArguments:
     """Tests for common/arguments.py"""
 
-    compiler_candidates: List[str] = ["cc", "gcc", "g++", "clang", "clang++"]
-    compilers: List[str] = list(filter(lambda compiler: shutil.which(compiler) is not None, compiler_candidates))
+    COMPILER_CANDIDATES: List[str] = ["cc", "gcc", "g++", "clang", "clang++"]
+    COMPILERS: List[str] = list(filter(lambda compiler: shutil.which(compiler) is not None, COMPILER_CANDIDATES))
 
     def test_arguments(self):
         args: List[str] = ["g++", "foo.cpp", "-O0", "-Iexample/include/"]
@@ -38,9 +38,9 @@ class TestArguments:
         for not_object_file in not_object_files:
             assert not Arguments.is_object_file_arg(not_object_file)
 
-    @pytest.mark.skipif(not compilers, reason=f"No compiler of {compiler_candidates} installed to test")
+    @pytest.mark.skipif(not COMPILERS, reason=f"No compiler of {COMPILER_CANDIDATES} installed to test")
     def test_is_compiler_arg(self):
-        for compiler in self.compilers:
+        for compiler in self.COMPILERS:
             assert Arguments.is_compiler_arg(compiler)
 
     def test_from_args(self):
@@ -143,10 +143,10 @@ class TestArguments:
         assert Arguments.from_args(args).remove_local_args() == args
 
         local_args: List[str] = (
-            Arguments.Local.linking_option_prefix_args + Arguments.Local.preprocessing_option_prefix_args
+            Arguments.Local.LINKER_OPTION_PREFIX_ARGS + Arguments.Local.PREPROCESSOR_OPTION_PREFIX_ARGS
         )
 
-        for preprocessing_arg in Arguments.Local.preprocessing_args:
+        for preprocessing_arg in Arguments.Local.PREPROCESSOR_ARGS:
             assert Arguments.from_args(args + [preprocessing_arg]).remove_local_args() == args
 
         local_option_args: List[str] = args.copy()

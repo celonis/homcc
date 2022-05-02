@@ -36,17 +36,17 @@ class Arguments:
     """
 
     # if the compiler is neither specified by the callee nor defined in the config file use this as fallback
-    default_compiler: str = "cc"
-    preprocessor_target: str = "$(homcc)"
+    DEFAULT_COMPILER: str = "cc"
+    PREPROCESSOR_TARGET: str = "$(homcc)"
 
-    no_linking_arg: str = "-c"
-    output_arg: str = "-o"
-    language_arg: str = "-x"
+    NO_LINKING_ARG: str = "-c"
+    OUTPUT_ARG: str = "-o"
+    SPECIFY_LANGUAGE_ARG: str = "-x"
 
-    include_args: List[str] = ["-I", "-isysroot", "-isystem"]
+    INCLUDE_ARGS: List[str] = ["-I", "-isysroot", "-isystem"]
 
     # languages
-    allowed_language_prefixes: List[str] = ["c", "c++", "objective-c", "objective-c++", "go"]
+    ALLOWED_LANGUAGE_PREFIXES: List[str] = ["c", "c++", "objective-c", "objective-c++", "go"]
 
     class Local:
         """
@@ -55,11 +55,11 @@ class Arguments:
         """
 
         # preprocessor args
-        preprocessing_args: List[str] = ["-MD", "-MMD", "-MG", "-MP"]
-        preprocessing_option_prefix_args: List[str] = ["-MF", "-MT", "-MQ"]
+        PREPROCESSOR_ARGS: List[str] = ["-MD", "-MMD", "-MG", "-MP"]
+        PREPROCESSOR_OPTION_PREFIX_ARGS: List[str] = ["-MF", "-MT", "-MQ"]
 
         # linking args
-        linking_option_prefix_args: List[str] = ["-L", "-l", "-Wl,"]
+        LINKER_OPTION_PREFIX_ARGS: List[str] = ["-L", "-l", "-Wl,"]
 
     class Unsendable:
         """
@@ -69,38 +69,38 @@ class Arguments:
         """
 
         # preprocessing args
-        preprocessing_only_arg: str = "-E"
-        preprocessing_dependency_arg: str = "-M"
+        PREPROCESSOR_ONLY_ARG: str = "-E"
+        PREPROCESSOR_DEPENDENY_ARG: str = "-M"
 
         # args that rely on native machine
-        native_args: List[str] = ["-march=native", "-mtune=native"]
+        NATIVE_ARGS: List[str] = ["-march=native", "-mtune=native"]
 
         # assembly
-        no_assembly_arg: str = "-S"
-        assembler_options_prefix: str = "-Wa,"
-        assembler_options: List[str] = [",-a", "--MD"]
+        NO_ASSEMBLY_ARG: str = "-S"
+        ASSEMBLER_OPTIONS_PREFIX: str = "-Wa,"
+        ASSEMBLER_OPTIONS: List[str] = [",-a", "--MD"]
 
         # specs
-        specs_prefix: str = "-specs="
+        SPECS_PREFIX: str = "-specs="
 
         # profile info
-        profile_args: List[str] = [
+        PROFILE_ARGS: List[str] = [
             "-fprofile-arcs",
             "-ftest-coverage",
             "--coverage",
             "-fprofile-correction",
         ]
-        profile_arg_prefixes: List[str] = [
+        PROFILE_ARG_PREFIXES: List[str] = [
             "-fprofile-generate",
             "-fprofile-use",
             "-fauto-profile",
         ]
 
         # rpo
-        rpo_arg: str = "-frepo"
+        RPO_ARG: str = "-frepo"
 
         # debug
-        debug_arg_prefix: str = "-dr"
+        DEBUG_ARG_PREFIX: str = "-dr"
 
     def __init__(self, compiler: Optional[str], args: List[str]):
         self._compiler: Optional[str] = compiler
@@ -189,55 +189,55 @@ class Arguments:
             return True
 
         # preprocessor args
-        if arg == Arguments.Unsendable.preprocessing_only_arg:  # -E
+        if arg == Arguments.Unsendable.PREPROCESSOR_ONLY_ARG:  # -E
             logger.debug("[%s] implies a preprocessor only call", arg)
             return False
 
-        if arg in Arguments.Local.preprocessing_args:
+        if arg in Arguments.Local.PREPROCESSOR_ARGS:
             return True
 
-        if arg.startswith(tuple(Arguments.Local.preprocessing_option_prefix_args)):
+        if arg.startswith(tuple(Arguments.Local.PREPROCESSOR_OPTION_PREFIX_ARGS)):
             return True
 
         # all remaining preprocessing arg types with prefix "-M" imply Unsendability
-        if arg.startswith(Arguments.Unsendable.preprocessing_dependency_arg):
+        if arg.startswith(Arguments.Unsendable.PREPROCESSOR_DEPENDENY_ARG):
             logger.debug(
-                "[%s] implies [%s] and must be executed locally", arg, Arguments.Unsendable.preprocessing_only_arg
+                "[%s] implies [%s] and must be executed locally", arg, Arguments.Unsendable.PREPROCESSOR_ONLY_ARG
             )
             return False
 
         # native args
-        if arg in Arguments.Unsendable.native_args:
+        if arg in Arguments.Unsendable.NATIVE_ARGS:
             logger.debug("[%s] optimizes for local machine", arg)
             return False
 
         # assembly
-        if arg == Arguments.Unsendable.no_assembly_arg:  # "-S"
+        if arg == Arguments.Unsendable.NO_ASSEMBLY_ARG:  # "-S"
             return False
 
-        if arg.startswith(Arguments.Unsendable.assembler_options_prefix):  # "-Wa,"
-            for assembler_option in Arguments.Unsendable.assembler_options:
+        if arg.startswith(Arguments.Unsendable.ASSEMBLER_OPTIONS_PREFIX):  # "-Wa,"
+            for assembler_option in Arguments.Unsendable.ASSEMBLER_OPTIONS:
                 if assembler_option in arg:
                     logger.debug("[%s] must be executed locally", arg)
                     return False
 
         # specs
-        if arg.startswith(Arguments.Unsendable.specs_prefix):  # "-specs="
+        if arg.startswith(Arguments.Unsendable.SPECS_PREFIX):  # "-specs="
             logger.debug("[%s] overwrites spec strings", arg)
             return False
 
         # profile info
-        if arg in Arguments.Unsendable.profile_args or arg.startswith(tuple(Arguments.Unsendable.profile_arg_prefixes)):
+        if arg in Arguments.Unsendable.PROFILE_ARGS or arg.startswith(tuple(Arguments.Unsendable.PROFILE_ARG_PREFIXES)):
             logger.debug("[%s] will emit or use profile info", arg)
             return False
 
         # rpo
-        if arg == Arguments.Unsendable.rpo_arg:  # "-frepo"
+        if arg == Arguments.Unsendable.RPO_ARG:  # "-frepo"
             logger.debug("[%s] will emit .rpo files", arg)
             return False
 
         # debug
-        if arg.startswith(Arguments.Unsendable.debug_arg_prefix):  # "-dr"
+        if arg.startswith(Arguments.Unsendable.DEBUG_ARG_PREFIX):  # "-dr"
             logger.debug("[%s] may imply creation of debug files", arg)
             return False
 
@@ -293,8 +293,8 @@ class Arguments:
 
         it: Iterator[str] = iter(self.args)
         for arg in it:
-            if arg.startswith(self.output_arg):
-                if arg == self.output_arg:  # output argument with output target following: e.g.: -o out
+            if arg.startswith(self.OUTPUT_ARG):
+                if arg == self.OUTPUT_ARG:  # output argument with output target following: e.g.: -o out
                     output = next(it)  # skip output target
                 else:  # compact output argument: e.g.: -oout
                     output = arg[2:]
@@ -308,7 +308,7 @@ class Arguments:
         it: Iterator[str] = iter(self.args)
         for arg in it:
             if arg.startswith("-"):
-                for arg_prefix in [self.output_arg] + self.include_args:
+                for arg_prefix in [self.OUTPUT_ARG] + self.INCLUDE_ARGS:
                     if arg == arg_prefix:
                         next(it)
 
@@ -321,11 +321,22 @@ class Arguments:
         return source_files
 
     @cached_property
+    def object_files(self) -> List[str]:
+        """extract and return all object files that will be linked"""
+        object_files: List[str] = []
+
+        for arg in self.args:
+            if not arg.startswith("-") and self.is_object_file_arg(arg):
+                object_files.append(arg)
+
+        return object_files
+
+    @cached_property
     def specified_language(self) -> Optional[str]:
         """if present, return the specified language"""
         it: Iterator[str] = iter(self.args)
         for arg in it:
-            if arg.startswith(self.language_arg):
+            if arg.startswith(self.SPECIFY_LANGUAGE_ARG):
                 return next(it)
 
         return None
@@ -334,20 +345,20 @@ class Arguments:
         """check whether the remote execution of arguments would be successful"""
         # "-o -" might be treated as "write result to stdout" by some compilers
         if self.output == "-":
-            logger.info('cannot compile %s remotely because output "%s" is ambiguous', self, self.output)
+            logger.info('Cannot compile %s remotely because output "%s" is ambiguous', self, self.output)
             return False
 
         # no source files
         if not self.source_files:
-            logger.info("cannot compile %s remotely because no source files were given", self)
+            logger.info("Cannot compile %s remotely because no source files were given", self)
             return False
 
         # unknown language
         if self.specified_language is not None and not self.specified_language.startswith(
-            tuple(Arguments.allowed_language_prefixes)
+            tuple(Arguments.ALLOWED_LANGUAGE_PREFIXES)
         ):
             logger.info(
-                'cannot compile %s remotely because handling of language "%s" is too complex',
+                'Cannot compile %s remotely because handling of language "%s" is too complex',
                 self,
                 self.specified_language,
             )
@@ -356,14 +367,14 @@ class Arguments:
         # complex unsendable arguments
         for arg in self.args:
             if not self.is_sendable_arg(arg):
-                logger.info("cannot compile %s remotely due to argument [%s]", self, arg)
+                logger.info("Cannot compile %s remotely due to argument [%s]", self, arg)
                 return False
 
         return True
 
     def is_linking(self) -> bool:
         """check whether the linking arg is present"""
-        return self.no_linking_arg not in self.args
+        return self.NO_LINKING_ARG not in self.args
 
     def is_linking_only(self) -> bool:
         """check whether the execution of arguments leads to calling only the linker"""
@@ -373,21 +384,21 @@ class Arguments:
         """return a copy of arguments with which to find dependencies via the preprocessor"""
         return (
             self.copy()
-            .remove_arg(self.no_linking_arg)
+            .remove_arg(self.NO_LINKING_ARG)
             .remove_output_args()
             .add_arg("-M")  # output dependencies
             .add_arg("-MT")  # change target of the dependency generation
-            .add_arg(self.preprocessor_target)
+            .add_arg(self.PREPROCESSOR_TARGET)
         )
 
     def no_linking(self) -> Arguments:
         """return a copy of arguments where all output args are removed and the no linking arg is added"""
-        return self.copy().remove_output_args().add_arg(self.no_linking_arg)
+        return self.copy().remove_output_args().add_arg(self.NO_LINKING_ARG)
 
     def map(self, instance_path: str, mapped_cwd: str) -> Arguments:
         """modify and return arguments by mapping relevant paths"""
         args: List[str] = []
-        path_option_prefix_args: List[str] = [self.output_arg] + self.include_args
+        path_option_prefix_args: List[str] = [self.OUTPUT_ARG] + self.INCLUDE_ARGS
 
         it: Iterator[str] = iter(self.args)
         for arg in it:
@@ -416,17 +427,17 @@ class Arguments:
         for arg in it:
             if arg.startswith("-"):
                 # skip preprocessing args
-                if arg in Arguments.Local.preprocessing_args:
+                if arg in Arguments.Local.PREPROCESSOR_ARGS:
                     continue
 
-                if arg.startswith(tuple(Arguments.Local.preprocessing_option_prefix_args)):
-                    if arg in Arguments.Local.preprocessing_option_prefix_args:
+                if arg.startswith(tuple(Arguments.Local.PREPROCESSOR_OPTION_PREFIX_ARGS)):
+                    if arg in Arguments.Local.PREPROCESSOR_OPTION_PREFIX_ARGS:
                         next(it)
                     continue
 
                 # skip linking related args
-                if arg.startswith(tuple(Arguments.Local.linking_option_prefix_args)):
-                    if arg in Arguments.Local.linking_option_prefix_args:
+                if arg.startswith(tuple(Arguments.Local.LINKER_OPTION_PREFIX_ARGS)):
+                    if arg in Arguments.Local.LINKER_OPTION_PREFIX_ARGS:
                         next(it)
                     continue
 
@@ -443,8 +454,8 @@ class Arguments:
         it: Iterator[str] = iter(self.args)
         for arg in it:
             # skip output related args
-            if arg.startswith(self.output_arg):
-                if arg == self.output_arg:
+            if arg.startswith(self.OUTPUT_ARG):
+                if arg == self.OUTPUT_ARG:
                     next(it)  # skip output target
                 continue
 

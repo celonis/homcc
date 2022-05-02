@@ -140,7 +140,7 @@ class ClientConfig:
         verbose: Optional[str] = None,
         timeout: Optional[str] = None,
     ):
-        self.compiler = compiler or Arguments.default_compiler
+        self.compiler = compiler or Arguments.DEFAULT_COMPILER
         self.compression = compression
         self.timeout = float(timeout) if timeout is not None else None
 
@@ -208,7 +208,7 @@ def parse_cli_args(args: List[str]) -> Tuple[Dict[str, Any], Arguments]:
         type=str,
         metavar="[COMPILER] ARGUMENTS ...",
         help="COMPILER, if not specified explicitly, is either read from the config file or defaults to "
-        f'"{Arguments.default_compiler}"\n'
+        f'"{Arguments.DEFAULT_COMPILER}"\n'
         "all remaining ARGUMENTS will be directly forwarded to the COMPILER",
     )
 
