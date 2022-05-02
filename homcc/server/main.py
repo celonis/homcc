@@ -44,9 +44,10 @@ def main():
     if homccd_args_dict["verbose"] or log_level == "DEBUG" or homccd_config.log_level == LogLevel.DEBUG:
         logging_config.config |= FormatterConfig.DETAILED
         logging_config.level = logging.DEBUG
-    elif log_level:
-        logging_config.level = LogLevel[homccd_args_dict["log_level"]].value
-    elif homccd_config.log_level:
+
+    if log_level is not None:
+        logging_config.level = LogLevel[log_level].value
+    elif homccd_config.log_level is not None:
         logging_config.level = int(homccd_config.log_level)
 
     setup_logging(logging_config)

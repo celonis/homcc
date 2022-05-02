@@ -11,17 +11,14 @@ from typing import List, Optional
 
 sys.path.append(os.path.join(os.path.dirname(__file__), "../.."))
 
-from homcc.client.client import TCPClientError  # pylint: disable=wrong-import-position
 from homcc.client.compilation import (  # pylint: disable=wrong-import-position
-    CompilerError,
-    HostsExhaustedError,
     compile_locally,
     compile_remotely,
     scan_includes,
 )
+from homcc.client.errors import RecoverableClientError, RemoteCompilationError  # pylint: disable=wrong-import-position
 from homcc.client.parsing import (  # pylint: disable=wrong-import-position
     ClientConfig,
-    NoHostsFoundError,
     load_config_file,
     load_hosts,
     parse_cli_args,
@@ -64,12 +61,7 @@ def main():
 
     # SCAN-INCLUDES; and exit
     if homcc_args_dict["scan_includes"]:
-        try:
-            includes: List[str] = scan_includes(compiler_arguments)
-        except CompilerError as e:
-            sys.exit(e.returncode)
-
-        for include in includes:
+        for include in scan_includes(compiler_arguments):
             print(include)
 
         sys.exit(os.EX_OK)
@@ -84,20 +76,37 @@ def main():
     if timeout:
         client_config.timeout = timeout
 
+    if compiler_arguments.is_linking_only():
+        logger.debug("Linking [%s] to %s", ", ".join(compiler_arguments.object_files), compiler_arguments.output)
+        sys.exit(compile_locally(compiler_arguments))
+
     # try to compile remotely
     if compiler_arguments.is_sendable():
         try:
-            sys.exit(asyncio.run(compile_remotely(hosts, client_config, compiler_arguments)))
+            sys.exit(asyncio.run(compile_remotely(compiler_arguments, hosts, client_config)))
 
         # exit on unrecoverable errors
-        except CompilerError as error:
-            sys.exit(error.returncode)
+        except RemoteCompilationError as error:
+            logger.error("%s", error.message)
+            # sys.exit(error.return_code)
 
-        # recoverable errors
-        except (HostsExhaustedError, NoHostsFoundError, TCPClientError) as error:
+            # TODO(s.pirsch): remove local compilation fallback after extensive testing, disable for benchmarking!
+            # for now, we try to recover from remote compilation errors via local compilation to track bugs
+            local_compilation_return_code: int = compile_locally(compiler_arguments)
+            if local_compilation_return_code != error.return_code:
+                logger.critical(
+                    "Different compilation result errors: Client error(%i) - Host error(%i)",
+                    local_compilation_return_code,
+                    error.return_code,
+                )
+            sys.exit(local_compilation_return_code)
+
+        # compile locally on recoverable errors
+        except RecoverableClientError as error:
             logger.warning("%s", error)
 
-    # compile locally on unsendable arguments or recoverable errors
+    # compile locally on unsendable arguments
+    logger.warning("Compiling locally instead!")
     sys.exit(compile_locally(compiler_arguments))
 
 
