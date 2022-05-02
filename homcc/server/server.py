@@ -10,6 +10,7 @@ from tempfile import TemporaryDirectory
 from threading import Lock
 from typing import Dict, List, Optional, Tuple
 from socket import SHUT_RD
+from pathlib import Path
 
 from homcc.common.messages import (
     ArgumentMessage,
@@ -24,15 +25,9 @@ from homcc.common.hashing import hash_file_with_bytes
 from homcc.common.compression import Compression, NoCompression
 
 from homcc.server.environment import (
-    create_root_temp_folder,
-    create_instance_folder,
-    map_cwd,
-    map_arguments,
-    get_needed_dependencies,
-    map_dependency_paths,
+    Environment,
     save_dependency,
-    do_compilation,
-    symlink_dependency_to_cache,
+    create_root_temp_folder,
 )
 
 logger = logging.getLogger(__name__)
@@ -99,13 +94,13 @@ class TCPRequestHandler(socketserver.BaseRequestHandler):
 
     BUFFER_SIZE = 65536
 
-    mapped_dependencies: Dict[str, str] = {}
+    mapped_dependencies: Dict[str, str]
     """All dependencies for the current compilation, mapped to server paths."""
-    needed_dependencies: Dict[str, str] = {}
+    needed_dependencies: Dict[str, str]
     """Further dependencies needed from the client."""
-    needed_dependency_keys: List[str] = []
+    needed_dependency_keys: List[str]
     """Shuffled list of keys for the needed dependencies dict."""
-    compiler_arguments: List[str] = []
+    compiler_arguments: List[str]
     """List of compiler arguments."""
     instance_path: str = ""
     """Path to the current compilation inside /tmp/."""
@@ -115,6 +110,7 @@ class TCPRequestHandler(socketserver.BaseRequestHandler):
     """The TCP server belonging to this handler. (redefine for typing)"""
     compression: Compression
     """The compression algorithm requested by the client."""
+    environment: Environment
 
     @singledispatchmethod
     def _handle_message(self, message):
@@ -124,18 +120,15 @@ class TCPRequestHandler(socketserver.BaseRequestHandler):
     def _handle_argument_message(self, message: ArgumentMessage):
         logger.info("Handling ArgumentMessage...")
 
-        self.instance_path = create_instance_folder(self.server.root_temp_folder.name)
-        logger.info("Created dir for new client: %s", self.instance_path)
+        self.environment = Environment(root_folder=Path(self.server.root_temp_folder.name), cwd=message.get_cwd())
 
-        self.mapped_cwd = map_cwd(self.instance_path, message.get_cwd())
-
-        self.compiler_arguments = map_arguments(self.instance_path, self.mapped_cwd, message.get_arguments())
+        self.compiler_arguments = self.environment.map_arguments(message.get_arguments())
         logger.debug("Mapped compiler args: %s", str(self.compiler_arguments))
 
-        self.mapped_dependencies = map_dependency_paths(self.instance_path, self.mapped_cwd, message.get_dependencies())
+        self.mapped_dependencies = self.environment.map_dependency_paths(message.get_dependencies())
         logger.debug("Mapped dependencies: %s", self.mapped_dependencies)
 
-        self.needed_dependencies = get_needed_dependencies(
+        self.needed_dependencies = self.environment.get_needed_dependencies(
             self.mapped_dependencies, self.server.cache, self.server.cache_mutex
         )
         logger.debug("Needed dependencies: %s", self.needed_dependencies)
@@ -206,7 +199,7 @@ class TCPRequestHandler(socketserver.BaseRequestHandler):
                 already_cached = next_needed_hash in self.server.cache
 
             if already_cached:
-                symlink_dependency_to_cache(
+                self.environment.symlink_dependency_to_cache(
                     next_needed_file, next_needed_hash, self.server.cache, self.server.cache_mutex
                 )
 
@@ -225,9 +218,7 @@ class TCPRequestHandler(socketserver.BaseRequestHandler):
         """Checks if all dependencies exist. If yes, starts compiling. If no, requests missing dependencies."""
         if not self._request_next_dependency():
             # no further dependencies needed, compile now
-            result_message = do_compilation(
-                self.instance_path, self.mapped_cwd, self.compiler_arguments, self.compression
-            )
+            result_message = self.environment.do_compilation(self.compiler_arguments, self.compression)
 
             self.request.sendall(result_message.to_bytes())
 
@@ -259,7 +250,7 @@ class TCPRequestHandler(socketserver.BaseRequestHandler):
             recv_bytes: bytearray = self.recv()
 
             if len(recv_bytes) == 0:
-                logger.info("Connection closed gracefully.")
+                logger.info("Connection closed gracefully. %s", self.environment.instance_folder)
                 return
 
             bytes_needed: int = Message.MINIMUM_SIZE_BYTES

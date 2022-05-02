@@ -1,29 +1,26 @@
 """Tests for the server environment."""
 from pytest_mock.plugin import MockerFixture
 import pytest
+from pathlib import Path
 from homcc.common.compression import NoCompression
 
-from homcc.server.environment import (
-    CompilerResult,
-    map_arguments,
-    map_cwd,
-    unmap_path,
-    do_compilation,
-    get_needed_dependencies,
-)
+from homcc.server.environment import CompilerResult, Environment
 
 
-class TestServerEnvironmentPathMapping:
-    """Tests the server environment path mappings."""
+def create_mock_environment(instance_folder: str, mapped_cwd: str) -> Environment:
+    Environment.__init__ = lambda *_: None  # type: ignore
+    environment = Environment(Path(), "")
+
+    environment.instance_folder = instance_folder
+    environment.mapped_cwd = mapped_cwd
+
+    return environment
 
 
 class TestServerEnvironment:
     """Tests the server environment."""
 
     def test_map_arguments(self):
-        instance_path = "/client1"
-        mapped_cwd = "/client1/test/xyz"
-
         arguments = [
             "gcc",
             "-Irelative_path/relative.h",
@@ -37,24 +34,21 @@ class TestServerEnvironment:
             "relative/relative.cpp",
             "/opt/src/absolute.cpp",
         ]
-
-        mapped_arguments = map_arguments(instance_path, mapped_cwd, arguments)
+        environment = create_mock_environment("/client1", "/client1/test/xyz")
+        mapped_arguments = environment.map_arguments(arguments)
 
         assert mapped_arguments.pop(0) == "gcc"
-        assert mapped_arguments.pop(0) == f"-I{mapped_cwd}/relative_path/relative.h"
-        assert mapped_arguments.pop(0) == f"-I{instance_path}/var/includes/absolute.h"
-        assert mapped_arguments.pop(0) == f"-I{instance_path}/var/includes/absolute.h"
-        assert mapped_arguments.pop(0) == f"-isysroot{instance_path}/var/lib/sysroot.h"
-        assert mapped_arguments.pop(0) == f"-o{instance_path}/home/user/output.o"
-        assert mapped_arguments.pop(0) == f"-isystem{instance_path}/var/lib/system.h"
-        assert mapped_arguments.pop(0) == f"{mapped_cwd}/main.cpp"
-        assert mapped_arguments.pop(0) == f"{mapped_cwd}/relative/relative.cpp"
-        assert mapped_arguments.pop(0) == f"{instance_path}/opt/src/absolute.cpp"
+        assert mapped_arguments.pop(0) == f"-I{environment.mapped_cwd}/relative_path/relative.h"
+        assert mapped_arguments.pop(0) == f"-I{environment.instance_folder}/var/includes/absolute.h"
+        assert mapped_arguments.pop(0) == f"-I{environment.instance_folder}/var/includes/absolute.h"
+        assert mapped_arguments.pop(0) == f"-isysroot{environment.instance_folder}/var/lib/sysroot.h"
+        assert mapped_arguments.pop(0) == f"-o{environment.instance_folder}/home/user/output.o"
+        assert mapped_arguments.pop(0) == f"-isystem{environment.instance_folder}/var/lib/system.h"
+        assert mapped_arguments.pop(0) == f"{environment.mapped_cwd}/main.cpp"
+        assert mapped_arguments.pop(0) == f"{environment.mapped_cwd}/relative/relative.cpp"
+        assert mapped_arguments.pop(0) == f"{environment.instance_folder}/opt/src/absolute.cpp"
 
     def test_map_arguments_relative_paths(self):
-        instance_path = "/client1"
-        mapped_cwd = "/client1/test/xyz"
-
         arguments = [
             "gcc",
             "-BsomeOtherArgument",
@@ -72,36 +66,39 @@ class TestServerEnvironment:
             "some_file.cpp",
         ]
 
-        mapped_arguments = map_arguments(instance_path, mapped_cwd, arguments)
+        environment = create_mock_environment("/client1", "/client1/test/xyz")
+        mapped_arguments = environment.map_arguments(arguments)
 
         assert mapped_arguments.pop(0) == "gcc"
         assert mapped_arguments.pop(0) == "-BsomeOtherArgument"
         assert mapped_arguments.pop(0) == "-FooArgument"
         assert mapped_arguments.pop(0) == "should_not_be_mapped"
-        assert mapped_arguments.pop(0) == f"-o{mapped_cwd}/output_folder/b.out"
+        assert mapped_arguments.pop(0) == f"-o{environment.mapped_cwd}/output_folder/b.out"
         assert mapped_arguments.pop(0) == "-I/client1/test/abc/include/foo.h"
-        assert mapped_arguments.pop(0) == f"-I{mapped_cwd}/include/foo2.h"
+        assert mapped_arguments.pop(0) == f"-I{environment.mapped_cwd}/include/foo2.h"
         assert mapped_arguments.pop(0) == "-isystem/client1/include/sys.h"
         assert mapped_arguments.pop(0) == "/client1/test/main.cpp"
-        assert mapped_arguments.pop(0) == f"{mapped_cwd}/relative.cpp"
+        assert mapped_arguments.pop(0) == f"{environment.mapped_cwd}/relative.cpp"
         assert mapped_arguments.pop(0) == "-c"
-        assert mapped_arguments.pop(0) == f"{mapped_cwd}/some_file.cpp"
+        assert mapped_arguments.pop(0) == f"{environment.mapped_cwd}/some_file.cpp"
 
     def test_map_cwd(self):
         instance_path = "/client1/"
         cwd = "/home/xyz/query-engine"
 
-        mapped_cwd = map_cwd(instance_path, cwd)
+        environment = create_mock_environment(instance_path, cwd)
+        mapped_cwd = environment.map_cwd(cwd)
 
         assert mapped_cwd == "/client1/home/xyz/query-engine"
 
     def test_unmap(self):
         instance_path = "/tmp/homcc-random/"
+        environment = create_mock_environment(instance_path, "")
 
         client_path = "/home/user/output/a.out"
         mapped_path = f"{instance_path}/{client_path}"
 
-        unmapped = unmap_path(instance_path, mapped_path)
+        unmapped = environment.unmap_path(mapped_path)
 
         assert unmapped == client_path
 
@@ -117,11 +114,15 @@ class TestServerEnvironment:
         lock_mock.__enter__ = mocker.Mock(return_value=(mocker.Mock(), None))
         lock_mock.__exit__ = mocker.Mock(return_value=None)
 
-        needed_dependencies = get_needed_dependencies(dependencies, cache, lock_mock)
+        environment = create_mock_environment("", "")
+        needed_dependencies = environment.get_needed_dependencies(dependencies, cache, lock_mock)
 
         assert len(needed_dependencies) == 2
         assert "file1" in needed_dependencies
         assert "file3" in needed_dependencies
+
+        assert len(environment.symlinked_files) == 1
+        assert "file2" == str(environment.symlinked_files[0])
 
 
 class TestServerCompilation:
@@ -131,7 +132,7 @@ class TestServerCompilation:
     def setup_mocks(self, mocker: MockerFixture):
         mocked_compiler_result = CompilerResult(0, "", "")
         mocker.patch(
-            "homcc.server.environment.invoke_compiler",
+            "homcc.server.environment.Environment.invoke_compiler",
             return_value=mocked_compiler_result,
         )
         mocker.patch("pathlib.Path.read_bytes", return_value=bytes())
@@ -146,7 +147,8 @@ class TestServerCompilation:
             f"{mapped_cwd}/other.cpp",
         ]
 
-        result_message = do_compilation(instance_path, mapped_cwd, arguments, NoCompression())
+        environment = create_mock_environment(instance_path, mapped_cwd)
+        result_message = environment.do_compilation(arguments, NoCompression())
 
         assert len(result_message.object_files) == 2
         assert result_message.object_files[0].file_name == "/home/user/cwd/main.o"
@@ -161,7 +163,8 @@ class TestServerCompilation:
             f"{mapped_cwd}/src/this_is_a_source_file.cpp",
         ]
 
-        result_message = do_compilation(instance_path, mapped_cwd, arguments, NoCompression())
+        environment = create_mock_environment(instance_path, mapped_cwd)
+        result_message = environment.do_compilation(arguments, NoCompression())
 
         assert len(result_message.object_files) == 1
         assert result_message.object_files[0].file_name == "/home/user/cwd/this_is_a_source_file.o"
