@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class ArgumentsExecutionResult:
-    """Information that the Execution of Arguments produces"""
+    """Information that the execution of an Arguments instance produces"""
 
     return_code: int
     stdout: str
@@ -127,20 +127,20 @@ class Arguments:
         return f"{self.__class__}({str(self)})"
 
     def copy(self) -> Arguments:
-        """return an Arguments copy"""
+        """return an arguments copy"""
         return Arguments(self.compiler, self.args.copy())
 
     @classmethod
     def from_args(cls, args: List[str]) -> Arguments:
-        """construct Arguments from a list of args"""
+        """construct arguments from a list of args"""
         if not args:
-            raise ValueError("Not enough arguments supplied to construct Arguments")
+            raise ValueError("Not enough args supplied to construct Arguments")
 
-        # compiler without arguments, e.g. ["g++"]
+        # compiler without args, e.g. ["g++"]
         if len(args) == 1:
             return cls(args[0], [])
 
-        # compiler with arguments, e.g. ["g++", "foo.cpp", "-c"]
+        # compiler with args, e.g. ["g++", "foo.cpp", "-c"]
         return cls(args[0], args[1:])
 
     @classmethod
@@ -331,7 +331,7 @@ class Arguments:
         return None
 
     def is_sendable(self) -> bool:
-        """check whether the remote execution of Arguments would be successful"""
+        """check whether the remote execution of arguments would be successful"""
         # "-o -" might be treated as "write result to stdout" by some compilers
         if self.output == "-":
             logger.info('cannot compile %s remotely because output "%s" is ambiguous', self, self.output)
@@ -366,7 +366,7 @@ class Arguments:
         return self.no_linking_arg not in self.args
 
     def dependency_finding(self) -> Arguments:
-        """return a copy of Arguments with which to find dependencies via the preprocessor"""
+        """return a copy of arguments with which to find dependencies via the preprocessor"""
         return (
             self.copy()
             .remove_arg(self.no_linking_arg)
@@ -377,13 +377,12 @@ class Arguments:
         )
 
     def no_linking(self) -> Arguments:
-        """return a copy of Arguments where all output args are removed and the no linking arg is added"""
+        """return a copy of arguments where all output args are removed and the no linking arg is added"""
         return self.copy().remove_output_args().add_arg(self.no_linking_arg)
 
     def map(self, instance_path: str, mapped_cwd: str) -> Arguments:
-        """modify and return Arguments by mapping relevant paths"""
-
-        arguments: Arguments = Arguments(self.compiler, [])
+        """modify and return arguments by mapping relevant paths"""
+        args: List[str] = []
         path_option_prefix_args: List[str] = [self.output_arg] + self.include_args
 
         it: Iterator[str] = iter(self.args)
@@ -400,14 +399,14 @@ class Arguments:
             else:
                 logger.warning("Unmapped and possibly erroneous arg [%s]", arg)
 
-            arguments.add_arg(arg)
+            args.append(arg)
 
-        self._args = arguments.args
+        self._args = args
         return self
 
     def remove_local_args(self) -> Arguments:
-        """modify and return Arguments by removing all remote compilation irrelevant args"""
-        arguments: Arguments = Arguments(self.compiler, [])
+        """modify and return arguments by removing all remote compilation irrelevant args"""
+        args: List[str] = []
 
         it: Iterator[str] = iter(self.args)
         for arg in it:
@@ -428,14 +427,14 @@ class Arguments:
                     continue
 
             # keep remaining types of args
-            arguments.add_arg(arg)
+            args.append(arg)
 
-        self._args = arguments.args
+        self._args = args
         return self
 
     def remove_output_args(self) -> Arguments:
-        """modify and return Arguments by removing all output related args"""
-        arguments: Arguments = Arguments(self.compiler, [])
+        """modify and return arguments by removing all output related args"""
+        args: List[str] = []
 
         it: Iterator[str] = iter(self.args)
         for arg in it:
@@ -445,21 +444,21 @@ class Arguments:
                     next(it)  # skip output target
                 continue
 
-            arguments.add_arg(arg)
+            args.append(arg)
 
         self.__dict__.pop("output", None)  # remove cached_property output
-        self._args = arguments.args
+        self._args = args
         return self
 
     def remove_source_file_args(self) -> Arguments:
-        """modify and return Arguments by removing all source file args"""
+        """modify and return arguments by removing all source file args"""
         self.__dict__.pop("source_files", None)  # remove cached_property source_files
         self._args = [arg for arg in self.args if not self.is_source_file_arg(arg)]
         return self
 
     def execute(self, **kwargs) -> ArgumentsExecutionResult:
         """
-        Execute Arguments by forwarding it as a list of args to subprocess and return the result as an
+        Execute arguments by forwarding it as a list of args to subprocess and return the result as an
         ArgumentsExecutionResult. If possible, all parameters to this method will also be forwarded directly to the
         subprocess function call.
         """
