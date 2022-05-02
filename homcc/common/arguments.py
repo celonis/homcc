@@ -2,11 +2,13 @@
 from __future__ import annotations
 
 import logging
+import os
 import re
 import shutil
 import subprocess
 
 from dataclasses import dataclass
+from functools import cached_property
 from typing import Any, Iterator, List, Optional
 
 logger = logging.getLogger(__name__)
@@ -14,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class ArgumentsExecutionResult:
-    """Information that the Execution of Arguments produces"""
+    """Information that the execution of an Arguments instance produces"""
 
     return_code: int
     stdout: str
@@ -23,10 +25,6 @@ class ArgumentsExecutionResult:
     @classmethod
     def from_process_result(cls, result: subprocess.CompletedProcess) -> ArgumentsExecutionResult:
         return cls(result.returncode, result.stdout, result.stderr)
-
-
-class ArgumentsOutputError(Exception):
-    """Exception for failing to extract output target"""
 
 
 class Arguments:
@@ -38,44 +36,71 @@ class Arguments:
     """
 
     # if the compiler is neither specified by the callee nor defined in the config file use this as fallback
-    default_compiler: str = "cc"
+    DEFAULT_COMPILER: str = "cc"
+    PREPROCESSOR_TARGET: str = "$(homcc)"
 
-    no_linking_arg: str = "-c"
-    output_arg: str = "-o"
+    NO_LINKING_ARG: str = "-c"
+    OUTPUT_ARG: str = "-o"
+    SPECIFY_LANGUAGE_ARG: str = "-x"
 
-    include_args: List[str] = ["-I", "-isysroot", "-isystem"]
+    INCLUDE_ARGS: List[str] = ["-I", "-isysroot", "-isystem"]
 
-    preprocessor_target: str = "$(homcc)"
+    # languages
+    ALLOWED_LANGUAGE_PREFIXES: List[str] = ["c", "c++", "objective-c", "objective-c++", "go"]
+
+    class Local:
+        """
+        Class to encapsulate all argument types that are not meaningful during remote compilation and should therefore
+        be removed before being sent.
+        """
+
+        # preprocessor args
+        PREPROCESSOR_ARGS: List[str] = ["-MD", "-MMD", "-MG", "-MP"]
+        PREPROCESSOR_OPTION_PREFIX_ARGS: List[str] = ["-MF", "-MT", "-MQ"]
+
+        # linking args
+        LINKER_OPTION_PREFIX_ARGS: List[str] = ["-L", "-l", "-Wl,"]
 
     class Unsendable:
         """
-        Class to encapsulate all args that imply unsendability.
-
-        Note: Respect the naming scheme as listed in the comments below when additional arguments are added, so that the
-        sendability test can deduce them automatically!
+        Class to encapsulate all argument types that are relevant for the Sendability test. Unsendability implies
+        harmfulness during remote compilation, therefore if an Arguments instance does not fulfil Sendability, it should
+        only be executed locally.
         """
 
-        # arg prefixes: naming ends on _prefix
-        assembler_options_prefix: str = "-Wa,"
-        specs_prefix: str = "-specs="
-        profile_generate_prefix: str = "-fprofile-generate="
+        # preprocessing args
+        PREPROCESSOR_ONLY_ARG: str = "-E"
+        PREPROCESSOR_DEPENDENY_ARG: str = "-M"
 
-        # single args: naming ends on _arg
-        no_assembly_arg: str = "-S"
-        rpo_arg: str = "-frepo"
+        # args that rely on native machine
+        NATIVE_ARGS: List[str] = ["-march=native", "-mtune=native"]
 
-        # arg families: naming ends on _args
-        native_args: List[str] = ["-march=native", "-mtune=native"]
-        preprocessor_args: List[str] = ["-E", "-M", "-MM"]
-        profile_args: List[str] = [
+        # assembly
+        NO_ASSEMBLY_ARG: str = "-S"
+        ASSEMBLER_OPTIONS_PREFIX: str = "-Wa,"
+        ASSEMBLER_OPTIONS: List[str] = [",-a", "--MD"]
+
+        # specs
+        SPECS_PREFIX: str = "-specs="
+
+        # profile info
+        PROFILE_ARGS: List[str] = [
             "-fprofile-arcs",
             "-ftest-coverage",
             "--coverage",
+            "-fprofile-correction",
+        ]
+        PROFILE_ARG_PREFIXES: List[str] = [
             "-fprofile-generate",
             "-fprofile-use",
             "-fauto-profile",
-            "-fprofile-correction",
         ]
+
+        # rpo
+        RPO_ARG: str = "-frepo"
+
+        # debug
+        DEBUG_ARG_PREFIX: str = "-dr"
 
     def __init__(self, compiler: Optional[str], args: List[str]):
         self._compiler: Optional[str] = compiler
@@ -96,232 +121,361 @@ class Arguments:
         return len(self.args) + 1
 
     def __str__(self) -> str:
-        return f'[{self.compiler} {" ".join(self.args[1:])}]'
+        return f'[{self.compiler} {" ".join(self.args)}]'
 
     def __repr__(self) -> str:
         return f"{self.__class__}({str(self)})"
 
+    def copy(self) -> Arguments:
+        """return an arguments copy"""
+        return Arguments(self.compiler, self.args.copy())
+
     @classmethod
     def from_args(cls, args: List[str]) -> Arguments:
+        """construct arguments from a list of args"""
         if not args:
-            raise ValueError("Not enough arguments supplied to construct Arguments")
+            raise ValueError("Not enough args supplied to construct Arguments")
 
-        # compiler without arguments, e.g. ["g++"]
+        # compiler without args, e.g. ["g++"]
         if len(args) == 1:
             return cls(args[0], [])
 
-        # compiler with arguments, e.g. ["g++", "foo.cpp", "-c"]
+        # compiler with args, e.g. ["g++", "foo.cpp", "-c"]
         return cls(args[0], args[1:])
 
     @classmethod
     def from_cli(cls, compiler_or_argument: str, args: List[str]) -> Arguments:
+        """construct Arguments from args given via the CLI"""
         # explicit compiler argument, e.g.: "homcc [OPTIONAL ARGUMENTS] g++ -c foo.cpp"
-        if cls.is_compiler(compiler_or_argument):
+        if cls.is_compiler_arg(compiler_or_argument):
             return cls(compiler_or_argument, args)
 
         # missing compiler argument, e.g.: "homcc [OPTIONAL ARGUMENTS] -c foo.cpp"
         return cls(None, [compiler_or_argument] + args)
 
     @staticmethod
-    def is_source_file(arg: str) -> bool:
+    def is_source_file_arg(arg: str) -> bool:
         """check whether an argument looks like a source file"""
         # if we enable remote assembly, additionally allow file extension ".s"
         source_file_pattern: str = r"^\S+\.(i|ii|c|cc|cp|cpp|cxx|c\+\+|m|mm|mi|mii)$"  # e.g. "foo.cpp"
         return re.match(source_file_pattern, arg, re.IGNORECASE) is not None
 
     @staticmethod
-    def is_object_file(arg: str) -> bool:
+    def is_object_file_arg(arg: str) -> bool:
         """check whether an argument looks like an object file"""
         object_file_pattern: str = r"^\S+\.o$"  # e.g. "foo.o"
         return re.match(object_file_pattern, arg, re.IGNORECASE) is not None
 
     @staticmethod
-    def is_executable(arg: str) -> bool:
+    def is_executable_arg(arg: str) -> bool:
         """check whether an argument is executable"""
         return shutil.which(arg) is not None
 
     @staticmethod
-    def is_compiler(arg: str) -> bool:
-        """check if an argument looks like a compiler"""
-        if not arg.startswith("-") and not Arguments.is_source_file(arg) and not Arguments.is_object_file(arg):
+    def is_compiler_arg(arg: str) -> bool:
+        """check whether an argument looks like a compiler"""
+        if not arg.startswith("-") and not Arguments.is_source_file_arg(arg) and not Arguments.is_object_file_arg(arg):
             logger.debug("%s is used as compiler", arg)
 
-            if not Arguments.is_executable(arg):
+            if not Arguments.is_executable_arg(arg):
                 logger.warning("Specified compiler %s is not an executable", arg)
             return True
         return False
 
-    def is_sendable(self) -> bool:
-        """determine if the Arguments lead to a meaningful remote compilation"""
+    @staticmethod
+    def is_sendable_arg(arg: str) -> bool:
+        """check whether an argument is sendable"""
+        if not arg.startswith("-"):
+            return True
 
-        def log_unsendable(message: str):
-            logger.info("%s; cannot compile remotely", message)
-
-        if not self.source_files:
-            log_unsendable("no source files given")
+        # preprocessor args
+        if arg == Arguments.Unsendable.PREPROCESSOR_ONLY_ARG:  # -E
+            logger.debug("[%s] implies a preprocessor only call", arg)
             return False
 
-        for arg in self.args:
-            if not arg.startswith("-"):
-                continue
+        if arg in Arguments.Local.PREPROCESSOR_ARGS:
+            return True
 
-            # prefix args
-            if arg.startswith(self.Unsendable.assembler_options_prefix):  # "-Wa,"
-                log_unsendable(f"[{arg}] must be local")  # TODO(s.pirsch): this is more detailed, fix in separate PR
-                return False
+        if arg.startswith(tuple(Arguments.Local.PREPROCESSOR_OPTION_PREFIX_ARGS)):
+            return True
 
-            if arg.startswith(self.Unsendable.specs_prefix):  # "-specs="
-                log_unsendable(f"[{arg}] overwrites spec strings")
-                return False
+        # all remaining preprocessing arg types with prefix "-M" imply Unsendability
+        if arg.startswith(Arguments.Unsendable.PREPROCESSOR_DEPENDENY_ARG):
+            logger.debug(
+                "[%s] implies [%s] and must be executed locally", arg, Arguments.Unsendable.PREPROCESSOR_ONLY_ARG
+            )
+            return False
 
-            if arg.startswith(self.Unsendable.profile_generate_prefix):  # "-fprofile-generate="
-                log_unsendable(f"[{arg}]  will emit profile info")
-                return False
+        # native args
+        if arg in Arguments.Unsendable.NATIVE_ARGS:
+            logger.debug("[%s] optimizes for local machine", arg)
+            return False
 
-            # single args
-            if arg == self.Unsendable.no_assembly_arg:  # "-S"
-                log_unsendable(f"[{arg}] implies a no assembly call")
-                return False
+        # assembly
+        if arg == Arguments.Unsendable.NO_ASSEMBLY_ARG:  # "-S"
+            return False
 
-            if arg == self.Unsendable.rpo_arg:  # "-frepo"
-                log_unsendable(f"[{arg}] will emit .rpo files")
-                return False
-
-            # arg families
-            if arg in self.Unsendable.native_args:
-                log_unsendable(f"[{arg}] optimizes for local machine")
-                return False
-
-            if arg in self.Unsendable.preprocessor_args:
-                log_unsendable(f"[{arg}] implies a preprocessor only call")
-                return False
-
-            for profile_arg in self.Unsendable.profile_args:
-                if arg.startswith(profile_arg):
-                    log_unsendable(f"[{arg}] will emit or use profile info")
+        if arg.startswith(Arguments.Unsendable.ASSEMBLER_OPTIONS_PREFIX):  # "-Wa,"
+            for assembler_option in Arguments.Unsendable.ASSEMBLER_OPTIONS:
+                if assembler_option in arg:
+                    logger.debug("[%s] must be executed locally", arg)
                     return False
+
+        # specs
+        if arg.startswith(Arguments.Unsendable.SPECS_PREFIX):  # "-specs="
+            logger.debug("[%s] overwrites spec strings", arg)
+            return False
+
+        # profile info
+        if arg in Arguments.Unsendable.PROFILE_ARGS or arg.startswith(tuple(Arguments.Unsendable.PROFILE_ARG_PREFIXES)):
+            logger.debug("[%s] will emit or use profile info", arg)
+            return False
+
+        # rpo
+        if arg == Arguments.Unsendable.RPO_ARG:  # "-frepo"
+            logger.debug("[%s] will emit .rpo files", arg)
+            return False
+
+        # debug
+        if arg.startswith(Arguments.Unsendable.DEBUG_ARG_PREFIX):  # "-dr"
+            logger.debug("[%s] may imply creation of debug files", arg)
+            return False
 
         return True
 
-    def is_linking(self) -> bool:
-        """check whether the linking flag is present"""
-        return self.no_linking_arg not in self.args
+    @staticmethod
+    def map_path_arg(path_arg: str, instance_path: str, mapped_cwd: str) -> str:
+        """Maps absolute or relative path from client to absolute path on the server."""
+        joined_path: str = (
+            # in case of an absolute path we have to remove the first "/"
+            # otherwise os.path.join ignores the paths previous to this
+            os.path.join(instance_path, path_arg[1:])
+            if os.path.isabs(path_arg)
+            else os.path.join(mapped_cwd, path_arg)
+        )
+
+        # remove any ".." or "." inside paths
+        return os.path.realpath(joined_path)
 
     @property
     def args(self) -> List[str]:
+        """return all non-compiler args"""
         return self._args
 
     def add_arg(self, arg: str) -> Arguments:
-        """add argument, may introduce duplicated arguments"""
+        """
+        add the specified arg, this may introduce duplicated args and break cached properties when used inconsiderately
+        """
         self._args.append(arg)
         return self
 
     def remove_arg(self, arg: str) -> Arguments:
-        """remove argument if present, may remove multiple matching arguments"""
+        """
+        if present, remove the specified arg, this may remove multiple occurrences of this arg and break cached
+        properties when used inconsiderately
+        """
         self._args = list(filter(lambda _arg: _arg != arg, self.args))
         return self
 
     @property
     def compiler(self) -> Optional[str]:
+        """if present, return the specified compiler"""
         return self._compiler
 
     @compiler.setter
     def compiler(self, compiler: str):
         self._compiler = compiler
 
-    def dependency_finding(self) -> Arguments:
-        """return Arguments with which to find dependencies via the preprocessor"""
-        return (
-            Arguments(self.compiler, self.args)
-            .remove_arg(self.no_linking_arg)
-            .remove_output_args()
-            .add_arg("-M")  # output dependencies
-            .add_arg("-MT")  # change target of the dependency generation
-            .add_arg(self.preprocessor_target)
-        )
-
-    def no_linking(self) -> Arguments:
-        """return copy of Arguments with output arguments removed and no linking argument added"""
-        return Arguments(self.compiler, self.args).remove_output_args().add_arg(self.no_linking_arg)
-
-    @property
+    @cached_property
     def output(self) -> Optional[str]:
         """if present, return the last specified output target"""
         output: Optional[str] = None
 
         it: Iterator[str] = iter(self.args)
         for arg in it:
-            if arg.startswith("-o"):
-                if arg == "-o":  # output argument with output target following: e.g.: -o out
-                    try:
-                        output = next(it)  # skip output target argument
-                    except StopIteration as error:
-                        logger.error("Faulty output arguments provided: %s", self)
-                        raise ArgumentsOutputError from error
+            if arg.startswith(self.OUTPUT_ARG):
+                if arg == self.OUTPUT_ARG:  # output argument with output target following: e.g.: -o out
+                    output = next(it)  # skip output target
                 else:  # compact output argument: e.g.: -oout
                     output = arg[2:]
         return output
 
-    @output.setter
-    def output(self, output: str):
-        self.remove_output_args().add_arg(f"-o{output}")
-
-    @property
+    @cached_property
     def source_files(self) -> List[str]:
-        """extract files to be compiled and returns their paths"""
-        source_file_paths: List[str] = []
-        other_open_arg: bool = False
-
-        for arg in self.args:
-            if arg.startswith("-"):
-                for arg_prefix in [self.output_arg] + self.include_args:
-                    if arg == arg_prefix:
-                        other_open_arg = True
-                        break
-
-                if other_open_arg:
-                    continue
-
-            elif not other_open_arg:
-                if self.is_source_file(arg):
-                    source_file_paths.append(arg)
-                else:
-                    logger.debug('Not adding "%s" as source file, as it doesn\'t match source file regex.', arg)
-
-            other_open_arg = False
-
-        return source_file_paths
-
-    def remove_output_args(self) -> Arguments:
-        """return modified Arguments with all output related arguments removed"""
-        arguments: Arguments = Arguments(self.compiler, [])
+        """extract and return all source files that will be compiled"""
+        source_files: List[str] = []
 
         it: Iterator[str] = iter(self.args)
         for arg in it:
-            if arg.startswith("-o"):
-                # skip output related args
-                if arg == "-o":
-                    next(it, None)  # skip output target argument without raising an exception
-            else:
-                arguments.add_arg(arg)
+            if arg.startswith("-"):
+                for arg_prefix in [self.OUTPUT_ARG] + self.INCLUDE_ARGS:
+                    if arg == arg_prefix:
+                        next(it)
 
-        self._args = arguments.args
+            elif self.is_source_file_arg(arg):
+                source_files.append(arg)
+
+            else:
+                logger.debug('Not adding "%s" as source file, as it does not match source file regex.', arg)
+
+        return source_files
+
+    @cached_property
+    def object_files(self) -> List[str]:
+        """extract and return all object files that will be linked"""
+        object_files: List[str] = []
+
+        for arg in self.args:
+            if not arg.startswith("-") and self.is_object_file_arg(arg):
+                object_files.append(arg)
+
+        return object_files
+
+    @cached_property
+    def specified_language(self) -> Optional[str]:
+        """if present, return the specified language"""
+        it: Iterator[str] = iter(self.args)
+        for arg in it:
+            if arg.startswith(self.SPECIFY_LANGUAGE_ARG):
+                return next(it)
+
+        return None
+
+    def is_sendable(self) -> bool:
+        """check whether the remote execution of arguments would be successful"""
+        # "-o -" might be treated as "write result to stdout" by some compilers
+        if self.output == "-":
+            logger.info('Cannot compile %s remotely because output "%s" is ambiguous', self, self.output)
+            return False
+
+        # no source files
+        if not self.source_files:
+            logger.info("Cannot compile %s remotely because no source files were given", self)
+            return False
+
+        # unknown language
+        if self.specified_language is not None and not self.specified_language.startswith(
+            tuple(Arguments.ALLOWED_LANGUAGE_PREFIXES)
+        ):
+            logger.info(
+                'Cannot compile %s remotely because handling of language "%s" is too complex',
+                self,
+                self.specified_language,
+            )
+            return False
+
+        # complex unsendable arguments
+        for arg in self.args:
+            if not self.is_sendable_arg(arg):
+                logger.info("Cannot compile %s remotely due to argument [%s]", self, arg)
+                return False
+
+        return True
+
+    def is_linking(self) -> bool:
+        """check whether the linking arg is present"""
+        return self.NO_LINKING_ARG not in self.args
+
+    def is_linking_only(self) -> bool:
+        """check whether the execution of arguments leads to calling only the linker"""
+        return not self.source_files and self.is_linking()
+
+    def dependency_finding(self) -> Arguments:
+        """return a copy of arguments with which to find dependencies via the preprocessor"""
+        return (
+            self.copy()
+            .remove_arg(self.NO_LINKING_ARG)
+            .remove_output_args()
+            .add_arg("-M")  # output dependencies
+            .add_arg("-MT")  # change target of the dependency generation
+            .add_arg(self.PREPROCESSOR_TARGET)
+        )
+
+    def no_linking(self) -> Arguments:
+        """return a copy of arguments where all output args are removed and the no linking arg is added"""
+        return self.copy().remove_output_args().add_arg(self.NO_LINKING_ARG)
+
+    def map(self, instance_path: str, mapped_cwd: str) -> Arguments:
+        """modify and return arguments by mapping relevant paths"""
+        args: List[str] = []
+        path_option_prefix_args: List[str] = [self.OUTPUT_ARG] + self.INCLUDE_ARGS
+
+        it: Iterator[str] = iter(self.args)
+        for arg in it:
+            if arg in self.source_files:
+                arg = self.map_path_arg(arg, instance_path, mapped_cwd)
+
+            elif arg.startswith("-"):
+                for path_arg in path_option_prefix_args:
+                    if arg.startswith(path_arg):
+                        path: str = next(it) if arg == path_arg else arg[len(path_arg) :]
+                        arg = f"{path_arg}{self.map_path_arg(path, instance_path, mapped_cwd)}"
+
+            else:
+                logger.warning("Unmapped and possibly erroneous arg [%s]", arg)
+
+            args.append(arg)
+
+        self._args = args
+        return self
+
+    def remove_local_args(self) -> Arguments:
+        """modify and return arguments by removing all remote compilation irrelevant args"""
+        args: List[str] = []
+
+        it: Iterator[str] = iter(self.args)
+        for arg in it:
+            if arg.startswith("-"):
+                # skip preprocessing args
+                if arg in Arguments.Local.PREPROCESSOR_ARGS:
+                    continue
+
+                if arg.startswith(tuple(Arguments.Local.PREPROCESSOR_OPTION_PREFIX_ARGS)):
+                    if arg in Arguments.Local.PREPROCESSOR_OPTION_PREFIX_ARGS:
+                        next(it)
+                    continue
+
+                # skip linking related args
+                if arg.startswith(tuple(Arguments.Local.LINKER_OPTION_PREFIX_ARGS)):
+                    if arg in Arguments.Local.LINKER_OPTION_PREFIX_ARGS:
+                        next(it)
+                    continue
+
+            # keep remaining types of args
+            args.append(arg)
+
+        self._args = args
+        return self
+
+    def remove_output_args(self) -> Arguments:
+        """modify and return arguments by removing all output related args"""
+        args: List[str] = []
+
+        it: Iterator[str] = iter(self.args)
+        for arg in it:
+            # skip output related args
+            if arg.startswith(self.OUTPUT_ARG):
+                if arg == self.OUTPUT_ARG:
+                    next(it)  # skip output target
+                continue
+
+            args.append(arg)
+
+        self.__dict__.pop("output", None)  # remove cached_property output
+        self._args = args
         return self
 
     def remove_source_file_args(self) -> Arguments:
-        """remove source file args"""
-        for source_file in self.source_files:
-            self.remove_arg(source_file)
-
+        """modify and return arguments by removing all source file args"""
+        self.__dict__.pop("source_files", None)  # remove cached_property source_files
+        self._args = [arg for arg in self.args if not self.is_source_file_arg(arg)]
         return self
 
     def execute(self, **kwargs) -> ArgumentsExecutionResult:
         """
-        execute the current arguments as command and return its execution result
-
-        parameters:
-        - check: enables the raising of CalledProcessError
-        - cwd: changes the current working directory
+        Execute arguments by forwarding it as a list of args to subprocess and return the result as an
+        ArgumentsExecutionResult. If possible, all parameters to this method will also be forwarded directly to the
+        subprocess function call.
         """
         check: bool = kwargs.pop("check", False)
         capture_output: bool = kwargs.pop("capture_output", True)
@@ -333,6 +487,6 @@ class Arguments:
             logger.error("Arguments currently does not support shell execution!")
 
         result: subprocess.CompletedProcess = subprocess.run(
-            list(self), check=check, encoding="utf-8", capture_output=capture_output, **kwargs
+            args=list(self), check=check, encoding="utf-8", capture_output=capture_output, **kwargs
         )
         return ArgumentsExecutionResult.from_process_result(result)

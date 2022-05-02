@@ -14,28 +14,19 @@ from typing import Any, Dict, Iterable, List, Optional, Tuple
 from homcc.common.arguments import Arguments
 from homcc.common.compression import Compression
 from homcc.common.parsing import default_locations, load_config_file_from, parse_config_keys
+from homcc.client.errors import HostParsingError, NoHostsFoundError
 
 logger = logging.getLogger(__name__)
 
-HOMCC_HOSTS_ENV_VAR = "$HOMCC_HOSTS"
+HOMCC_HOSTS_ENV_VAR: str = "$HOMCC_HOSTS"
 HOMCC_HOSTS_FILENAME: str = "hosts"
 HOMCC_CLIENT_CONFIG_FILENAME: str = "client.conf"
-
-
-class NoHostsFoundError(Exception):
-    """
-    Error class to indicate a recoverable error when hosts could neither be determined from the environment variable nor
-    from the default hosts file locations
-    """
-
-
-class HostParsingError(Exception):
-    """Class to indicate an error during parsing a host"""
 
 
 class ConnectionType(str, Enum):
     """Helper class to distinguish between different host connection types"""
 
+    LOCAL = "localhost"
     TCP = "TCP"
     SSH = "SSH"
 
@@ -125,16 +116,12 @@ class Host:
         limit: Optional[str] = None,
         compression: Optional[str] = None,
     ):
-        self.type = type
+        self.type = ConnectionType.LOCAL if host == ConnectionType.LOCAL else type
         self.host = host
-        self.port = int(port) if port else None
+        self.port = int(port) if port is not None else None
         self.user = user
-        self.limit = int(limit) if limit else 2  # allow 2 connections per default to enable minor level of concurrency
+        self.limit = int(limit) if limit is not None else 2  # enable minor level of concurrency on default
         self.compression = compression
-
-    def is_localhost(self) -> bool:
-        # this check could be more complex e.g. testing for 127.0.0.1 and ::1 IP addresses and other looping interfaces
-        return self.host == "localhost"
 
 
 @dataclass
@@ -153,9 +140,9 @@ class ClientConfig:
         verbose: Optional[str] = None,
         timeout: Optional[str] = None,
     ):
-        self.compiler = compiler or Arguments.default_compiler
+        self.compiler = compiler or Arguments.DEFAULT_COMPILER
         self.compression = compression
-        self.timeout = float(timeout) if timeout else None
+        self.timeout = float(timeout) if timeout is not None else None
 
         # additional parsing step for verbosity
         self.verbose = verbose is not None and re.match(r"^true$", verbose, re.IGNORECASE) is not None
@@ -221,7 +208,7 @@ def parse_cli_args(args: List[str]) -> Tuple[Dict[str, Any], Arguments]:
         type=str,
         metavar="[COMPILER] ARGUMENTS ...",
         help="COMPILER, if not specified explicitly, is either read from the config file or defaults to "
-        f'"{Arguments.default_compiler}"\n'
+        f'"{Arguments.DEFAULT_COMPILER}"\n'
         "all remaining ARGUMENTS will be directly forwarded to the COMPILER",
     )
 
@@ -237,7 +224,7 @@ def parse_cli_args(args: List[str]) -> Tuple[Dict[str, Any], Arguments]:
 
 def parse_host(host: str) -> Host:
     """
-    try to categorize and extract the following information from the host:
+    Try to categorize and extract the following information from the host in the general order of:
     - Compression
     - ConnectionType:
         - TCP:
@@ -332,7 +319,7 @@ def load_hosts(hosts_file_locations: Optional[List[Path]] = None) -> List[str]:
             line = line.strip().replace(" ", "")
 
             # filter empty lines and comment lines
-            if len(line) != 0 and not line.startswith("#"):
+            if line and not line.startswith("#"):
                 lines.append(line)
 
         return lines
