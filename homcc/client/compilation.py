@@ -58,11 +58,10 @@ async def compile_remotely(hosts: List[str], config: ClientConfig, arguments: Ar
 async def compile_remotely_at(
     host: Host, compression_name: Optional[str], timeout: Optional[float], arguments: Arguments
 ) -> int:
-    """main function for the communication between client and the remote compilation server"""
+    """Main function for the communication between client and the remote compilation server."""
 
     compression = get_compression(compression_name)
 
-    # connect TCP client
     client: TCPClient = TCPClient(host, compression)
     await client.connect()
 
@@ -84,13 +83,13 @@ async def compile_remotely_at(
 
         server_response = await client.receive(timeout)
 
-    # close client and handle final message
+    # Close client and then handle the final message
     await client.close()
 
     if not isinstance(server_response, CompilationResultMessage):
         raise UnexpectedMessageTypeError(f'Received message of unexpected type "{server_response.message_type}"!')
 
-    # extract and use compilation result
+    # Extract and use compilation result
     server_result: ArgumentsExecutionResult = server_response.get_compilation_result()
 
     if server_result.stdout:
@@ -113,8 +112,15 @@ async def compile_remotely_at(
         return compilation_return_code
 
     for object_file in server_response.get_object_files():
-        logger.debug("Writing file %s", object_file.file_name)
-        Path(object_file.file_name).write_bytes(object_file.get_data())
+        output_path = object_file.file_name
+
+        if not arguments.is_linking() and arguments.output is not None:
+            # if we do not want to link, respect the -o flag for the object file
+            output_path = arguments.output
+
+        logger.debug("Writing file %s", output_path)
+
+        Path(output_path).write_bytes(object_file.get_data())
 
     # link and delete object files if required
     if arguments.is_linking():
