@@ -70,7 +70,7 @@ class Arguments:
 
         # preprocessing args
         PREPROCESSOR_ONLY_ARG: str = "-E"
-        PREPROCESSOR_DEPENDENCY_ARG: str = "-M"
+        PREPROCESSOR_DEPENDENY_ARG: str = "-M"
 
         # args that rely on native machine
         NATIVE_ARGS: List[str] = ["-march=native", "-mtune=native"]
