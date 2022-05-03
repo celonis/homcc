@@ -88,4 +88,4 @@ class TestTCPClient:
         dependency_dict: Dict[str, str] = calculate_dependency_dict(dependencies)
 
         async with self.client as client:
-            await client.send_argument_message(Arguments.from_args(args), cwd, dependency_dict)
+            await client.send_argument_message(Arguments.from_args(args), cwd, dependency_dict, None)

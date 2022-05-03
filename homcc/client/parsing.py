@@ -130,18 +130,21 @@ class ClientConfig:
 
     compiler: str
     compression: Optional[str]
-    verbose: bool
+    profile: Optional[str]
     timeout: Optional[float]
+    verbose: bool
 
     def __init__(
         self,
         compiler: Optional[str] = None,
         compression: Optional[str] = None,
-        verbose: Optional[str] = None,
+        profile: Optional[str] = None,
         timeout: Optional[str] = None,
+        verbose: Optional[str] = None,
     ):
         self.compiler = compiler or Arguments.DEFAULT_COMPILER
         self.compression = compression
+        self.profile = profile
         self.timeout = float(timeout) if timeout is not None else None
 
         # additional parsing step for verbosity

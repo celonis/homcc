@@ -149,14 +149,22 @@ class Message(ABC):
 
 
 class ArgumentMessage(Message):
-    """Initial message in the protocol. Client sends arguments, working directory,
+    """Initial message in the protocol. Client sends args, working directory,
     dependencies (key: file paths, value: SHA1 hash) and the to be used compression algorithm."""
 
-    def __init__(self, arguments: List[str], cwd: str, dependencies: Dict[str, str], compression: Compression) -> None:
-        self.arguments = arguments
-        self.cwd = cwd
-        self.dependencies = dependencies
-        self.compression = compression
+    def __init__(
+        self,
+        args: List[str],
+        cwd: str,
+        dependencies: Dict[str, str],
+        profile: Optional[str],
+        compression: Compression,
+    ):
+        self.args: List[str] = args
+        self.cwd: str = cwd
+        self.dependencies: Dict[str, str] = dependencies
+        self.profile: Optional[str] = profile
+        self.compression: Compression = compression
 
         super().__init__(MessageType.ArgumentMessage)
 
@@ -164,18 +172,19 @@ class ArgumentMessage(Message):
         """Gets the JSON dict of this object."""
         json_dict: Dict = super()._get_json_dict()
 
-        json_dict["arguments"] = self.arguments
+        json_dict["args"] = self.args
         json_dict["cwd"] = self.cwd
         json_dict["dependencies"] = self.dependencies
+        json_dict["profile"] = self.profile
 
         if self.compression:
             json_dict["compression"] = str(self.compression)
 
         return json_dict
 
-    def get_arguments(self) -> List[str]:
-        """Returns the arguments as a list of strings."""
-        return self.arguments
+    def get_args(self) -> List[str]:
+        """Returns the args as a list of strings."""
+        return self.args
 
     def get_cwd(self) -> str:
         """Returns the current working directory."""
@@ -185,6 +194,10 @@ class ArgumentMessage(Message):
         """Returns a dictionary with dependencies."""
         return self.dependencies
 
+    def get_profile(self) -> Optional[str]:
+        """Returns the specified profile if provided."""
+        return self.profile
+
     def get_compression(self) -> Compression:
         """Returns the to be used compression algorithm."""
         return self.compression
@@ -192,9 +205,10 @@ class ArgumentMessage(Message):
     def __eq__(self, other):
         if isinstance(other, ArgumentMessage):
             return (
-                self.get_arguments() == other.get_arguments()
+                self.get_args() == other.get_args()
                 and self.get_cwd() == other.get_cwd()
                 and self.get_dependencies() == other.get_dependencies()
+                and self.get_profile() == other.get_profile()
                 and self.get_compression() == other.get_compression()
             )
         return False
@@ -202,9 +216,10 @@ class ArgumentMessage(Message):
     @staticmethod
     def from_dict(json_dict: dict) -> ArgumentMessage:
         return ArgumentMessage(
-            json_dict["arguments"],
+            json_dict["args"],
             json_dict["cwd"],
             json_dict["dependencies"],
+            json_dict["profile"],
             Compression.from_name(json_dict.get("compression", str(NoCompression))),
         )
 

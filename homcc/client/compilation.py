@@ -8,7 +8,7 @@ import subprocess
 import sys
 
 from pathlib import Path
-from typing import Dict, List, Set
+from typing import Dict, Optional, List, Set
 
 from homcc.client.client import (
     HostSelector,
@@ -35,6 +35,7 @@ async def compile_remotely(arguments: Arguments, hosts: List[str], config: Clien
     # try to connect to 3 different remote compilation hosts before giving up
     for host in HostSelector(hosts, 3):
         timeout: float = config.timeout or 180
+        profile: Optional[str] = config.profile
         host.compression = host.compression or config.compression
 
         if host.type == ConnectionType.LOCAL:
@@ -42,7 +43,7 @@ async def compile_remotely(arguments: Arguments, hosts: List[str], config: Clien
             return compile_locally(arguments)
 
         try:
-            return await asyncio.wait_for(compile_remotely_at(arguments, host), timeout=timeout)
+            return await asyncio.wait_for(compile_remotely_at(arguments, host, profile), timeout=timeout)
 
         except (asyncio.TimeoutError, ConnectionError) as error:
             logger.warning("%s", error)
@@ -50,13 +51,13 @@ async def compile_remotely(arguments: Arguments, hosts: List[str], config: Clien
     raise HostsExhaustedError(f"All hosts {hosts} are exhausted!")
 
 
-async def compile_remotely_at(arguments: Arguments, host: Host) -> int:
+async def compile_remotely_at(arguments: Arguments, host: Host, profile: Optional[str]) -> int:
     """main function for the communication between client and a remote compilation host"""
     dependency_dict: Dict[str, str] = calculate_dependency_dict(find_dependencies(arguments))
     remote_arguments: Arguments = arguments.copy().remove_local_args()
 
     async with TCPClient(host) as client:
-        await client.send_argument_message(remote_arguments, os.getcwd(), dependency_dict)
+        await client.send_argument_message(remote_arguments, os.getcwd(), dependency_dict, profile)
 
         # invert dependency dictionary
         dependency_dict = {file_hash: dependency for dependency, file_hash in dependency_dict.items()}

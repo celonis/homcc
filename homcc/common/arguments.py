@@ -70,7 +70,7 @@ class Arguments:
 
         # preprocessing args
         PREPROCESSOR_ONLY_ARG: str = "-E"
-        PREPROCESSOR_DEPENDENY_ARG: str = "-M"
+        PREPROCESSOR_DEPENDENCY_ARG: str = "-M"
 
         # args that rely on native machine
         NATIVE_ARGS: List[str] = ["-march=native", "-mtune=native"]
@@ -200,7 +200,7 @@ class Arguments:
             return True
 
         # all remaining preprocessing arg types with prefix "-M" imply Unsendability
-        if arg.startswith(Arguments.Unsendable.PREPROCESSOR_DEPENDENY_ARG):
+        if arg.startswith(Arguments.Unsendable.PREPROCESSOR_DEPENDENCY_ARG):
             logger.debug(
                 "[%s] implies [%s] and must be executed locally", arg, Arguments.Unsendable.PREPROCESSOR_ONLY_ARG
             )

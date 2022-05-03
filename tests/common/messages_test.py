@@ -24,7 +24,7 @@ class TestArgumentMessage:
             "server.c": "1239012890312903",
             "server.h": "testsha1",
         }
-        message = ArgumentMessage(arguments, cwd, dependencies, compression=LZMA())
+        message = ArgumentMessage(arguments, cwd, dependencies, profile=None, compression=LZMA())
 
         message_bytes: bytearray = message.to_bytes()
 

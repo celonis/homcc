@@ -83,8 +83,7 @@ class TCPServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
                 self.connections_limit,
             )
 
-            connection_refused_message = ConnectionRefusedMessage()
-            request.sendall(connection_refused_message.to_bytes())
+            request.sendall(ConnectionRefusedMessage().to_bytes())
             request.shutdown(SHUT_RD)
             request.close()
 
@@ -113,6 +112,8 @@ class TCPRequestHandler(socketserver.BaseRequestHandler):
     """Absolute path to the working directory."""
     server: TCPServer
     """The TCP server belonging to this handler. (redefine for typing)"""
+    profile: Optional[str]
+    """The optional client profile used for schroot"""
     compression: Compression
     """The compression algorithm requested by the client."""
 
@@ -129,7 +130,7 @@ class TCPRequestHandler(socketserver.BaseRequestHandler):
 
         self.mapped_cwd = map_cwd(self.instance_path, message.get_cwd())
 
-        self.compiler_arguments = map_arguments(self.instance_path, self.mapped_cwd, message.get_arguments())
+        self.compiler_arguments = map_arguments(self.instance_path, self.mapped_cwd, message.get_args())
         logger.debug("Mapped compiler args: %s", str(self.compiler_arguments))
 
         self.mapped_dependencies = map_dependency_paths(self.instance_path, self.mapped_cwd, message.get_dependencies())
@@ -139,6 +140,10 @@ class TCPRequestHandler(socketserver.BaseRequestHandler):
             self.mapped_dependencies, self.server.cache, self.server.cache_mutex
         )
         logger.debug("Needed dependencies: %s", self.needed_dependencies)
+
+        self.profile = message.get_profile()
+        if self.profile is not None:
+            logger.debug("Using profile: %s", self.profile)
 
         self.compression = message.get_compression()
         if not isinstance(self.compression, NoCompression):
@@ -226,7 +231,7 @@ class TCPRequestHandler(socketserver.BaseRequestHandler):
         if not self._request_next_dependency():
             # no further dependencies needed, compile now
             result_message = do_compilation(
-                self.instance_path, self.mapped_cwd, self.compiler_arguments, self.compression
+                self.instance_path, self.mapped_cwd, self.compiler_arguments, self.profile, self.compression
             )
 
             self.request.sendall(result_message.to_bytes())

@@ -7,7 +7,7 @@ import subprocess
 import logging
 from tempfile import TemporaryDirectory
 from pathlib import Path
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 from homcc.common.arguments import Arguments
 from homcc.common.compression import Compression
@@ -109,14 +109,19 @@ class CompilerResult:
     stderr: str
 
 
-def invoke_compiler(mapped_cwd: str, arguments: List[str]) -> CompilerResult:
+def invoke_compiler(mapped_cwd: str, args: List[str], profile: Optional[str]) -> CompilerResult:
     """Actually invokes the compiler process."""
-    logger.debug("Compile arguments: %s", arguments)
+    schroot_args: List[str] = ["schroot"]  # TODO: schroot profile option here
+
+    if profile is not None:
+        args = args + schroot_args
+
+    logger.debug("Compile arguments: %s", args)
 
     # pylint: disable=subprocess-run-check
     # (justification: we explicitly return the result code)
     result = subprocess.run(
-        arguments,
+        args=args,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         cwd=mapped_cwd,
@@ -136,7 +141,7 @@ def invoke_compiler(mapped_cwd: str, arguments: List[str]) -> CompilerResult:
 
 
 def do_compilation(
-    instance_path: str, mapped_cwd: str, args: List[str], compression: Compression
+    instance_path: str, mapped_cwd: str, args: List[str], profile: Optional[str], compression: Compression
 ) -> CompilationResultMessage:
     """Does the compilation and returns the filled result message."""
     logger.info("Compiling...")
@@ -146,7 +151,7 @@ def do_compilation(
 
     arguments: Arguments = Arguments.from_args(args).no_linking()
 
-    result = invoke_compiler(mapped_cwd, list(arguments))
+    result = invoke_compiler(mapped_cwd, list(arguments), profile)
 
     object_files: List[ObjectFile] = []
     if result.return_code == 0:
