@@ -65,7 +65,9 @@ async def compile_remotely_at(arguments: Arguments, host: Host, profile: Optiona
         host_response: Message = await client.receive()
 
         if isinstance(host_response, ConnectionRefusedMessage):
-            raise ConnectionRefusedError(f"Host {client.host}:{client.port} refused the connection!")
+            raise ConnectionRefusedError(
+                f"Host {client.host}:{client.port} refused the connection:\n{host_response.info}!"
+            )
 
         # provide requested dependencies
         while isinstance(host_response, DependencyRequestMessage):

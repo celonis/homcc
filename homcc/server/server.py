@@ -49,7 +49,7 @@ class TCPServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
         or -1  # fallback error value
     )
 
-    def __init__(self, address: Optional[str], port: Optional[int], limit: Optional[int]):
+    def __init__(self, address: Optional[str], port: Optional[int], limit: Optional[int], profiles: List[str]):
         address = address or self.DEFAULT_ADDRESS
         port = port or self.DEFAULT_PORT
 
@@ -64,6 +64,8 @@ class TCPServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
                 "Please provide the job limit explicitly either via the CLI or the configuration file!",
                 self.connections_limit,
             )
+
+        self.profiles: List[str] = profiles
 
         self.root_temp_folder: TemporaryDirectory = create_root_temp_folder()
 
@@ -83,7 +85,11 @@ class TCPServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
                 self.connections_limit,
             )
 
-            request.sendall(ConnectionRefusedMessage().to_bytes())
+            refused_message: ConnectionRefusedMessage = ConnectionRefusedMessage(
+                f"Limit {self.connections_limit} reached"
+            )
+
+            request.sendall(refused_message.to_bytes())
             request.shutdown(SHUT_RD)
             request.close()
 
@@ -142,7 +148,14 @@ class TCPRequestHandler(socketserver.BaseRequestHandler):
         logger.debug("Needed dependencies: %s", self.needed_dependencies)
 
         self.profile = message.get_profile()
+
         if self.profile is not None:
+            if self.profile not in self.server.profiles:
+                refused_message: ConnectionRefusedMessage = ConnectionRefusedMessage(
+                    f"Profile {self.profile} not in [{', '.join(self.server.profiles)}]"
+                )
+                self.request.sendall(refused_message.to_bytes())
+
             logger.debug("Using profile: %s", self.profile)
 
         self.compression = message.get_compression()
@@ -299,9 +312,9 @@ class TCPRequestHandler(socketserver.BaseRequestHandler):
 
 
 def start_server(
-    address: Optional[str], port: Optional[int], limit: Optional[int]
+    address: Optional[str], port: Optional[int], limit: Optional[int], profiles: Optional[List[str]] = None
 ) -> Tuple[TCPServer, threading.Thread]:
-    server: TCPServer = TCPServer(address, port, limit)
+    server: TCPServer = TCPServer(address, port, limit, profiles or [])
 
     server_thread = threading.Thread(target=server.serve_forever, daemon=True)
     server_thread.start()

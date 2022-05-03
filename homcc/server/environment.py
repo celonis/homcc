@@ -111,10 +111,10 @@ class CompilerResult:
 
 def invoke_compiler(mapped_cwd: str, args: List[str], profile: Optional[str]) -> CompilerResult:
     """Actually invokes the compiler process."""
-    schroot_args: List[str] = ["schroot"]  # TODO: schroot profile option here
 
     if profile is not None:
-        args = args + schroot_args
+        schroot_args: List[str] = ["schroot", "-c", profile, "--"]
+        args = schroot_args + args
 
     logger.debug("Compile arguments: %s", args)
 

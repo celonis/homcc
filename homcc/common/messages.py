@@ -100,7 +100,7 @@ class Message(ABC):
         elif message_type == MessageType.CompilationResultMessage:
             return CompilationResultMessage.from_dict(json_dict)
         elif message_type == MessageType.ConnectionRefusedMessage:
-            return ConnectionRefusedMessage()
+            return ConnectionRefusedMessage.from_dict(json_dict)
         else:
             raise ValueError(f"{message_type} is not a valid message type. Can not parse message.")
 
@@ -175,7 +175,9 @@ class ArgumentMessage(Message):
         json_dict["args"] = self.args
         json_dict["cwd"] = self.cwd
         json_dict["dependencies"] = self.dependencies
-        json_dict["profile"] = self.profile
+
+        if self.profile:
+            json_dict["profile"] = self.profile
 
         if self.compression:
             json_dict["compression"] = str(self.compression)
@@ -219,7 +221,7 @@ class ArgumentMessage(Message):
             json_dict["args"],
             json_dict["cwd"],
             json_dict["dependencies"],
-            json_dict["profile"],
+            json_dict.get("profile", None),
             Compression.from_name(json_dict.get("compression", str(NoCompression))),
         )
 
@@ -484,7 +486,30 @@ class CompilationResultMessage(Message):
 
 
 class ConnectionRefusedMessage(Message):
-    """Message that indicates that the server has declined a connection."""
+    """Message that contains why the server has declined a connection."""
 
-    def __init__(self) -> None:
+    def __init__(self, info: str):
+        self.info: str = info
+
         super().__init__(MessageType.ConnectionRefusedMessage)
+
+    def _get_json_dict(self) -> Dict:
+        """Gets the JSON dict of this object."""
+        json_dict: Dict[str, str] = super()._get_json_dict()
+
+        json_dict["info"] = self.info
+
+        return json_dict
+
+    def get_info(self) -> str:
+        """Returns the connection refusal information."""
+        return self.info
+
+    def __eq__(self, other):
+        if isinstance(other, ConnectionRefusedMessage):
+            return self.get_info() == other.get_info()
+        return False
+
+    @staticmethod
+    def from_dict(json_dict: dict) -> ConnectionRefusedMessage:
+        return ConnectionRefusedMessage(json_dict["info"])

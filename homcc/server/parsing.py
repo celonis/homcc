@@ -1,9 +1,11 @@
 """Parsing related functionality regarding the homcc server"""
 import logging
 import os
+import re
 import sys
 
 from argparse import Action, ArgumentParser, ArgumentTypeError, RawTextHelpFormatter
+from configparser import ConfigParser
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Union
@@ -36,18 +38,24 @@ class ServerConfig:
     port: Optional[int]
     limit: Optional[int]
     log_level: Optional[LogLevel]
+    verbose: bool
 
     def __init__(
         self,
+        *,
         limit: Optional[str] = None,
         port: Optional[str] = None,
         address: Optional[str] = None,
         log_level: Optional[str] = None,
+        verbose: Optional[str] = None,
     ):
         self.limit = int(limit) if limit else None
         self.port = int(port) if port else None
         self.address = address
         self.log_level = LogLevel[log_level] if log_level else None
+
+        # additional parsing step for verbosity
+        self.verbose = verbose is not None and re.match(r"^true$", verbose, re.IGNORECASE) is not None
 
     @staticmethod
     def keys() -> Iterable[str]:
@@ -128,9 +136,44 @@ def parse_config(config_lines: List[str]) -> ServerConfig:
 
 
 def load_config_file(config_file_locations: Optional[List[Path]] = None) -> List[str]:
-    """Load a homcc config file from the default locations or as parameterized by config_file_locations"""
+    """Load the server config file as parameterized by config_file_locations or from the default homcc locations"""
+    return load_config_file_from(config_file_locations or default_locations(HOMCC_SERVER_CONFIG_FILENAME))
 
-    if not config_file_locations:
-        return load_config_file_from(default_locations(HOMCC_SERVER_CONFIG_FILENAME))
 
-    return load_config_file_from(config_file_locations)
+def default_schroot_locations() -> List[Path]:
+    """
+    Look for schroot config files in the default locations:
+    - File: "/etc/schroot/schroot.conf"
+    - All files in directory: "/etc/schroot/chroot.d/"
+    """
+
+    etc_schroot_dir = Path("/etc/schroot/")
+    etc_schroot_schroot_conf = etc_schroot_dir / "schroot.conf"
+    etc_schroot_chroot_d_dir = etc_schroot_dir / "chroot.d"
+
+    schroot_config_locations: List[Path] = []
+
+    # /etc/schroot/chroot.d/
+    if etc_schroot_chroot_d_dir.is_dir():
+        for chroot_d_config in etc_schroot_chroot_d_dir.glob("*"):
+            schroot_config_locations.append(chroot_d_config)
+
+    # /etc/schroot/schroot.conf
+    if etc_schroot_schroot_conf.exists():
+        schroot_config_locations.append(etc_schroot_schroot_conf)
+
+    return schroot_config_locations
+
+
+def load_schroot_profiles(schroot_config_file_locations: Optional[List[Path]] = None) -> List[str]:
+    """TODO: STUFF"""
+
+    schroot_configparser: ConfigParser = ConfigParser()
+
+    successfully_read_files: List[str] = schroot_configparser.read(
+        schroot_config_file_locations or default_schroot_locations()
+    )
+
+    logger.debug("Read schroot files: [%s]", ", ".join(successfully_read_files))
+
+    return schroot_configparser.sections()

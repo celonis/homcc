@@ -19,11 +19,12 @@ class TestParsingConfig:
         "LOG_LEVEL=DEBUG  # DEBUG",
         " port = 3633 ",
         "\tAdDrEsS=localhost",
+        "verbose=TRUE",
     ]
 
     def test_parse_config(self):
         assert parse_config(self.config) == ServerConfig(
-            limit="64", port="3633", address="localhost", log_level="DEBUG"
+            limit="64", port="3633", address="localhost", log_level="DEBUG", verbose="True"
         )
 
     def test_load_config_file(self, tmp_path: Path):
@@ -35,5 +36,5 @@ class TestParsingConfig:
         config: List[str] = load_config_file(config_file_locations)
         assert config == self.config
         assert parse_config(self.config) == ServerConfig(
-            limit="64", port="3633", address="localhost", log_level="DEBUG"
+            limit="64", port="3633", address="localhost", log_level="DEBUG", verbose="True"
         )

@@ -70,6 +70,12 @@ def main():
     host: Optional[str] = homcc_args_dict["host"]
     hosts: List[str] = [host] if host else load_hosts()
 
+    # PROFILE; get profile from cli or config file
+    profile: Optional[str] = homcc_args_dict["profile"]
+
+    if profile:
+        client_config.profile = profile
+
     # TIMEOUT
     timeout: Optional[float] = homcc_args_dict["timeout"]
 
