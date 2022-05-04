@@ -3,13 +3,12 @@ from dataclasses import dataclass
 from threading import Lock
 import uuid
 import os
-import subprocess
 import logging
 from tempfile import TemporaryDirectory
 from pathlib import Path
 from typing import Dict, List, Optional
 
-from homcc.common.arguments import Arguments
+from homcc.common.arguments import Arguments, ArgumentsExecutionResult
 from homcc.common.compression import Compression
 from homcc.common.messages import CompilationResultMessage, ObjectFile
 
@@ -111,33 +110,21 @@ class CompilerResult:
 
 def invoke_compiler(mapped_cwd: str, args: List[str], profile: Optional[str]) -> CompilerResult:
     """Actually invokes the compiler process."""
-
-    if profile is not None:
-        schroot_args: List[str] = ["schroot", "-c", profile, "--"]
-        args = schroot_args + args
-
     logger.debug("Compile arguments: %s", args)
 
-    # pylint: disable=subprocess-run-check
-    # (justification: we explicitly return the result code)
-    result = subprocess.run(
-        args=args,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        cwd=mapped_cwd,
+    result: ArgumentsExecutionResult = (
+        Arguments.from_args(args).execute(cwd=mapped_cwd)
+        if profile is None
+        else Arguments.from_args(args).schroot_execute(profile=profile, cwd=mapped_cwd)
     )
 
-    stdout = ""
     if result.stdout:
-        stdout = result.stdout.decode("utf-8")
-        logger.debug("Compiler gave output:\n'%s'", stdout)
+        logger.debug("Compiler gave output:\n'%s'", result.stdout)
 
-    stderr = ""
     if result.stderr:
-        stderr = result.stderr.decode("utf-8")
-        logger.warning("Compiler gave error output:\n'%s'", stderr)
+        logger.warning("Compiler gave error output:\n'%s'", result.stderr)
 
-    return CompilerResult(result.returncode, stdout, stderr)
+    return CompilerResult(result.return_code, result.stdout, result.stderr)
 
 
 def do_compilation(

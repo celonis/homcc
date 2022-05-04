@@ -49,7 +49,9 @@ class TCPServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
         or -1  # fallback error value
     )
 
-    def __init__(self, address: Optional[str], port: Optional[int], limit: Optional[int], profiles: List[str]):
+    def __init__(
+        self, address: Optional[str], port: Optional[int], limit: Optional[int], profiles: Optional[List[str]]
+    ):
         address = address or self.DEFAULT_ADDRESS
         port = port or self.DEFAULT_PORT
 
@@ -65,7 +67,7 @@ class TCPServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
                 self.connections_limit,
             )
 
-        self.profiles: List[str] = profiles
+        self.profiles: List[str] = profiles or []
 
         self.root_temp_folder: TemporaryDirectory = create_root_temp_folder()
 
@@ -314,7 +316,7 @@ class TCPRequestHandler(socketserver.BaseRequestHandler):
 def start_server(
     address: Optional[str], port: Optional[int], limit: Optional[int], profiles: Optional[List[str]] = None
 ) -> Tuple[TCPServer, threading.Thread]:
-    server: TCPServer = TCPServer(address, port, limit, profiles or [])
+    server: TCPServer = TCPServer(address, port, limit, profiles)
 
     server_thread = threading.Thread(target=server.serve_forever, daemon=True)
     server_thread.start()

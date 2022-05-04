@@ -119,10 +119,10 @@ class TCPClient:
         await self._writer.drain()  # type: ignore[union-attr]
 
     async def send_argument_message(
-        self, arguments: Arguments, cwd: str, dependencies: Dict[str, str], profile: Optional[str]
+        self, arguments: Arguments, cwd: str, dependency_dict: Dict[str, str], profile: Optional[str]
     ):
         """send an argument message to homcc server"""
-        await self._send(ArgumentMessage(list(arguments), cwd, dependencies, profile, self.compression))
+        await self._send(ArgumentMessage(list(arguments), cwd, dependency_dict, profile, self.compression))
 
     async def send_dependency_reply_message(self, dependency: str):
         """send dependency reply message to homcc server"""

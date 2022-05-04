@@ -2,6 +2,7 @@
 import logging
 import os
 import re
+import subprocess
 import sys
 
 from argparse import Action, ArgumentParser, ArgumentTypeError, RawTextHelpFormatter
@@ -28,6 +29,28 @@ class ShowVersion(Action):
     def __call__(self, *_):
         print("homccd 0.0.1")
         sys.exit(os.EX_OK)
+
+
+class ShowProfiles(Action):
+    """show available schroot environments and exit"""
+
+    def __init__(self, **kwargs):
+        super().__init__(nargs=0, help=self.__doc__, **kwargs)
+
+    def __call__(self, *_):
+        schroot_args: List[str] = ["schroot", "-l"]
+
+        result: subprocess.CompletedProcess = subprocess.run(
+            args=schroot_args, check=True, encoding="utf-8", capture_output=True
+        )
+
+        if result.stdout:
+            print(result.stdout)
+
+        if result.stderr:
+            print(result.stderr[:-1])  # trim trailing new line
+
+        sys.exit(result.returncode)
 
 
 @dataclass
@@ -82,10 +105,13 @@ def parse_cli_args(args: List[str]) -> Dict[str, Any]:
     networking_group = parser.add_argument_group(" Networking")
     debug_group = parser.add_argument_group(" Debug")
 
-    # general
-    general_options_group.add_argument("--help", action="help", help="show this help message and exit")
-    general_options_group.add_argument("--version", action=ShowVersion)
+    # show and exit
+    show_and_exit = general_options_group.add_mutually_exclusive_group()
+    show_and_exit.add_argument("--help", action="help", help="show this help message and exit")
+    show_and_exit.add_argument("--version", action=ShowVersion)
+    show_and_exit.add_argument("--profiles", action=ShowProfiles)
 
+    # general
     general_options_group.add_argument(
         "--jobs",
         "-j",

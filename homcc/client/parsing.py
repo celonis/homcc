@@ -171,15 +171,16 @@ def parse_cli_args(args: List[str]) -> Tuple[Dict[str, Any], Arguments]:
     show_and_exit.add_argument("-j", action=ShowConcurrencyLevel)
 
     parser.add_argument(
-        "--verbose",
+        "--scan-includes",
         action="store_true",
-        help="enables a verbose mode which implies detailed and colored logging of debug messages",
+        help="show all header dependencies that would be sent to the server, as calculated from the given arguments, "
+        "and exit",
     )
 
     parser.add_argument(
-        "--scan-includes",
+        "--verbose",
         action="store_true",
-        help="show all dependencies that would be sent to the server, as calculated from the given arguments, and exit",
+        help="enables a verbose mode which implies detailed and colored logging of debug messages",
     )
 
     indented_newline: str = "\n\t"
@@ -198,11 +199,17 @@ def parse_cli_args(args: List[str]) -> Tuple[Dict[str, Any], Arguments]:
         f"{indented_newline.join(Compression.descriptions())}",
     )
 
-    parser.add_argument(
+    profile = parser.add_mutually_exclusive_group()
+    profile.add_argument(
         "--profile",
         type=str,
         help="PROFILE which will be mapped to predefined chroot environments on the selected remote compilation server,"
         " no profile is being used on default",
+    )
+    profile.add_argument(
+        "--no-profile",
+        action="store_true",
+        help="enforce that no PROFILE is used even if one is specified in the configuration file",
     )
 
     parser.add_argument(

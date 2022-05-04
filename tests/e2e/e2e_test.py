@@ -18,17 +18,24 @@ class TestEndToEnd:
     @staticmethod
     def start_server(unused_tcp_port: int) -> subprocess.Popen:
         return subprocess.Popen(
-            ["./homcc/server/main.py", f"--listen={TestEndToEnd.ADDRESS}", f"--port={unused_tcp_port}"],
+            [  # specify all relevant args explicitly so that config files may not disturb e2e testing
+                "./homcc/server/main.py",
+                f"--listen={TestEndToEnd.ADDRESS}",
+                f"--port={unused_tcp_port}",
+                "--verbose",
+            ],
             stdout=subprocess.PIPE,
         )
 
     @staticmethod
     def start_client(args: List[str], unused_tcp_port: int) -> subprocess.CompletedProcess:
         return subprocess.run(
-            [
+            [  # specify all relevant args explicitly so that config files may not disturb e2e testing
                 "./homcc/client/main.py",
-                f"--host={TestEndToEnd.ADDRESS}:{unused_tcp_port}",
                 "--verbose",
+                f"--host={TestEndToEnd.ADDRESS}:{unused_tcp_port}",
+                "--no-profile",
+                "--timeout=5",
             ]
             + args,
             check=True,
