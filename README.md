@@ -2,7 +2,7 @@
 
 ## Table of Contents
 1. [Installation](#Installation)
-2. [Usage and Configuration](#Usage and Configuration)
+2. [Usage and Configuration](#Usage)
    1. [Client](#Client)
    2. [Server](#Server)
 3. [Development](#Development)
@@ -10,7 +10,7 @@
    2. [Testing](#Testing)
    3. [Linting](#Linting)
    4. [Formatting](#Formatting)
-   5. [Build Debian packages](#Build Debian packages)
+   5. [Build Debian packages](#Build)
 
 
 ## Installation
@@ -21,7 +21,7 @@
 **Note**: Currently, installing both packages leads to an issue with conflicting files. Therefore, to install the second package, use `sudo dpkg -i --force-overwrite ./target/{package.deb}`!
 
 
-## Usage and Configuration
+## <a name="Usage" />Usage and Configuration
 
 ### <a name="Client" />Client: `homcc`
 - Follow the client [Installation](#Installation) guide
@@ -37,7 +37,7 @@
     - `compiler`: compiler if none is explicitly specified via the CLI
     - `timeout`: timeout value in seconds for each remote compilation attempt
     - `compression`: compression algorithm, choose from `{lzo, lzma}`
-    - `profile`: `schroot` environment profile that will be used on the server side
+    - `profile`: `schroot` environment profile that will be used on the server side for compilations
   - Example:
     ```
     # homcc: example client.conf
@@ -53,7 +53,7 @@
     - `~/.homcc/hosts`
     - `~/.config/homcc/hosts`
     - `/etc/homcc/hosts`
-  - Possible formats:
+  - Possible `hosts` formats:
     - `HOST` format:
       - `HOST`: TCP connection to specified `HOST` with default port `3633`
       - `HOST:PORT`: TCP connection to specified `HOST` with specified `PORT`
@@ -66,13 +66,13 @@
         - `lzo`: Lempel-Ziv-Oberhumer compression algorithm
         - `lzma`: Lempel-Ziv-Markov chain algorithm
       - per default, no compression is used as it is usually not necessary for high bandwidth connections
-    - Example:
-      ```
-      # homcc: example hosts
-      localhost/12
-      127.0.0.1:3633/21
-      [::1]:3633/42,lzo
-      ```
+  - Example:
+    ```
+    # homcc: example hosts
+    localhost/12
+    127.0.0.1:3633/21
+    [::1]:3633/42,lzo
+    ```
 - Use `homcc` in your `conan` profile by specifying: `CCACHE_PREFIX=homcc`
 
 
@@ -100,7 +100,8 @@
     address=localhost
     verbose=True
     ```
-- \[Optional]: Setup your `schroot` environments at [`/etc/schroot/schroot.conf`](https://linux.die.net/man/5/schroot.conf) or in the `/etc/schroot/chroot.d/` directory to permit `homcc` *schrooted* compilation<br/>
+- \[Optional]: Setup your `schroot` environments at `/etc/schroot/schroot.conf` or in the<br/>
+  `/etc/schroot/chroot.d/` directory to permit *schrooted* compilation<br/>
   **Note**: In order to apply changes in these files you have to restart `homccd`!
 
 
@@ -134,6 +135,6 @@
   `black --check --color --diff --verbose *.py homcc tests`
 - Format a specified python file: `black ./path/to/file.py`
 
-### Build Debian packages
+### <a name="Build" />Build Debian packages
 - Run `make all` in the repository root
 - The generated `.deb` files are then contained in the `./target/` directory
