@@ -1,16 +1,19 @@
 """Main logic for the homcc server."""
-import threading
-import socketserver
 import logging
 import os
 import random
+import shutil
+import socketserver
+import threading
 
 from functools import singledispatchmethod
+from socket import SHUT_RD
 from tempfile import TemporaryDirectory
 from threading import Lock
 from typing import Dict, List, Optional, Tuple
-from socket import SHUT_RD
 
+from homcc.common.compression import Compression, NoCompression
+from homcc.common.hashing import hash_file_with_bytes
 from homcc.common.messages import (
     ArgumentMessage,
     ConnectionRefusedMessage,
@@ -19,9 +22,6 @@ from homcc.common.messages import (
     DependencyRequestMessage,
     CompilationResultMessage,
 )
-from homcc.common.hashing import hash_file_with_bytes
-
-from homcc.common.compression import Compression, NoCompression
 
 from homcc.server.environment import (
     create_root_temp_folder,
@@ -67,6 +67,7 @@ class TCPServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
                 self.connections_limit,
             )
 
+        self.profiles_enabled: bool = shutil.which("schroot") is not None
         self.profiles: List[str] = profiles or []
 
         self.root_temp_folder: TemporaryDirectory = create_root_temp_folder()
@@ -152,9 +153,16 @@ class TCPRequestHandler(socketserver.BaseRequestHandler):
         self.profile = message.get_profile()
 
         if self.profile is not None:
+            if not self.server.profiles_enabled:
+                refused_message = ConnectionRefusedMessage(
+                    f"Profile {self.profile} could not be used as 'schroot' is not installed on the server"
+                )
+                self.request.sendall(refused_message.to_bytes())
+
             if self.profile not in self.server.profiles:
-                refused_message: ConnectionRefusedMessage = ConnectionRefusedMessage(
-                    f"Profile {self.profile} not in [{', '.join(self.server.profiles)}]"
+                refused_message = ConnectionRefusedMessage(
+                    f"Profile {self.profile} could not be used as it is not in the provided profiles "
+                    f"[{', '.join(self.server.profiles)}]"
                 )
                 self.request.sendall(refused_message.to_bytes())
 

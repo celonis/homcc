@@ -102,7 +102,7 @@
     ```
 - \[Optional]: Setup your `schroot` environments at `/etc/schroot/schroot.conf` or in the<br/>
   `/etc/schroot/chroot.d/` directory to permit *schrooted* compilation<br/>
-  **Note**: In order to apply changes in these files you have to restart `homccd`!
+  **Note**: Currently, in order to apply changes in these files you have to restart `homccd`!
 
 
 
