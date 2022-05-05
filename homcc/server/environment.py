@@ -44,8 +44,8 @@ class Environment:
             if path.is_file() or path.is_symlink():
                 path.unlink()
                 return
-            for p in path.iterdir():
-                remove_path(p)
+            for iter_path in path.iterdir():
+                remove_path(iter_path)
             path.rmdir()
 
         remove_path(Path(self.instance_folder))
@@ -133,7 +133,6 @@ class Environment:
 
                 object_file = ObjectFile(client_output_path, bytearray(object_file_content), compression)
                 object_files.append(object_file)
-                
                 logger.info("Compiled '%s'.", object_file.file_name)
 
         logger.info(

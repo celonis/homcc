@@ -241,7 +241,7 @@ class TCPRequestHandler(socketserver.BaseRequestHandler):
             recv_bytes: bytearray = self.recv()
 
             if len(recv_bytes) == 0:
-                logger.info("Connection closed gracefully. %s", self.environment.instance_folder)
+                logger.info("Connection '%s' closed gracefully.", self.environment.instance_folder)
                 return
 
             bytes_needed: int = Message.MINIMUM_SIZE_BYTES
