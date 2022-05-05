@@ -32,57 +32,55 @@ class Environment:
     """Path to the current compilation inside /tmp/."""
     mapped_cwd: str
     """Mapped cwd, valid on server side."""
-    symlinked_files: List[Path]
-    """Holds all files that have been symlinked for this particular compilation,
-    so that they can be cleaned up again after compilation to release inodes."""
+    linked_files: List[Path]
+    """Holds all files that have been linked for this particular compilation,
+    so that they can be cleaned up again after compilation."""
 
     def __init__(self, root_folder: Path, cwd: str):
         self.root_folder = root_folder
-        self.symlinked_files = []
+        self.linked_files = []
 
         self.create_instance_folder()
         self.map_cwd(cwd)
 
     def __del__(self):
-        self.clean_up_symlinks()
+        self.clean_up_links()
 
-    def symlink_dependency_to_cache(
+    def link_dependency_to_cache(
         self, dependency_file: str, dependency_hash: str, cache: Dict[str, str], cache_mutex: Lock
     ):
-        """Symlinks the dependency to a cached dependency with the same hash."""
-        # first create the folder structure (if needed), else symlinking won't work
+        """Links the dependency to a cached dependency with the same hash."""
+        # first create the folder structure (if needed), else linking won't work
         dependency_folder = os.path.dirname(dependency_file)
         Path(dependency_folder).mkdir(parents=True, exist_ok=True)
 
-        # then do the actual symlinking
+        # then do the actual linking
         with cache_mutex:
-            os.symlink(cache[dependency_hash], dependency_file)
-            logger.debug("Symlinked '%s' to '%s'.", dependency_file, cache[dependency_hash])
+            os.link(cache[dependency_hash], dependency_file)
+            logger.debug("Linked '%s' to '%s'.", dependency_file, cache[dependency_hash])
 
-        self.symlinked_files.append(Path(dependency_file))
+        self.linked_files.append(Path(dependency_file))
 
-    def clean_up_symlinks(self):
-        """Cleans up all symlinks supplied and deletes folders holding that symlinks if they
-        would be empty after the symlinks have been deleted."""
-        for symlink in self.symlinked_files:
-            symlink.unlink(missing_ok=True)
+    def clean_up_links(self):
+        """Cleans up all links supplied and deletes folders holding that links if they
+        would be empty after the links have been deleted."""
+        for link in self.linked_files:
+            link.unlink(missing_ok=True)
 
-        # TODO: doesnt work for some for some reason, figure out why....
+            parent = link.parent.absolute()
+            ## delete all empty parent directories and finally stop at the root homcc temp folder
+            while parent.exists() and not os.listdir(parent) and not self.root_folder.samefile(parent):
+                parent.rmdir()
+                parent = parent.parent
 
-        #  parent = symlink.parent.absolute()
-        ## delete all empty parent directories and finally stop at the root homcc temp folder
-        # while parent.exists() and not os.listdir(parent) and not self.root_folder.samefile(parent):
-        #    parent.rmdir()
-        #    parent = parent.parent
-
-        logger.debug("Cleaned up #%i symlinks that are not needed any more.", len(self.symlinked_files))
-        self.symlinked_files.clear()
+        logger.debug("Cleaned up #%i links that are not needed any more.", len(self.linked_files))
+        self.linked_files.clear()
 
     def get_needed_dependencies(
         self, dependencies: Dict[str, str], cache: Dict[str, str], cache_mutex: Lock
     ) -> Dict[str, str]:
         """Get the dependencies that are not cached and are therefore required to be sent by the client.
-        Symlink cached dependencies so they can be used in the compilation process."""
+        Link cached dependencies so they can be used in the compilation process."""
         needed_dependencies: Dict[str, str] = {}
 
         for dependency_file, dependency_hash in dependencies.items():
@@ -90,7 +88,7 @@ class Environment:
                 is_cached = dependency_hash in cache
 
             if is_cached:
-                self.symlink_dependency_to_cache(dependency_file, dependency_hash, cache, cache_mutex)
+                self.link_dependency_to_cache(dependency_file, dependency_hash, cache, cache_mutex)
             else:
                 needed_dependencies[dependency_file] = dependency_hash
 

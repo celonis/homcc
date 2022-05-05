@@ -104,9 +104,9 @@ class TestServerEnvironment:
 
     def test_caching(self, mocker: MockerFixture):
         dependencies = {"file1": "hash1", "file2": "hash2", "file3": "hash3"}
-        cache = {"hash2": "some/path/to/be/symlinked"}
+        cache = {"hash2": "some/path/to/be/linked"}
         mocker.patch(
-            "os.symlink",
+            "os.link",
         )
 
         # mock the locks
@@ -121,8 +121,8 @@ class TestServerEnvironment:
         assert "file1" in needed_dependencies
         assert "file3" in needed_dependencies
 
-        assert len(environment.symlinked_files) == 1
-        assert "file2" == str(environment.symlinked_files[0])
+        assert len(environment.linked_files) == 1
+        assert "file2" == str(environment.linked_files[0])
 
 
 class TestServerCompilation:

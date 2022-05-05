@@ -199,7 +199,7 @@ class TCPRequestHandler(socketserver.BaseRequestHandler):
                 already_cached = next_needed_hash in self.server.cache
 
             if already_cached:
-                self.environment.symlink_dependency_to_cache(
+                self.environment.link_dependency_to_cache(
                     next_needed_file, next_needed_hash, self.server.cache, self.server.cache_mutex
                 )
 
