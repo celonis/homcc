@@ -2,13 +2,15 @@
 from pytest_mock.plugin import MockerFixture
 import pytest
 from pathlib import Path
-from homcc.common.compression import NoCompression
 
+from homcc.common.compression import NoCompression
 from homcc.server.environment import CompilerResult, Environment
+from homcc.server.cache import Cache
 
 
 def create_mock_environment(instance_folder: str, mapped_cwd: str) -> Environment:
     Environment.__init__ = lambda *_: None  # type: ignore
+    Environment.__del__ = lambda *_: None  # type: ignore
     environment = Environment(Path(), "")
 
     environment.instance_folder = instance_folder
@@ -104,7 +106,6 @@ class TestServerEnvironment:
 
     def test_caching(self, mocker: MockerFixture):
         dependencies = {"file1": "hash1", "file2": "hash2", "file3": "hash3"}
-        cache = {"hash2": "some/path/to/be/linked"}
         mocker.patch(
             "os.link",
         )
@@ -115,14 +116,15 @@ class TestServerEnvironment:
         lock_mock.__exit__ = mocker.Mock(return_value=None)
 
         environment = create_mock_environment("", "")
-        needed_dependencies = environment.get_needed_dependencies(dependencies, cache, lock_mock)
+        Cache._create_cache_folder = lambda *_: None  # type: ignore
+        cache = Cache(Path(""))
+        cache.cache = {"hash2": "some/path/to/be/linked"}
+
+        needed_dependencies = environment.get_needed_dependencies(dependencies, cache)
 
         assert len(needed_dependencies) == 2
         assert "file1" in needed_dependencies
         assert "file3" in needed_dependencies
-
-        assert len(environment.linked_files) == 1
-        assert "file2" == str(environment.linked_files[0])
 
 
 class TestServerCompilation:

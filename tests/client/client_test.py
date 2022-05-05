@@ -56,36 +56,3 @@ class TestHostSelector:
         with pytest.raises(StopIteration):
             assert next(host_iter)
 
-
-class TestTCPClient:
-    """Tests for TCPClient"""
-
-    output: str = "tcp_client_test"
-
-    @pytest.fixture(autouse=True)
-    def _init(self, unused_tcp_port: int):
-        server, server_thread = start_server(address="localhost", port=unused_tcp_port, limit=1)
-
-        self.client: TCPClient = TCPClient(Host(type=ConnectionType.TCP, host="127.0.0.1", port=str(unused_tcp_port)))
-
-        yield  # individual tests run here
-
-        stop_server(server)
-        server_thread.join()
-
-    @pytest.mark.asyncio
-    @pytest.mark.timeout(5)
-    async def test_connectivity_and_send_argument_message(self):
-        args: List[str] = [
-            "g++",
-            "-Iexample/include",
-            "example/src/foo.cpp",
-            "example/src/main.cpp",
-            f"-o{TestTCPClient.output}",
-        ]
-        cwd: str = "/home/user/homcc_tcp_client_test"
-        dependencies: Set[str] = find_dependencies(Arguments.from_args(args))
-        dependency_dict: Dict[str, str] = calculate_dependency_dict(dependencies)
-
-        async with self.client as client:
-            await client.send_argument_message(Arguments.from_args(args), cwd, dependency_dict)

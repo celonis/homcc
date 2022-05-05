@@ -1,7 +1,6 @@
 """Module containing methods to manage the server environment, mostly file and path manipulation."""
 from dataclasses import dataclass
 from tempfile import TemporaryDirectory
-from threading import Lock
 import uuid
 import os
 import subprocess
@@ -12,6 +11,7 @@ from typing import Dict, List
 from homcc.common.arguments import Arguments
 from homcc.common.compression import Compression
 from homcc.common.messages import CompilationResultMessage, ObjectFile
+from homcc.server.cache import Cache
 
 logger = logging.getLogger(__name__)
 
@@ -32,63 +32,43 @@ class Environment:
     """Path to the current compilation inside /tmp/."""
     mapped_cwd: str
     """Mapped cwd, valid on server side."""
-    linked_files: List[Path]
-    """Holds all files that have been linked for this particular compilation,
-    so that they can be cleaned up again after compilation."""
 
     def __init__(self, root_folder: Path, cwd: str):
         self.root_folder = root_folder
-        self.linked_files = []
 
         self.create_instance_folder()
         self.map_cwd(cwd)
 
     def __del__(self):
-        self.clean_up_links()
+        def remove_path(path: Path):
+            if path.is_file() or path.is_symlink():
+                path.unlink()
+                return
+            for p in path.iterdir():
+                remove_path(p)
+            path.rmdir()
 
-    def link_dependency_to_cache(
-        self, dependency_file: str, dependency_hash: str, cache: Dict[str, str], cache_mutex: Lock
-    ):
+        remove_path(Path(self.instance_folder))
+        logger.info("Deleted instance folder '%s'.", self.instance_folder)
+
+    def link_dependency_to_cache(self, dependency_file: str, dependency_hash: str, cache: Cache):
         """Links the dependency to a cached dependency with the same hash."""
         # first create the folder structure (if needed), else linking won't work
         dependency_folder = os.path.dirname(dependency_file)
         Path(dependency_folder).mkdir(parents=True, exist_ok=True)
 
         # then do the actual linking
-        with cache_mutex:
-            os.link(cache[dependency_hash], dependency_file)
-            logger.debug("Linked '%s' to '%s'.", dependency_file, cache[dependency_hash])
+        os.link(cache.get(dependency_hash), dependency_file)
+        logger.debug("Linked '%s' to '%s'.", dependency_file, cache.get(dependency_hash))
 
-        self.linked_files.append(Path(dependency_file))
-
-    def clean_up_links(self):
-        """Cleans up all links supplied and deletes folders holding that links if they
-        would be empty after the links have been deleted."""
-        for link in self.linked_files:
-            link.unlink(missing_ok=True)
-
-            parent = link.parent.absolute()
-            ## delete all empty parent directories and finally stop at the root homcc temp folder
-            while parent.exists() and not os.listdir(parent) and not self.root_folder.samefile(parent):
-                parent.rmdir()
-                parent = parent.parent
-
-        logger.debug("Cleaned up #%i links that are not needed any more.", len(self.linked_files))
-        self.linked_files.clear()
-
-    def get_needed_dependencies(
-        self, dependencies: Dict[str, str], cache: Dict[str, str], cache_mutex: Lock
-    ) -> Dict[str, str]:
+    def get_needed_dependencies(self, dependencies: Dict[str, str], cache: Cache) -> Dict[str, str]:
         """Get the dependencies that are not cached and are therefore required to be sent by the client.
         Link cached dependencies so they can be used in the compilation process."""
         needed_dependencies: Dict[str, str] = {}
 
         for dependency_file, dependency_hash in dependencies.items():
-            with cache_mutex:
-                is_cached = dependency_hash in cache
-
-            if is_cached:
-                self.link_dependency_to_cache(dependency_file, dependency_hash, cache, cache_mutex)
+            if dependency_hash in cache:
+                self.link_dependency_to_cache(dependency_file, dependency_hash, cache)
             else:
                 needed_dependencies[dependency_file] = dependency_hash
 
@@ -197,11 +177,3 @@ class Environment:
 def create_root_temp_folder() -> TemporaryDirectory:
     """Creates and returns the root folder of homcc inside /tmp."""
     return TemporaryDirectory(prefix="homcc_")
-
-
-def save_dependency(absolute_dependency_path: str, content: bytearray):
-    """Writes the dependency to disk."""
-    os.makedirs(os.path.dirname(absolute_dependency_path), exist_ok=True)
-    Path.write_bytes(Path(absolute_dependency_path), content)
-
-    logger.debug("Wrote file %s", absolute_dependency_path)

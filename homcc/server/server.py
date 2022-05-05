@@ -24,11 +24,9 @@ from homcc.common.hashing import hash_file_with_bytes
 
 from homcc.common.compression import Compression, NoCompression
 
-from homcc.server.environment import (
-    Environment,
-    save_dependency,
-    create_root_temp_folder,
-)
+from homcc.server.environment import Environment, create_root_temp_folder
+
+from homcc.server.cache import Cache
 
 logger = logging.getLogger(__name__)
 
@@ -65,8 +63,7 @@ class TCPServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
         self.current_amount_connections: int = 0  # indicates the amount of clients that are currently connected
         self.current_amount_connections_mutex: Lock = Lock()
 
-        self.cache: Dict[str, str] = {}  # 'Hash' -> 'File path' on server map for holding paths to cached files
-        self.cache_mutex: Lock = Lock()
+        self.cache = Cache(Path(self.root_temp_folder.name))
 
     def verify_request(self, request, _) -> bool:
         with self.current_amount_connections_mutex:
@@ -128,9 +125,7 @@ class TCPRequestHandler(socketserver.BaseRequestHandler):
         self.mapped_dependencies = self.environment.map_dependency_paths(message.get_dependencies())
         logger.debug("Mapped dependencies: %s", self.mapped_dependencies)
 
-        self.needed_dependencies = self.environment.get_needed_dependencies(
-            self.mapped_dependencies, self.server.cache, self.server.cache_mutex
-        )
+        self.needed_dependencies = self.environment.get_needed_dependencies(self.mapped_dependencies, self.server.cache)
         logger.debug("Needed dependencies: %s", self.needed_dependencies)
 
         self.compression = message.get_compression()
@@ -176,10 +171,9 @@ class TCPRequestHandler(socketserver.BaseRequestHandler):
             del self.needed_dependencies[dependency_path]
             self.needed_dependency_keys.pop(0)
 
-            save_dependency(dependency_path, dependency_content)
+            self.server.cache.put(dependency_hash, dependency_content)
 
-            with self.server.cache_mutex:
-                self.server.cache[dependency_hash] = dependency_path
+            self.environment.link_dependency_to_cache(dependency_path, dependency_hash, self.server.cache)
 
         self.check_dependencies_exist()
 
@@ -195,13 +189,10 @@ class TCPRequestHandler(socketserver.BaseRequestHandler):
             next_needed_file = next(iter(self.needed_dependency_keys))
             next_needed_hash = self.needed_dependencies[next_needed_file]
 
-            with self.server.cache_mutex:
-                already_cached = next_needed_hash in self.server.cache
+            already_cached = next_needed_hash in self.server.cache
 
             if already_cached:
-                self.environment.link_dependency_to_cache(
-                    next_needed_file, next_needed_hash, self.server.cache, self.server.cache_mutex
-                )
+                self.environment.link_dependency_to_cache(next_needed_file, next_needed_hash, self.server.cache)
 
                 del self.needed_dependencies[next_needed_file]
                 self.needed_dependency_keys.pop(0)
