@@ -53,16 +53,22 @@ class TestEndToEnd:
             "example/src/main.cpp",
             f"-o{TestEndToEnd.OUTPUT}",
         ]
-
+        print("Starting server....")
         with self.start_server(unused_tcp_port) as server_process:
+            print("Started server....")
             result = self.start_client(args, unused_tcp_port)
-
+            print("Started client....")
             self.check_remote_compilation_assertions(result)
-
+            print("Remote assertions....")
             executable_stdout: str = subprocess.check_output([f"./{self.OUTPUT}"], encoding="utf-8")
+            print("Checked output....")
+
             assert executable_stdout == "homcc\n"
 
+            print("Kill....")
             server_process.kill()
+            print("Killed....")
+
 
     def cpp_end_to_end_no_linking(self, compiler: str, unused_tcp_port: int):
         args: List[str] = [
@@ -128,7 +134,7 @@ class TestEndToEnd:
 
     @pytest.mark.timeout(5)
     def test_end_to_end_clangplusplus(self, unused_tcp_port: int):
-        self.cpp_end_to_end("clang++", unused_tcp_port)
+        self.cpp_end_to_end("clang++", 66221)
 
     @pytest.mark.timeout(5)
     def test_end_to_end_clangplusplus_no_linking(self, unused_tcp_port: int):
