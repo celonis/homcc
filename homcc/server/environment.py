@@ -133,11 +133,7 @@ class Environment:
 
                 object_file = ObjectFile(client_output_path, bytearray(object_file_content), compression)
                 object_files.append(object_file)
-
-                # delete the object file after reading it,
-                # the server does not need it and it consumes disk space.
-                Path(object_file_path).unlink(missing_ok=True)
-
+                
                 logger.info("Compiled '%s'.", object_file.file_name)
 
         logger.info(
