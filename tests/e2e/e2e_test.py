@@ -132,7 +132,7 @@ class TestEndToEnd:
     def test_end_to_end_gplusplus_linking_only(self, unused_tcp_port: int):
         self.cpp_end_to_end_linking_only("g++", unused_tcp_port)
 
-    @pytest.mark.timeout(5)
+    @pytest.mark.timeout(10)
     def test_end_to_end_clangplusplus(self, unused_tcp_port: int):
         self.cpp_end_to_end("clang++", unused_tcp_port)
 
