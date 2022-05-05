@@ -39,7 +39,7 @@ async def compile_remotely(arguments: Arguments, hosts: List[str], config: Clien
         host.compression = host.compression or config.compression
 
         if host.type == ConnectionType.LOCAL:
-            logger.info("Compiling locally!")
+            logger.info("Compiling locally:\n%s", arguments)
             return compile_locally(arguments)
 
         try:

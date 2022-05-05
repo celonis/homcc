@@ -110,12 +110,12 @@ class CompilerResult:
 
 def invoke_compiler(mapped_cwd: str, args: List[str], profile: Optional[str]) -> CompilerResult:
     """Actually invokes the compiler process."""
-    logger.debug("Compile arguments: %s", args)
+    arguments: Arguments = Arguments.from_args(args)
 
     result: ArgumentsExecutionResult = (
-        Arguments.from_args(args).execute(cwd=mapped_cwd)
+        arguments.execute(cwd=mapped_cwd)
         if profile is None
-        else Arguments.from_args(args).schroot_execute(profile=profile, cwd=mapped_cwd)
+        else arguments.schroot_execute(profile=profile, cwd=mapped_cwd)
     )
 
     if result.stdout:
@@ -141,7 +141,7 @@ def do_compilation(
     result = invoke_compiler(mapped_cwd, list(arguments), profile)
 
     object_files: List[ObjectFile] = []
-    if result.return_code == 0:
+    if result.return_code == os.EX_OK:
         for source_file in arguments.source_files:
             object_file_path: str = map_source_file_to_object_file(mapped_cwd, source_file)
             object_file_content = Path.read_bytes(Path(object_file_path))

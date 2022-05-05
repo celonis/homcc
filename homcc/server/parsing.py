@@ -191,13 +191,20 @@ def default_schroot_locations() -> List[Path]:
 
 def load_schroot_profiles(schroot_config_file_locations: Optional[List[Path]] = None) -> List[str]:
     """Load schroot profiles as parameterized by schroot_config_file_locations or from the default schroot locations"""
-
     schroot_configparser: ConfigParser = ConfigParser()
 
     successfully_read_files: List[str] = schroot_configparser.read(
         schroot_config_file_locations or default_schroot_locations()
     )
 
-    logger.debug("Read schroot files: [%s]", ", ".join(successfully_read_files))
+    logger.info("Read schroot files: [%s]", ", ".join(successfully_read_files))
 
-    return schroot_configparser.sections()
+    profiles: List[str] = []
+
+    for section in schroot_configparser.sections():
+        profiles.append(section)
+        aliases: str = schroot_configparser[section].get("aliases")
+        if aliases is not None:
+            profiles.extend(aliases.split(","))
+
+    return profiles

@@ -2,10 +2,11 @@
 
 ## Table of Contents
 1. [Installation](#Installation)
-2. [Usage and Configuration](#Usage)
-   1. [Client](#Client)
-   2. [Server](#Server)
-3. [Development](#Development)
+2. [Documentation](#Documentation)
+3. [Usage and Configuration](#Usage)
+   1. [Client: homcc](#Client)
+   2. [Server: homccd](#Server)
+4. [Development](#Development)
    1. [Setup](#Setup)
    2. [Testing](#Testing)
    3. [Linting](#Linting)
@@ -14,11 +15,19 @@
 
 
 ## Installation
-- Download or [build](#Build Debian packages) the Debian packages
+- Download or [build](#Build) the Debian packages
 - Install the `homcc` client via: ```sudo apt install ./target/homcc.deb```
-- Install the `homccd` server via: ```sudo apt install ./target/homcc_server.deb```
+- Install the `homccd` server via: ```sudo apt install ./target/homccd.deb```
 
 **Note**: Currently, installing both packages leads to an issue with conflicting files. Therefore, to install the second package, use `sudo dpkg -i --force-overwrite ./target/{package.deb}`!
+
+
+## Documentation
+- TODO:
+  - Brief overview of what `homcc` is and why it exists: distribtued compilation -> faster build times, modern alternative
+  - Differences to `distcc`: thin connection as priority, caching, local pre-processing
+  - Description of client-server interaction
+  - Description of server-side caching
 
 
 ## <a name="Usage" />Usage and Configuration
@@ -47,7 +56,7 @@
     compression=lzo
     profile=schroot_environment
     ```
-- Specify your remote compilation server in the `hosts` file or in the `$HOMCC_HOSTS` environment variable:
+- Specify your remote compilation server in a `hosts` file or in the `$HOMCC_HOSTS` environment variable:
   - Possible `hosts` file locations:
     - `$HOMCC_DIR/hosts`
     - `~/.homcc/hosts`
@@ -100,10 +109,10 @@
     address=localhost
     verbose=True
     ```
-- \[Optional]: Setup your `schroot` environments at `/etc/schroot/schroot.conf` or in the<br/>
+- \[Optional]: Setup your `chroot` environments at `/etc/schroot/schroot.conf` or in the<br/>
   `/etc/schroot/chroot.d/` directory to permit *schrooted* compilation<br/>
-  **Note**: Currently, in order to apply changes in these files you have to restart `homccd`!
-
+  **Note**: Currently, in order to apply changes in these files you have to restart `homccd`:<br/>
+  `systemctl restart homccd.service`
 
 
 ## Development
@@ -118,7 +127,7 @@
 
 ### Testing
 - Tests and test coverage analysis are performed via [pytest](https://github.com/pytest-dev/pytest)
-- Execute all tests in `./tests` and produce a testing and test coverage summary:<br/>
+- Execute all tests in `./tests/` and produce a testing and test coverage summary:<br/>
   `pytest -v -rfEs --cov=homcc`
 
 
@@ -136,5 +145,5 @@
 - Format a specified python file: `black ./path/to/file.py`
 
 ### <a name="Build" />Build Debian packages
-- Run `make all` in the repository root
+- Run `make all` in the repository root to build the `server` and `client` target
 - The generated `.deb` files are then contained in the `./target/` directory

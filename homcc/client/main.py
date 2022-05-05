@@ -114,7 +114,7 @@ def main():
             logger.warning("%s", error)
 
     # compile locally on unsendable arguments
-    logger.warning("Compiling locally instead!")
+    logger.warning("Compiling locally instead:\n%s", compiler_arguments)
     sys.exit(compile_locally(compiler_arguments))
 
 

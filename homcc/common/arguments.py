@@ -482,6 +482,8 @@ class Arguments:
         if "shell" in kwargs:
             logger.error("Arguments currently does not support shell execution!")
 
+        logger.debug("Executing: [%s]", " ".join(args))
+
         result: subprocess.CompletedProcess = subprocess.run(
             args=args, check=check, encoding="utf-8", capture_output=capture_output, **kwargs
         )

@@ -53,19 +53,14 @@ class TestLoadSchrootProfiles:
     """
 
     schroot_config: List[str] = [
-        "[foo]",
-        "description=Foo",
+        "[foobar]",
+        "description=FooBar",
         "directory=/var/chroot/foo",
-        "root-users=user",
-        "users=user",
-        "type=directory",
+        "aliases=foo,bar",
         "",
-        "[bar]",
-        "description=Bar",
-        "directory=/var/chroot/bar",
-        "root-users=user",
-        "users=user",
-        "type=directory",
+        "[baz]",
+        "description=Baz",
+        "directory=/var/chroot/baz",
     ]
 
     def test_load_schroot_profiles(self, tmp_path: Path):
@@ -75,6 +70,8 @@ class TestLoadSchrootProfiles:
         schroot_config_file_locations: List[Path] = [tmp_schroot_config_file]
         schroot_profiles: List[str] = load_schroot_profiles(schroot_config_file_locations)
 
-        assert len(schroot_profiles) == 2
+        assert len(schroot_profiles) == 4
+        assert "foobar" in schroot_profiles
         assert "foo" in schroot_profiles
         assert "bar" in schroot_profiles
+        assert "baz" in schroot_profiles
