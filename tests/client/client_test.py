@@ -1,15 +1,12 @@
 """ Tests for client/client.py"""
 
-from typing import Dict, Iterator, List, Set
+from typing import Iterator, List
 
 import pytest
 
-from homcc.common.arguments import Arguments
-from homcc.client.client import HostSelector, TCPClient
-from homcc.client.compilation import calculate_dependency_dict, find_dependencies
+from homcc.client.client import HostSelector
 from homcc.client.errors import HostsExhaustedError
-from homcc.client.parsing import ConnectionType, Host, parse_host
-from homcc.server.server import start_server, stop_server
+from homcc.client.parsing import Host, parse_host
 
 
 class TestHostSelector:
@@ -55,4 +52,3 @@ class TestHostSelector:
         assert len(host_selector) == 0
         with pytest.raises(StopIteration):
             assert next(host_iter)
-

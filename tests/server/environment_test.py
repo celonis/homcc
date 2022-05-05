@@ -116,6 +116,7 @@ class TestServerEnvironment:
         lock_mock.__exit__ = mocker.Mock(return_value=None)
 
         environment = create_mock_environment("", "")
+        # pylint: disable=protected-access
         Cache._create_cache_folder = lambda *_: None  # type: ignore
         cache = Cache(Path(""))
         cache.cache = {"hash2": "some/path/to/be/linked"}
