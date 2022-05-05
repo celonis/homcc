@@ -4,6 +4,7 @@ import pytest
 import os
 import shutil
 import subprocess
+import time
 
 from pathlib import Path
 from typing import List
@@ -36,6 +37,12 @@ class TestEndToEnd:
             stderr=subprocess.STDOUT,
             encoding="utf-8",
         )
+
+    @pytest.fixture(autouse=True)
+    def delay_between_tests(self):
+        yield
+        time.sleep(2)
+
 
     @staticmethod
     def check_remote_compilation_assertions(result: subprocess.CompletedProcess):
