@@ -18,8 +18,7 @@ class TestEndToEnd:
     @staticmethod
     def start_server(unused_tcp_port: int) -> subprocess.Popen:
         return subprocess.Popen(
-            ["./homcc/server/main.py", f"--listen={TestEndToEnd.ADDRESS}", f"--port={unused_tcp_port}"],
-            stdout=subprocess.PIPE,
+            ["./homcc/server/main.py", f"--listen={TestEndToEnd.ADDRESS}", f"--port={unused_tcp_port}"]
         )
 
     @staticmethod
@@ -35,6 +34,7 @@ class TestEndToEnd:
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             encoding="utf-8",
+            timeout=10,
         )
 
     @staticmethod
