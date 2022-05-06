@@ -5,6 +5,8 @@ on:
     paths-ignore:
       - README.md
       - .gitignore
+    branches-ignore:
+      - main
   pull_request:
     types:
       - opened
@@ -60,8 +62,11 @@ jobs:
           cache: 'pip'
       - name: Install dependencies
         run: |
-          sudo apt install liblzo2-dev
+          sudo apt install liblzo2-dev schroot debootstrap
           python -m pip install --upgrade pip
           pip install -r requirements.txt
+      - name: Setup chroot environment
+          sudo debootstrap focal /var/chroot/focal http://archive.ubuntu.com/ubuntu
+          cp ./example/focal.conf /etc/schroot/chroot.d/
       - name: Run tests
-        run: pytest -v -rfE --cov=homcc --capture=tee-sys
+        run: pytest -v -rfE --cov=homcc --capture=tee-sys --runschroot=focal

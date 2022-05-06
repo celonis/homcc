@@ -8,7 +8,68 @@ on:
       - README.md
       - .gitignore
 
+# focal
+
+
 jobs:
+  linter:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+      - name: Setup python
+        uses: actions/setup-python@v2
+        with:
+          python-version: '3.8'
+          cache: 'pip'
+      - name: Install dependencies
+        run: |
+          sudo apt install liblzo2-dev
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      - name: Execute linters
+        run: |
+          pylint -v --rcfile=.pylintrc *.py homcc tests
+          mypy -v --pretty *.py homcc
+  format-check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+      - name: Setup python
+        uses: actions/setup-python@v2
+        with:
+          python-version: '3.8'
+          cache: 'pip'
+      - name: Install dependencies
+        run: |
+          sudo apt install liblzo2-dev
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      - name: Execute format-check
+        uses: psf/black@stable
+        with:
+          options: "--check --color --diff --verbose"
+  tests:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+      - name: Setup python
+        uses: actions/setup-python@v2
+        with:
+          python-version: '3.8'
+          cache: 'pip'
+      - name: Install dependencies
+        run: |
+          sudo apt install liblzo2-dev schroot debootstrap
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      - name: Setup chroot environment
+          sudo debootstrap focal /var/chroot/focal http://archive.ubuntu.com/ubuntu
+          cp ./example/focal.conf /etc/schroot/chroot.d/
+      - name: Run tests
+        run: pytest -v -rfE --cov=homcc --capture=tee-sys --runschroot=focal
   build:
     runs-on: ubuntu-latest
     steps:
