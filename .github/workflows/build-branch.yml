@@ -66,6 +66,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
       - name: Setup chroot environment
+        run: |
           sudo debootstrap focal /var/chroot/focal http://archive.ubuntu.com/ubuntu
           cp ./example/focal.conf /etc/schroot/chroot.d/
       - name: Run tests
