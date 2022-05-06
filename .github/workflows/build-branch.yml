@@ -74,6 +74,7 @@ jobs:
           groups
           cat /etc/schroot/chroot.d/focal.conf
           schroot -l
+          schroot -c focal -- sudo apt install build-essential
           schroot -c focal -- g++ --version
       - name: Run tests
         run: pytest -v -rfE --cov=homcc --capture=tee-sys --runschroot=focal
