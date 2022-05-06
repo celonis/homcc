@@ -8,11 +8,7 @@ import pytest
 
 def pytest_addoption(parser):
     parser.addoption(
-        "--runschroot",
-        action="store",
-        type=str,
-        metavar="PROFILE",
-        help="run e2e schroot tests with specified PROFILE"
+        "--runschroot", action="store", type=str, metavar="PROFILE", help="run e2e schroot tests with specified PROFILE"
     )
 
 

@@ -36,7 +36,7 @@ class TestEndToEnd:
                 "--verbose",
                 f"--host={TestEndToEnd.ADDRESS}:{unused_tcp_port}",
                 "--no-profile" if profile is None else f"--profile={profile}",
-                "--timeout=5",
+                "--timeout=20",
             ]
             + args,
             check=True,
