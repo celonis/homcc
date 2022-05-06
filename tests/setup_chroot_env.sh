@@ -6,7 +6,7 @@ cat > $FILE << EOF
 [$1]
 description=Test Environment $1
 directory=/var/chroot/$1
-root-groups=sudo
-groups=sudo
+root-groups=docker,adm,systemd-journal
+groups=docker,adm,systemd-journal
 type=directory
 EOF
