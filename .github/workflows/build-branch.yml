@@ -69,5 +69,9 @@ jobs:
         run: |
           sudo debootstrap focal /var/chroot/focal http://archive.ubuntu.com/ubuntu
           sudo ./tests/setup_chroot_env.sh focal $USERNAME
+          echo DEBUGGING-HOOK
+          echo $USERNAME
+          cat etc/schroot/chroot.d/focal.conf
+          schroot -l
       - name: Run tests
         run: pytest -v -rfE --cov=homcc --capture=tee-sys --runschroot=focal
