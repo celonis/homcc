@@ -12,6 +12,7 @@
    3. [Linting](#Linting)
    4. [Formatting](#Formatting)
    5. [Build Debian packages](#Build)
+   6. [`schroot` testing setup for Debian systems](#SchrootTestSetup)
 
 
 ## Installation
@@ -147,3 +148,22 @@
 ### <a name="Build" />Build Debian packages
 - Run `make all` in the repository root to build the `server` and `client` target
 - The generated `.deb` files are then contained in the `./target/` directory
+
+
+### <a name="SchrootTestSetup" />`schroot` testing setup for Debian systems
+- Install necessary tools: `sudo apt install schroot debootstrap`
+- Create `chroot` environment:
+  - Download and install selected distribution at your desired location, e.g. `Ubuntu 22.04 Jammy Jellyfish` from [Ubuntu Releases](https://wiki.ubuntu.com/Releases) at `/var/chroot/`:<br/>
+    `sudo debootstrap jammy /var/chroot/jammy http://archive.ubuntu.com/ubuntu`
+  - Configure the environment by creating a corresponding file in the `/etc/schroot/chroot.d/` directory or by appending it to `/etc/schroot/schroot.conf`, e.g. `jammy.conf`:<br/>
+    ```
+    [jammy]
+    description=Ubuntu 22.04 Jammy Jellyfish
+    directory=/var/chroot/jammy
+    root-users=USERNAME
+    users=USERNAME
+    type=directory
+    ```
+- Verify correct setup via: `schroot -l`
+- Install missing `build-essential`s: `sudo apt install build-essential`
+- Execute *schrooted* compilation by specifying `profile=jammy`
