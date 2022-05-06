@@ -68,6 +68,6 @@ jobs:
       - name: Setup chroot environment
         run: |
           sudo debootstrap focal /var/chroot/focal http://archive.ubuntu.com/ubuntu
-          cp ./example/focal.conf /etc/schroot/chroot.d/
+          sudo cp ./example/focal.conf /etc/schroot/chroot.d/
       - name: Run tests
         run: pytest -v -rfE --cov=homcc --capture=tee-sys --runschroot=focal
