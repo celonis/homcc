@@ -1,5 +1,4 @@
 """Module containing methods to manage the server environment, mostly file and path manipulation."""
-from dataclasses import dataclass
 from tempfile import TemporaryDirectory
 import uuid
 import os
