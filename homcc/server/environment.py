@@ -21,6 +21,10 @@ class Environment:
     """Path to the current compilation inside /tmp/."""
     mapped_cwd: str
     """Mapped cwd, valid on server side."""
+    profile: Optional[str]
+    """schroot profile for the compilation."""
+    compression: Compression
+    """Compression used for data transfer."""
 
     def __init__(self, root_folder: Path, cwd: str, profile: Optional[str], compression: Compression):
         self.instance_folder: str = self.create_instance_folder(root_folder)
