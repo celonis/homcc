@@ -2,7 +2,6 @@
 from tempfile import TemporaryDirectory
 import uuid
 import os
-import subprocess
 import logging
 from pathlib import Path
 from typing import Dict, List
