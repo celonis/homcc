@@ -8,5 +8,6 @@ cat > $FILE << EOF
 description=Test Environment $1
 directory=/var/chroot/$1
 root-groups=$GROUPS
+groups=$GROUPS
 type=directory
 EOF
