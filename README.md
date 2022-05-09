@@ -16,7 +16,7 @@
 
 
 ## Installation
-- Download or [build](#Build) the Debian packages
+- Download or [build](#build-debian-packages) the Debian packages
 - Install the `homcc` client via: ```sudo apt install ./target/homcc.deb```
 - Install the `homccd` server via: ```sudo apt install ./target/homccd.deb```
 
@@ -107,7 +107,7 @@
     limit=64
     log_level=DEBUG
     port=3633
-    address=localhost
+    address=0.0.0.0
     verbose=True
     ```
 - \[Optional]: Setup your `chroot` environments at `/etc/schroot/schroot.conf` or in the<br/>

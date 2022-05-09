@@ -149,8 +149,11 @@ class Message(ABC):
 
 
 class ArgumentMessage(Message):
-    """Initial message in the protocol. Client sends args, working directory,
-    dependencies (key: file paths, value: SHA1 hash) and the to be used compression algorithm."""
+    """
+    Initial message in the homcc protocol.
+    Client sends args, working directory, dependencies (key: file paths, value: SHA1 hash), the chroot env profile and
+    the to be used compression algorithm.
+    """
 
     def __init__(
         self,
