@@ -152,12 +152,12 @@ class TestEndToEnd:
 
     @pytest.mark.timeout(20)
     @pytest.mark.skipif(shutil.which("g++") is None, reason="g++ is not installed")
-    def test_end_to_end_gplusplus_lzo(self, unused_tcp_port: int):
+    def test_end_to_end_lzo_gplusplus(self, unused_tcp_port: int):
         self.cpp_end_to_end("g++", unused_tcp_port, compression=LZO())
 
     @pytest.mark.timeout(20)
     @pytest.mark.skipif(shutil.which("g++") is None, reason="g++ is not installed")
-    def test_end_to_end_gplusplus_lzma(self, unused_tcp_port: int):
+    def test_end_to_end_lzma_gplusplus(self, unused_tcp_port: int):
         self.cpp_end_to_end("g++", unused_tcp_port, compression=LZMA())
 
     @pytest.mark.timeout(20)
