@@ -24,8 +24,7 @@ class TestEndToEnd:
                 f"--listen={TestEndToEnd.ADDRESS}",
                 f"--port={unused_tcp_port}",
                 "--verbose",
-            ],
-            stdout=subprocess.PIPE,
+            ]
         )
 
     @staticmethod
