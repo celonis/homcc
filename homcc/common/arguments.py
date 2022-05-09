@@ -178,7 +178,7 @@ class Arguments:
             logger.debug("%s is used as compiler", arg)
 
             if not Arguments.is_executable_arg(arg):
-                logger.warning("Specified compiler %s is not an executable", arg)
+                logger.warning("Specified compiler '%s' is not an executable", arg)
             return True
         return False
 
@@ -316,7 +316,7 @@ class Arguments:
                 source_files.append(arg)
 
             else:
-                logger.debug('Not adding "%s" as source file, as it does not match source file regex.', arg)
+                logger.debug("Not adding '%s' as source file, as it does not match source file regex.", arg)
 
         return source_files
 

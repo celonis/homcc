@@ -6,6 +6,7 @@ from pathlib import Path
 from homcc.common.compression import NoCompression
 from homcc.server.environment import ArgumentsExecutionResult, Environment
 from homcc.server.cache import Cache
+from homcc.common.arguments import Arguments
 
 
 def create_mock_environment(instance_folder: str, mapped_cwd: str) -> Environment:
@@ -23,7 +24,7 @@ class TestServerEnvironment:
     """Tests the server environment."""
 
     def test_map_arguments(self):
-        arguments = [
+        args = [
             "gcc",
             "-Irelative_path/relative.h",
             "-I/var/includes/absolute.h",
@@ -37,7 +38,7 @@ class TestServerEnvironment:
             "/opt/src/absolute.cpp",
         ]
         environment = create_mock_environment("/client1", "/client1/test/xyz")
-        mapped_arguments = environment.map_arguments(arguments)
+        mapped_arguments = list(environment.map_args(args))
 
         assert mapped_arguments.pop(0) == "gcc"
         assert mapped_arguments.pop(0) == f"-I{environment.mapped_cwd}/relative_path/relative.h"
@@ -69,7 +70,7 @@ class TestServerEnvironment:
         ]
 
         environment = create_mock_environment("/client1", "/client1/test/xyz")
-        mapped_arguments = environment.map_arguments(arguments)
+        mapped_arguments = list(environment.map_args(arguments))
 
         assert mapped_arguments.pop(0) == "gcc"
         assert mapped_arguments.pop(0) == "-BsomeOtherArgument"
@@ -143,12 +144,14 @@ class TestServerCompilation:
     def test_multiple_files(self):
         instance_path = "/tmp/homcc/test-id"
         mapped_cwd = "/tmp/homcc/test-id/home/user/cwd"
-        arguments = [
-            "gcc",
-            "-I../abc/include/foo.h",
-            f"{mapped_cwd}/src/main.cpp",
-            f"{mapped_cwd}/other.cpp",
-        ]
+        arguments = Arguments.from_args(
+            [
+                "gcc",
+                "-I../abc/include/foo.h",
+                f"{mapped_cwd}/src/main.cpp",
+                f"{mapped_cwd}/other.cpp",
+            ]
+        )
 
         environment = create_mock_environment(instance_path, mapped_cwd)
         result_message = environment.do_compilation(arguments, NoCompression())
@@ -160,11 +163,13 @@ class TestServerCompilation:
     def test_single_file(self):
         instance_path = "/tmp/homcc/test-id"
         mapped_cwd = "/tmp/homcc/test-id/home/user/cwd"
-        arguments = [
-            "gcc",
-            "-I../abc/include/foo.h",
-            f"{mapped_cwd}/src/this_is_a_source_file.cpp",
-        ]
+        arguments = Arguments.from_args(
+            [
+                "gcc",
+                "-I../abc/include/foo.h",
+                f"{mapped_cwd}/src/this_is_a_source_file.cpp",
+            ]
+        )
 
         environment = create_mock_environment(instance_path, mapped_cwd)
         result_message = environment.do_compilation(arguments, NoCompression())

@@ -26,6 +26,8 @@ from homcc.common.compression import Compression, NoCompression
 
 from homcc.server.environment import Environment, create_root_temp_folder
 
+from homcc.common.arguments import Arguments
+
 from homcc.server.cache import Cache
 
 logger = logging.getLogger(__name__)
@@ -97,7 +99,7 @@ class TCPRequestHandler(socketserver.BaseRequestHandler):
     """Further dependencies needed from the client."""
     needed_dependency_keys: List[str]
     """Shuffled list of keys for the needed dependencies dict."""
-    compiler_arguments: List[str]
+    compiler_arguments: Arguments
     """List of compiler arguments."""
     instance_path: str = ""
     """Path to the current compilation inside /tmp/."""
@@ -119,7 +121,7 @@ class TCPRequestHandler(socketserver.BaseRequestHandler):
 
         self.environment = Environment(root_folder=Path(self.server.root_temp_folder.name), cwd=message.get_cwd())
 
-        self.compiler_arguments = self.environment.map_arguments(message.get_arguments())
+        self.compiler_arguments = self.environment.map_args(message.get_arguments())
         logger.debug("Mapped compiler args: %s", str(self.compiler_arguments))
 
         self.mapped_dependencies = self.environment.map_dependency_paths(message.get_dependencies())

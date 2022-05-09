@@ -62,10 +62,10 @@ class Environment:
 
         return needed_dependencies
 
-    def map_arguments(self, arguments: List[str]) -> List[str]:
+    def map_args(self, args: List[str]) -> Arguments:
         """Maps arguments that should be translated (e.g. -I{dir}, .cpp files,
         or the -o argument) to paths valid on the server."""
-        return list(Arguments.from_args(arguments).map(self.instance_folder, self.mapped_cwd))
+        return Arguments.from_args(args).map(self.instance_folder, self.mapped_cwd)
 
     @staticmethod
     def create_instance_folder(root_folder: Path) -> str:
@@ -101,16 +101,14 @@ class Environment:
     def map_source_file_to_object_file(self, source_file: str) -> str:
         return os.path.join(self.mapped_cwd, f"{Path(source_file).stem}.o")
 
-    def do_compilation(self, args: List[str], compression: Compression) -> CompilationResultMessage:
+    def do_compilation(self, arguments: Arguments, compression: Compression) -> CompilationResultMessage:
         """Does the compilation and returns the filled result message."""
         logger.info("Compiling...")
 
         # create the mapped current working directory if it doesn't exist yet
         Path(self.mapped_cwd).mkdir(parents=True, exist_ok=True)
 
-        arguments: Arguments = Arguments.from_args(args).no_linking()
-
-        result = self.invoke_compiler(list(arguments))
+        result = self.invoke_compiler(arguments.no_linking())
 
         object_files: List[ObjectFile] = []
         if result.return_code == 0:
@@ -132,30 +130,19 @@ class Environment:
 
         return CompilationResultMessage(object_files, result.stdout, result.stderr, result.return_code, compression)
 
-    def invoke_compiler(self, arguments: List[str]) -> ArgumentsExecutionResult:
+    def invoke_compiler(self, arguments: Arguments) -> ArgumentsExecutionResult:
         """Actually invokes the compiler process."""
         logger.debug("Compile arguments: %s", arguments)
 
-        # pylint: disable=subprocess-run-check
-        # (justification: we explicitly return the result code)
-        result = subprocess.run(
-            arguments,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            cwd=self.mapped_cwd,
-        )
+        result = arguments.execute(check=False, cwd=self.mapped_cwd)
 
-        stdout = ""
         if result.stdout:
-            stdout = result.stdout.decode("utf-8")
-            logger.debug("Compiler gave output:\n'%s'", stdout)
+            logger.debug("Compiler gave output:\n'%s'", result.stdout)
 
-        stderr = ""
         if result.stderr:
-            stderr = result.stderr.decode("utf-8")
-            logger.warning("Compiler gave error output %s:\n'%s'", self.instance_folder, stderr)
+            logger.warning("Compiler gave error output %s:\n'%s'", self.instance_folder, result.stderr)
 
-        return ArgumentsExecutionResult(result.returncode, stdout, stderr)
+        return result
 
 
 def create_root_temp_folder() -> TemporaryDirectory:
