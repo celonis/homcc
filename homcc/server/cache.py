@@ -27,7 +27,8 @@ class Cache:
         with self.cache_mutex:
             return key in self.cache
 
-    def _create_cache_folder(self, root_temp_folder: Path) -> Path:
+    @staticmethod
+    def _create_cache_folder(root_temp_folder: Path) -> Path:
         """Creates the cache folder inside the root folder."""
         cache_folder = root_temp_folder / Path("cache")
         cache_folder.mkdir(parents=True, exist_ok=True)

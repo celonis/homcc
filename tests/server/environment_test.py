@@ -4,7 +4,7 @@ import pytest
 from pathlib import Path
 
 from homcc.common.compression import NoCompression
-from homcc.server.environment import CompilerResult, Environment
+from homcc.server.environment import ArgumentsExecutionResult, Environment
 from homcc.server.cache import Cache
 
 
@@ -88,8 +88,8 @@ class TestServerEnvironment:
         instance_path = "/client1/"
         cwd = "/home/xyz/query-engine"
 
-        environment = create_mock_environment(instance_path, cwd)
-        mapped_cwd = environment.map_cwd(cwd)
+        environment = create_mock_environment(None, None)
+        mapped_cwd = environment.map_cwd(cwd, instance_path)
 
         assert mapped_cwd == "/client1/home/xyz/query-engine"
 
@@ -133,7 +133,7 @@ class TestServerCompilation:
 
     @pytest.fixture(autouse=True)
     def setup_mocks(self, mocker: MockerFixture):
-        mocked_compiler_result = CompilerResult(0, "", "")
+        mocked_compiler_result = ArgumentsExecutionResult(0, "", "")
         mocker.patch(
             "homcc.server.environment.Environment.invoke_compiler",
             return_value=mocked_compiler_result,

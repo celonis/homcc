@@ -8,21 +8,12 @@ import logging
 from pathlib import Path
 from typing import Dict, List
 
-from homcc.common.arguments import Arguments
+from homcc.common.arguments import Arguments, ArgumentsExecutionResult
 from homcc.common.compression import Compression
 from homcc.common.messages import CompilationResultMessage, ObjectFile
 from homcc.server.cache import Cache
 
 logger = logging.getLogger(__name__)
-
-
-@dataclass
-class CompilerResult:
-    """Information that the compiler process gives after executing."""
-
-    return_code: int
-    stdout: str
-    stderr: str
 
 
 class Environment:
@@ -34,10 +25,8 @@ class Environment:
     """Mapped cwd, valid on server side."""
 
     def __init__(self, root_folder: Path, cwd: str):
-        self.root_folder = root_folder
-
-        self.create_instance_folder()
-        self.map_cwd(cwd)
+        self.instance_folder = self.create_instance_folder(root_folder)
+        self.mapped_cwd = self.map_cwd(cwd, self.instance_folder)
 
     def __del__(self):
         def remove_path(path: Path):
@@ -79,22 +68,23 @@ class Environment:
         or the -o argument) to paths valid on the server."""
         return list(Arguments.from_args(arguments).map(self.instance_folder, self.mapped_cwd))
 
-    def create_instance_folder(self) -> str:
+    @staticmethod
+    def create_instance_folder(root_folder: Path) -> str:
         """Creates a folder with random name in the root temp folder. This folder is used for
         storing dependencies and compilation results of a single compilation.
         Returns the path to this folder."""
-        self.instance_folder = os.path.join(self.root_folder, str(uuid.uuid4()))
-        Path(self.instance_folder).mkdir()
+        instance_folder = os.path.join(root_folder, str(uuid.uuid4()))
+        Path(instance_folder).mkdir()
 
-        logger.info("Created dir for new client: %s", self.instance_folder)
+        logger.info("Created dir for new client: %s", instance_folder)
 
-        return self.instance_folder
+        return instance_folder
 
-    def map_cwd(self, cwd: str) -> str:
+    @staticmethod
+    def map_cwd(cwd: str, instance_folder: str) -> str:
         """Maps the cwd folder to an absolute path valid on the server."""
         # cwd is an absolute path, to join we have to remove the first /
-        self.mapped_cwd = os.path.join(self.instance_folder, cwd[1:])
-        return self.mapped_cwd
+        return os.path.join(instance_folder, cwd[1:])
 
     def unmap_path(self, server_path: str) -> str:
         """Unmaps an absolute path from the server to an absolute path valid on the client."""
@@ -143,7 +133,7 @@ class Environment:
 
         return CompilationResultMessage(object_files, result.stdout, result.stderr, result.return_code, compression)
 
-    def invoke_compiler(self, arguments: List[str]) -> CompilerResult:
+    def invoke_compiler(self, arguments: List[str]) -> ArgumentsExecutionResult:
         """Actually invokes the compiler process."""
         logger.debug("Compile arguments: %s", arguments)
 
@@ -166,7 +156,7 @@ class Environment:
             stderr = result.stderr.decode("utf-8")
             logger.warning("Compiler gave error output %s:\n'%s'", self.instance_folder, stderr)
 
-        return CompilerResult(result.returncode, stdout, stderr)
+        return ArgumentsExecutionResult(result.returncode, stdout, stderr)
 
 
 def create_root_temp_folder() -> TemporaryDirectory:
