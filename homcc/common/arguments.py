@@ -70,7 +70,7 @@ class Arguments:
 
         # preprocessing args
         PREPROCESSOR_ONLY_ARG: str = "-E"
-        PREPROCESSOR_DEPENDENY_ARG: str = "-M"
+        PREPROCESSOR_DEPENDENCY_ARG: str = "-M"
 
         # args that rely on native machine
         NATIVE_ARGS: List[str] = ["-march=native", "-mtune=native"]
@@ -200,7 +200,7 @@ class Arguments:
             return True
 
         # all remaining preprocessing arg types with prefix "-M" imply Unsendability
-        if arg.startswith(Arguments.Unsendable.PREPROCESSOR_DEPENDENY_ARG):
+        if arg.startswith(Arguments.Unsendable.PREPROCESSOR_DEPENDENCY_ARG):
             logger.debug(
                 "[%s] implies [%s] and must be executed locally", arg, Arguments.Unsendable.PREPROCESSOR_ONLY_ARG
             )
@@ -471,12 +471,8 @@ class Arguments:
         self._args = [arg for arg in self.args if not self.is_source_file_arg(arg)]
         return self
 
-    def execute(self, **kwargs) -> ArgumentsExecutionResult:
-        """
-        Execute arguments by forwarding it as a list of args to subprocess and return the result as an
-        ArgumentsExecutionResult. If possible, all parameters to this method will also be forwarded directly to the
-        subprocess function call.
-        """
+    @staticmethod
+    def _execute_args(args: List[str], **kwargs) -> ArgumentsExecutionResult:
         check: bool = kwargs.pop("check", False)
         capture_output: bool = kwargs.pop("capture_output", True)
 
@@ -486,7 +482,26 @@ class Arguments:
         if "shell" in kwargs:
             logger.error("Arguments currently does not support shell execution!")
 
+        logger.debug("Executing: [%s]", " ".join(args))
+
         result: subprocess.CompletedProcess = subprocess.run(
-            args=list(self), check=check, encoding="utf-8", capture_output=capture_output, **kwargs
+            args=args, check=check, encoding="utf-8", capture_output=capture_output, **kwargs
         )
         return ArgumentsExecutionResult.from_process_result(result)
+
+    def execute(self, **kwargs) -> ArgumentsExecutionResult:
+        """
+        Execute arguments by forwarding it as a list of args to subprocess and return the result as an
+        ArgumentsExecutionResult. If possible, all parameters to this method will also be forwarded directly to the
+        subprocess function call.
+        """
+        return self._execute_args(list(self), **kwargs)
+
+    def schroot_execute(self, profile: str, **kwargs) -> ArgumentsExecutionResult:
+        """
+        Execute arguments in a secure changed root environment by forwarding it as a list of args prepended by schroot
+        args to subprocess and return the result as an ArgumentsExecutionResult. If possible, all parameters to this
+        method will also be forwarded directly to the subprocess function call.
+        """
+        schroot_args: List[str] = ["schroot", "-c", profile, "--"]
+        return self._execute_args(schroot_args + list(self), **kwargs)

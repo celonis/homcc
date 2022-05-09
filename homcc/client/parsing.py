@@ -130,18 +130,22 @@ class ClientConfig:
 
     compiler: str
     compression: Optional[str]
-    verbose: bool
+    profile: Optional[str]
     timeout: Optional[float]
+    verbose: bool
 
     def __init__(
         self,
+        *,
         compiler: Optional[str] = None,
         compression: Optional[str] = None,
-        verbose: Optional[str] = None,
+        profile: Optional[str] = None,
         timeout: Optional[str] = None,
+        verbose: Optional[str] = None,
     ):
         self.compiler = compiler or Arguments.DEFAULT_COMPILER
         self.compression = compression
+        self.profile = profile
         self.timeout = float(timeout) if timeout is not None else None
 
         # additional parsing step for verbosity
@@ -167,15 +171,16 @@ def parse_cli_args(args: List[str]) -> Tuple[Dict[str, Any], Arguments]:
     show_and_exit.add_argument("-j", action=ShowConcurrencyLevel)
 
     parser.add_argument(
-        "--verbose",
+        "--scan-includes",
         action="store_true",
-        help="enables a verbose mode which implies detailed and colored logging of debug messages",
+        help="show all header dependencies that would be sent to the server, as calculated from the given arguments, "
+        "and exit",
     )
 
     parser.add_argument(
-        "--scan-includes",
+        "--verbose",
         action="store_true",
-        help="show all dependencies that would be sent to the server, as calculated from the given arguments, and exit",
+        help="enables a verbose mode which implies detailed and colored logging of debug messages",
     )
 
     indented_newline: str = "\n\t"
@@ -194,6 +199,19 @@ def parse_cli_args(args: List[str]) -> Tuple[Dict[str, Any], Arguments]:
         f"{indented_newline.join(Compression.descriptions())}",
     )
 
+    profile = parser.add_mutually_exclusive_group()
+    profile.add_argument(
+        "--profile",
+        type=str,
+        help="PROFILE which will be mapped to predefined chroot environments on the selected remote compilation server,"
+        " no profile is being used on default",
+    )
+    profile.add_argument(
+        "--no-profile",
+        action="store_true",
+        help="enforce that no PROFILE is used even if one is specified in the configuration file",
+    )
+
     parser.add_argument(
         "--timeout",
         type=float,
@@ -209,7 +227,7 @@ def parse_cli_args(args: List[str]) -> Tuple[Dict[str, Any], Arguments]:
         metavar="[COMPILER] ARGUMENTS ...",
         help="COMPILER, if not specified explicitly, is either read from the config file or defaults to "
         f'"{Arguments.DEFAULT_COMPILER}"\n'
-        "all remaining ARGUMENTS will be directly forwarded to the COMPILER",
+        "dependant on remote execution, the remaining ARGUMENTS may be altered before being forwarded to the COMPILER",
     )
 
     # known args (used for homcc), unknown args (used as and forwarded to the compiler)
@@ -348,9 +366,5 @@ def parse_config(config_lines: List[str]) -> ClientConfig:
 
 
 def load_config_file(config_file_locations: Optional[List[Path]] = None) -> List[str]:
-    """Load a homcc config file from the default locations or as parameterized by config_file_locations"""
-
-    if not config_file_locations:
-        return load_config_file_from(default_locations(HOMCC_CLIENT_CONFIG_FILENAME))
-
-    return load_config_file_from(config_file_locations)
+    """Load the client config file as parameterized by config_file_locations or from the default homcc locations"""
+    return load_config_file_from(config_file_locations or default_locations(HOMCC_CLIENT_CONFIG_FILENAME))

@@ -13,7 +13,7 @@ class MissingLogFileError(Exception):
     """Exception to indicate a missing logging file when FormatterDestination.FILE is specified."""
 
 
-class LogLevel(Enum):
+class LogLevel(int, Enum):
     DEBUG = logging.DEBUG
     INFO = logging.INFO
     WARNING = logging.WARNING

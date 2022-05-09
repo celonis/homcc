@@ -2,10 +2,9 @@
 from tempfile import TemporaryDirectory
 import uuid
 import os
-import subprocess
 import logging
 from pathlib import Path
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 from homcc.common.arguments import Arguments, ArgumentsExecutionResult
 from homcc.common.compression import Compression
@@ -23,9 +22,11 @@ class Environment:
     mapped_cwd: str
     """Mapped cwd, valid on server side."""
 
-    def __init__(self, root_folder: Path, cwd: str):
-        self.instance_folder = self.create_instance_folder(root_folder)
-        self.mapped_cwd = self.map_cwd(cwd, self.instance_folder)
+    def __init__(self, root_folder: Path, cwd: str, profile: Optional[str], compression: Compression):
+        self.instance_folder: str = self.create_instance_folder(root_folder)
+        self.mapped_cwd: str = self.map_cwd(cwd, self.instance_folder)
+        self.profile: Optional[str] = profile
+        self.compression: Compression = compression
 
     def __del__(self):
         def remove_path(path: Path):
@@ -101,7 +102,7 @@ class Environment:
     def map_source_file_to_object_file(self, source_file: str) -> str:
         return os.path.join(self.mapped_cwd, f"{Path(source_file).stem}.o")
 
-    def do_compilation(self, args: List[str], compression: Compression) -> CompilationResultMessage:
+    def do_compilation(self, args: List[str]) -> CompilationResultMessage:
         """Does the compilation and returns the filled result message."""
         logger.info("Compiling...")
 
@@ -120,7 +121,7 @@ class Environment:
 
                 client_output_path = self.unmap_path(object_file_path)
 
-                object_file = ObjectFile(client_output_path, bytearray(object_file_content), compression)
+                object_file = ObjectFile(client_output_path, bytearray(object_file_content), self.compression)
                 object_files.append(object_file)
                 logger.info("Compiled '%s'.", object_file.file_name)
 
@@ -130,32 +131,31 @@ class Environment:
             len(object_files),
         )
 
-        return CompilationResultMessage(object_files, result.stdout, result.stderr, result.return_code, compression)
-
-    def invoke_compiler(self, arguments: List[str]) -> ArgumentsExecutionResult:
-        """Actually invokes the compiler process."""
-        logger.debug("Compile arguments: %s", arguments)
-
-        # pylint: disable=subprocess-run-check
-        # (justification: we explicitly return the result code)
-        result = subprocess.run(
-            arguments,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            cwd=self.mapped_cwd,
+        return CompilationResultMessage(
+            object_files,
+            result.stdout,
+            result.stderr,
+            result.return_code,
+            self.compression,
         )
 
-        stdout = ""
+    def invoke_compiler(self, args: List[str]) -> ArgumentsExecutionResult:
+        """Actually invokes the compiler process."""
+        arguments: Arguments = Arguments.from_args(args)
+
+        result: ArgumentsExecutionResult = (
+            arguments.execute(cwd=self.mapped_cwd)
+            if self.profile is None
+            else arguments.schroot_execute(profile=self.profile, cwd=self.mapped_cwd)
+        )
+
         if result.stdout:
-            stdout = result.stdout.decode("utf-8")
-            logger.debug("Compiler gave output:\n'%s'", stdout)
+            logger.debug("Compiler gave output:\n'%s'", result.stdout)
 
-        stderr = ""
         if result.stderr:
-            stderr = result.stderr.decode("utf-8")
-            logger.warning("Compiler gave error output %s:\n'%s'", self.instance_folder, stderr)
+            logger.warning("Compiler gave error output:\n'%s'", result.stderr)
 
-        return ArgumentsExecutionResult(result.returncode, stdout, stderr)
+        return result
 
 
 def create_root_temp_folder() -> TemporaryDirectory:

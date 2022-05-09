@@ -11,10 +11,12 @@ from homcc.server.cache import Cache
 def create_mock_environment(instance_folder: str, mapped_cwd: str) -> Environment:
     Environment.__init__ = lambda *_: None  # type: ignore
     Environment.__del__ = lambda *_: None  # type: ignore
-    environment = Environment(Path(), "")
+    environment = Environment(Path(), "", None, NoCompression())
 
     environment.instance_folder = instance_folder
     environment.mapped_cwd = mapped_cwd
+    environment.profile = None
+    environment.compression = NoCompression()
 
     return environment
 
@@ -88,7 +90,7 @@ class TestServerEnvironment:
         instance_path = "/client1/"
         cwd = "/home/xyz/query-engine"
 
-        environment = create_mock_environment(None, None)
+        environment = create_mock_environment(instance_folder="", mapped_cwd="")
         mapped_cwd = environment.map_cwd(cwd, instance_path)
 
         assert mapped_cwd == "/client1/home/xyz/query-engine"
@@ -151,7 +153,7 @@ class TestServerCompilation:
         ]
 
         environment = create_mock_environment(instance_path, mapped_cwd)
-        result_message = environment.do_compilation(arguments, NoCompression())
+        result_message = environment.do_compilation(arguments)
 
         assert len(result_message.object_files) == 2
         assert result_message.object_files[0].file_name == "/home/user/cwd/main.o"
@@ -167,7 +169,7 @@ class TestServerCompilation:
         ]
 
         environment = create_mock_environment(instance_path, mapped_cwd)
-        result_message = environment.do_compilation(arguments, NoCompression())
+        result_message = environment.do_compilation(arguments)
 
         assert len(result_message.object_files) == 1
         assert result_message.object_files[0].file_name == "/home/user/cwd/this_is_a_source_file.o"
