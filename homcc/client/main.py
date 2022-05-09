@@ -70,6 +70,14 @@ def main():
     host: Optional[str] = homcc_args_dict["host"]
     hosts: List[str] = [host] if host else load_hosts()
 
+    # PROFILE; if --no-profile was specified do not use profile from cli or config file
+    profile: Optional[str] = homcc_args_dict["profile"]
+
+    if homcc_args_dict["no_profile"]:
+        client_config.profile = None
+    elif profile:
+        client_config.profile = profile
+
     # TIMEOUT
     timeout: Optional[float] = homcc_args_dict["timeout"]
 
@@ -106,7 +114,7 @@ def main():
             logger.warning("%s", error)
 
     # compile locally on unsendable arguments
-    logger.warning("Compiling locally instead!")
+    logger.warning("Compiling locally instead:\n%s", compiler_arguments)
     sys.exit(compile_locally(compiler_arguments))
 
 

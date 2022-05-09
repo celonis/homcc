@@ -4,7 +4,7 @@ import uuid
 import os
 import logging
 from pathlib import Path
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 from homcc.common.arguments import Arguments, ArgumentsExecutionResult
 from homcc.common.compression import Compression
@@ -22,9 +22,11 @@ class Environment:
     mapped_cwd: str
     """Mapped cwd, valid on server side."""
 
-    def __init__(self, root_folder: Path, cwd: str):
-        self.instance_folder = self.create_instance_folder(root_folder)
-        self.mapped_cwd = self.map_cwd(cwd, self.instance_folder)
+    def __init__(self, root_folder: Path, cwd: str, profile: Optional[str], compression: Compression):
+        self.instance_folder: str = self.create_instance_folder(root_folder)
+        self.mapped_cwd: str = self.map_cwd(cwd, self.instance_folder)
+        self.profile: Optional[str] = profile
+        self.compression: Compression = compression
 
     def __del__(self):
         def remove_path(path: Path):
@@ -100,7 +102,7 @@ class Environment:
     def map_source_file_to_object_file(self, source_file: str) -> str:
         return os.path.join(self.mapped_cwd, f"{Path(source_file).stem}.o")
 
-    def do_compilation(self, arguments: Arguments, compression: Compression) -> CompilationResultMessage:
+    def do_compilation(self, arguments: Arguments) -> CompilationResultMessage:
         """Does the compilation and returns the filled result message."""
         logger.info("Compiling...")
 
@@ -117,7 +119,7 @@ class Environment:
 
                 client_output_path = self.unmap_path(object_file_path)
 
-                object_file = ObjectFile(client_output_path, bytearray(object_file_content), compression)
+                object_file = ObjectFile(client_output_path, bytearray(object_file_content), self.compression)
                 object_files.append(object_file)
                 logger.info("Compiled '%s'.", object_file.file_name)
 
@@ -127,13 +129,21 @@ class Environment:
             len(object_files),
         )
 
-        return CompilationResultMessage(object_files, result.stdout, result.stderr, result.return_code, compression)
+        return CompilationResultMessage(
+            object_files,
+            result.stdout,
+            result.stderr,
+            result.return_code,
+            self.compression,
+        )
 
     def invoke_compiler(self, arguments: Arguments) -> ArgumentsExecutionResult:
         """Actually invokes the compiler process."""
-        logger.debug("Compile arguments: %s", arguments)
-
-        result = arguments.execute(check=False, cwd=self.mapped_cwd)
+        result: ArgumentsExecutionResult = (
+            arguments.execute(cwd=self.mapped_cwd)
+            if self.profile is None
+            else arguments.schroot_execute(profile=self.profile, cwd=self.mapped_cwd)
+        )
 
         if result.stdout:
             logger.debug("Compiler gave output:\n'%s'", result.stdout)

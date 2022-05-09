@@ -1,10 +1,12 @@
-name: Build Branch
+name: Build PR Branch
 
 on:
   push:
     paths-ignore:
       - README.md
       - .gitignore
+    branches-ignore:
+      - main
   pull_request:
     types:
       - opened

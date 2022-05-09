@@ -256,11 +256,12 @@ class TestParsingConfig:
         "verbose=TRUE  # DEBUG",
         " TIMEOUT = 180 ",
         "\tCoMpReSsIoN=lzo",
+        "profile=foobar",
     ]
 
     def test_parse_config(self):
         assert parse_config(self.config) == ClientConfig(
-            compiler="g++", compression="lzo", verbose="True", timeout="180"
+            compiler="g++", compression="lzo", verbose="True", timeout="180", profile="foobar"
         )
 
     def test_parse_loaded_config_file(self, tmp_path: Path):
@@ -271,4 +272,6 @@ class TestParsingConfig:
 
         config: List[str] = load_config_file(config_file_locations)
         assert config == self.config
-        assert parse_config(config) == ClientConfig(compiler="g++", compression="lzo", verbose="True", timeout="180")
+        assert parse_config(config) == ClientConfig(
+            compiler="g++", compression="lzo", verbose="True", timeout="180", profile="foobar"
+        )
