@@ -34,7 +34,7 @@ logger = logging.getLogger(__name__)
 class TCPServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
     """TCP Server instance, holding data relevant across compilations."""
 
-    DEFAULT_ADDRESS: str = "localhost"
+    DEFAULT_ADDRESS: str = "0.0.0.0"
     DEFAULT_PORT: int = 3633
     DEFAULT_LIMIT: int = (
         len(os.sched_getaffinity(0))  # number of available CPUs for this process
