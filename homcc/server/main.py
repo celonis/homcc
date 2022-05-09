@@ -5,7 +5,7 @@ import os
 import signal
 import sys
 
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 sys.path.append(os.path.join(os.path.dirname(__file__), "../.."))
 
@@ -22,6 +22,7 @@ from homcc.server.parsing import (  # pylint: disable=wrong-import-position
     parse_cli_args,
     parse_config,
     load_config_file,
+    load_schroot_profiles,
 )
 from homcc.server.server import start_server, stop_server  # pylint: disable=wrong-import-position
 
@@ -61,8 +62,11 @@ def main():
     # ADDRESS
     address: Optional[str] = homccd_args_dict["listen"] or homccd_config.address
 
+    # PROFILES
+    profiles: List[str] = load_schroot_profiles()
+
     # start server
-    server, server_thread = start_server(address=address, port=port, limit=limit)
+    server, server_thread = start_server(address=address, port=port, limit=limit, profiles=profiles)
 
     def signal_handler(*_):
         stop_server(server)

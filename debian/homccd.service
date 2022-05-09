@@ -1,0 +1,8 @@
+[Unit]
+Description=The homccd service.
+
+[Service]
+ExecStart=/usr/bin/homccd
+
+[Install]
+WantedBy=multi-user.target

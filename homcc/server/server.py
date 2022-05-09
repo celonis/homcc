@@ -1,17 +1,20 @@
 """Main logic for the homcc server."""
-import threading
-import socketserver
 import logging
 import os
 import random
+import shutil
+import socketserver
+import threading
 
 from functools import singledispatchmethod
+from pathlib import Path
+from socket import SHUT_RD
 from tempfile import TemporaryDirectory
 from threading import Lock
 from typing import Dict, List, Optional, Tuple
-from socket import SHUT_RD
-from pathlib import Path
 
+from homcc.common.compression import Compression, NoCompression
+from homcc.common.hashing import hash_file_with_bytes
 from homcc.common.messages import (
     ArgumentMessage,
     ConnectionRefusedMessage,
@@ -20,9 +23,6 @@ from homcc.common.messages import (
     DependencyRequestMessage,
     CompilationResultMessage,
 )
-from homcc.common.hashing import hash_file_with_bytes
-
-from homcc.common.compression import Compression, NoCompression
 
 from homcc.server.environment import Environment, create_root_temp_folder
 
@@ -34,7 +34,7 @@ logger = logging.getLogger(__name__)
 class TCPServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
     """TCP Server instance, holding data relevant across compilations."""
 
-    DEFAULT_ADDRESS: str = "localhost"
+    DEFAULT_ADDRESS: str = "0.0.0.0"
     DEFAULT_PORT: int = 3633
     DEFAULT_LIMIT: int = (
         len(os.sched_getaffinity(0))  # number of available CPUs for this process
@@ -42,7 +42,9 @@ class TCPServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
         or -1  # fallback error value
     )
 
-    def __init__(self, address: Optional[str], port: Optional[int], limit: Optional[int]):
+    def __init__(
+        self, address: Optional[str], port: Optional[int], limit: Optional[int], profiles: Optional[List[str]]
+    ):
         address = address or self.DEFAULT_ADDRESS
         port = port or self.DEFAULT_PORT
 
@@ -57,6 +59,9 @@ class TCPServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
                 "Please provide the job limit explicitly either via the CLI or the configuration file!",
                 self.connections_limit,
             )
+
+        self.profiles_enabled: bool = shutil.which("schroot") is not None
+        self.profiles: List[str] = profiles or []
 
         self.root_temp_folder: TemporaryDirectory = create_root_temp_folder()
 
@@ -75,8 +80,11 @@ class TCPServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
                 self.connections_limit,
             )
 
-            connection_refused_message = ConnectionRefusedMessage()
-            request.sendall(connection_refused_message.to_bytes())
+            refused_message: ConnectionRefusedMessage = ConnectionRefusedMessage(
+                f"Limit {self.connections_limit} reached"
+            )
+
+            request.sendall(refused_message.to_bytes())
             request.shutdown(SHUT_RD)
             request.close()
 
@@ -105,8 +113,6 @@ class TCPRequestHandler(socketserver.BaseRequestHandler):
     """Absolute path to the working directory."""
     server: TCPServer
     """The TCP server belonging to this handler. (redefine for typing)"""
-    compression: Compression
-    """The compression algorithm requested by the client."""
     environment: Environment
 
     @singledispatchmethod
@@ -117,9 +123,37 @@ class TCPRequestHandler(socketserver.BaseRequestHandler):
     def _handle_argument_message(self, message: ArgumentMessage):
         logger.info("Handling ArgumentMessage...")
 
-        self.environment = Environment(root_folder=Path(self.server.root_temp_folder.name), cwd=message.get_cwd())
+        profile: Optional[str] = message.get_profile()
+        if profile is not None:
+            if not self.server.profiles_enabled:
+                refused_message = ConnectionRefusedMessage(
+                    f"Profile {profile} could not be used as 'schroot' is not installed on the server"
+                )
+                self.request.sendall(refused_message.to_bytes())
+                return
 
-        self.compiler_arguments = self.environment.map_arguments(message.get_arguments())
+            if profile not in self.server.profiles:
+                refused_message = ConnectionRefusedMessage(
+                    f"Profile {profile} could not be used as it is not in the provided profiles "
+                    f"[{', '.join(self.server.profiles)}]"
+                )
+                self.request.sendall(refused_message.to_bytes())
+                return
+
+            logger.info("Using %s profile.", profile)
+
+        compression: Compression = message.get_compression()
+        if not isinstance(compression, NoCompression):
+            logger.info("Using %s compression.", compression.name())
+
+        self.environment = Environment(
+            root_folder=Path(self.server.root_temp_folder.name),
+            cwd=message.get_cwd(),
+            profile=profile,
+            compression=compression,
+        )
+
+        self.compiler_arguments = self.environment.map_arguments(message.get_args())
         logger.debug("Mapped compiler args: %s", str(self.compiler_arguments))
 
         self.mapped_dependencies = self.environment.map_dependency_paths(message.get_dependencies())
@@ -127,10 +161,6 @@ class TCPRequestHandler(socketserver.BaseRequestHandler):
 
         self.needed_dependencies = self.environment.get_needed_dependencies(self.mapped_dependencies, self.server.cache)
         logger.debug("Needed dependencies: %s", self.needed_dependencies)
-
-        self.compression = message.get_compression()
-        if not isinstance(self.compression, NoCompression):
-            logger.info("Using %s compression.", self.compression.name())
 
         # shuffle the keys so we request them at a different order later to avoid
         # transmitting the same files for simultaneous requests
@@ -209,7 +239,7 @@ class TCPRequestHandler(socketserver.BaseRequestHandler):
         """Checks if all dependencies exist. If yes, starts compiling. If no, requests missing dependencies."""
         if not self._request_next_dependency():
             # no further dependencies needed, compile now
-            result_message = self.environment.do_compilation(self.compiler_arguments, self.compression)
+            result_message = self.environment.do_compilation(self.compiler_arguments)
 
             self.request.sendall(result_message.to_bytes())
 
@@ -276,9 +306,9 @@ class TCPRequestHandler(socketserver.BaseRequestHandler):
 
 
 def start_server(
-    address: Optional[str], port: Optional[int], limit: Optional[int]
+    address: Optional[str], port: Optional[int], limit: Optional[int], profiles: Optional[List[str]] = None
 ) -> Tuple[TCPServer, threading.Thread]:
-    server: TCPServer = TCPServer(address, port, limit)
+    server: TCPServer = TCPServer(address, port, limit, profiles)
 
     server_thread = threading.Thread(target=server.serve_forever, daemon=True)
     server_thread.start()

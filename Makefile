@@ -10,8 +10,8 @@ server:
 
 	echo "-- Copying service file"
 	# we need to copy the systemd service file to the generated package
-	cd deb_dist/homcc-server-*
-	cp ../../debian/homcc-server.service debian/service
+	cd deb_dist/homccd-*
+	cp ../../debian/homccd.service debian/service
 
 	echo "-- Building server .deb package"
 	dpkg-buildpackage -rfakeroot -uc -us
@@ -19,7 +19,7 @@ server:
 
 	echo "-- Copying server .deb into target"
 	mkdir -p target
-	cp deb_dist/*.deb target/homcc_server.deb
+	cp deb_dist/*.deb target/homccd.deb
 
 	rm setup.py
 	rm -rf deb_dist
@@ -31,7 +31,16 @@ client:
 	python3 setup.py --command-packages=stdeb.command bdist_deb
 
 	echo "-- Copying client .deb into target"
+	mkdir -p target
 	cp deb_dist/*.deb target/homcc.deb
 
 	rm setup.py
 	rm -rf deb_dist
+
+
+homcc: client
+
+homccd: server
+
+clean:
+	rm -rf target/*.deb
