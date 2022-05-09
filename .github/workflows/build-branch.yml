@@ -68,13 +68,7 @@ jobs:
       - name: Setup chroot environment
         run: |
           sudo debootstrap focal /var/chroot/focal http://archive.ubuntu.com/ubuntu
-          sudo ./tests/setup_chroot_env.sh focal
-          echo DEBUGGING-HOOK
-          echo $USERNAME
-          groups
-          cat /etc/schroot/chroot.d/focal.conf
-          schroot -l
+          sudo ./.github/setup_chroot_env.sh focal
           sudo schroot -c focal -- apt -y install g++
-          schroot -c focal -- g++ --version
       - name: Run tests
         run: pytest -v -rfE --cov=homcc --capture=tee-sys --runschroot=focal
