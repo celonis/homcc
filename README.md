@@ -1,18 +1,18 @@
 # homcc - Home-Office friendly distcc replacement
 
 ## Table of Contents
-1. [Installation](#Installation)
-2. [Documentation](#Documentation)
-3. [Usage and Configuration](#Usage)
-   1. [Client: homcc](#Client)
-   2. [Server: homccd](#Server)
-4. [Development](#Development)
-   1. [Setup](#Setup)
-   2. [Testing](#Testing)
-   3. [Linting](#Linting)
-   4. [Formatting](#Formatting)
-   5. [Build Debian packages](#Build)
-   6. [`schroot` testing setup for Debian systems](#SchrootTestSetup)
+1. [Installation](#installation)
+2. [Documentation](#documentation)
+3. [Usage and Configuration](#usage-and-configuration)
+   1. [Client: homcc](#client-homcc)
+   2. [Server: homccd](#server-homcc)
+4. [Development](#development)
+   1. [Setup](#setup)
+   2. [Testing](#testing)
+   3. [Linting](#linting)
+   4. [Formatting](#formatting)
+   5. [Build Debian packages](#build-debian-packages)
+   6. [`schroot` testing setup for Debian systems](#schroot-testing-setup-for-debian-systems)
 
 
 ## Installation
@@ -31,9 +31,9 @@
   - Description of server-side caching
 
 
-## <a name="Usage" />Usage and Configuration
+## Usage and Configuration
 
-### <a name="Client" />Client: `homcc`
+### Client: `homcc`
 - Follow the client [Installation](#Installation) guide
 - Find usage description and client defaults: `homcc --help`
 - Overwrite defaults via a `client.conf` configuration file:
@@ -86,7 +86,7 @@
 - Use `homcc` in your `conan` profile by specifying: `CCACHE_PREFIX=homcc`
 
 
-### <a name="Server" />Server: `homccd` 
+### Server: `homccd` 
 - Follow the server [Installation](#Installation) guide
 - Find usage description and server defaults: `homccd --help`
 - Overwrite defaults via a `server.conf` configuration file:
@@ -128,7 +128,7 @@
 
 ### Testing
 - Tests and test coverage analysis are performed via [pytest](https://github.com/pytest-dev/pytest)
-- Execute all tests in `./tests/` and produce a testing and test coverage summary:<br/>
+- Execute all default tests in `./tests/` with testing and test coverage summary:<br/>
   `pytest -v -rfEs --cov=homcc`
 
 
@@ -145,17 +145,17 @@
   `black --check --color --diff --verbose *.py homcc tests`
 - Format a specified python file: `black ./path/to/file.py`
 
-### <a name="Build" />Build Debian packages
+### Build Debian packages
 - Run `make all` in the repository root to build the `server` and `client` target
 - The generated `.deb` files are then contained in the `./target/` directory
 
 
-### <a name="SchrootTestSetup" />`schroot` testing setup for Debian systems
+### `schroot` testing setup for Debian systems
 - Install necessary tools: `sudo apt install schroot debootstrap`
 - Create `chroot` environment:
   - Download and install selected distribution at your desired location, e.g. `Ubuntu 22.04 Jammy Jellyfish` from [Ubuntu Releases](https://wiki.ubuntu.com/Releases) at `/var/chroot/`:<br/>
     `sudo debootstrap jammy /var/chroot/jammy http://archive.ubuntu.com/ubuntu`
-  - Configure the environment by creating a corresponding file in the `/etc/schroot/chroot.d/` directory or by appending it to `/etc/schroot/schroot.conf`, e.g. `jammy.conf`:<br/>
+  - Configure the environment by creating a corresponding file in the `/etc/schroot/chroot.d/` directory or by appending it to `/etc/schroot/schroot.conf`, e.g. by replacing `USERNAME` in `jammy.conf`:<br/>
     ```
     [jammy]
     description=Ubuntu 22.04 Jammy Jellyfish
@@ -164,6 +164,9 @@
     users=USERNAME
     type=directory
     ```
-- Verify correct setup via: `schroot -l`
-- Install missing `build-essential`s: `sudo apt install build-essential`
-- Execute *schrooted* compilation by specifying `profile=jammy`
+- Verify that a `jammy` entry exists: `schroot -l`
+- Install missing `build-essential`s in the new environment:<br/>
+  `sudo schroot -c jammy -- apt -y install build-essential` (currently only `g++` is needed)
+- Execute *schrooted* compilation by specifying `profile=jammy` via the CLI or in the `client.conf` file
+- Execute all tests in `./tests/` with testing and test coverage summary:<br/>
+  `pytest -v -rfEs --cov=homcc --runschroot=jammy`
