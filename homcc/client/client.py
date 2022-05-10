@@ -79,6 +79,7 @@ class TCPClient:
 
     DEFAULT_PORT: int = 3633
     DEFAULT_TIMEOUT: float = 180
+    DEFAULT_OPEN_CONNECTION_TIMEOUT: float = 5
 
     def __init__(self, host: Host, buffer_limit: Optional[int] = None):
         connection_type: ConnectionType = host.type
@@ -101,8 +102,9 @@ class TCPClient:
     async def __aenter__(self) -> TCPClient:
         """connect to specified server at host:port"""
         logger.debug("Connecting to %s:%i", self.host, self.port)
-        self._reader, self._writer = await asyncio.open_connection(
-            host=self.host, port=self.port, limit=self.buffer_limit
+        self._reader, self._writer = await asyncio.wait_for(
+            asyncio.open_connection(host=self.host, port=self.port, limit=self.buffer_limit),
+            timeout=self.DEFAULT_OPEN_CONNECTION_TIMEOUT,
         )
         return self
 
