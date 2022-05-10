@@ -195,7 +195,7 @@ def parse_cli_args(args: List[str]) -> Tuple[Dict[str, Any], Arguments]:
     parser.add_argument(
         "--verbose",
         action="store_true",
-        help="enables a verbose mode which implies detailed and colored logging of debug messages",
+        help="enable a verbose mode which implies detailed and colored logging of debug messages",
     )
 
     indented_newline: str = "\n\t"

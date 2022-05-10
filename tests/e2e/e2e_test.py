@@ -23,6 +23,7 @@ class TestEndToEnd:
                 "./homcc/server/main.py",
                 f"--listen={TestEndToEnd.ADDRESS}",
                 f"--port={unused_tcp_port}",
+                "--jobs=1",
                 "--verbose",
             ]
         )

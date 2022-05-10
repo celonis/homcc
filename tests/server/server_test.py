@@ -43,7 +43,7 @@ class TestServerReceive:
         # messages sent by the client with messages that the server deserialized
         TCPRequestHandler._handle_message = self.patched_handle_message
 
-        server, _ = start_server(address="localhost", port=unused_tcp_port, limit=1)
+        server, _ = start_server(address="localhost", port=unused_tcp_port, limit=1, profiles=[])
         with server:
             arguments = ["-a", "-b", "--help"]
             cwd = "/home/o.layer/test"

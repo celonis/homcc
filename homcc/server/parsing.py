@@ -149,7 +149,7 @@ def parse_cli_args(args: List[str]) -> Dict[str, Any]:
         "--verbose",
         required=False,
         action="store_true",
-        help="set logging to a detailed DEBUG mode",
+        help="enable a verbose mode which implies detailed and colored logging of debug messages",
     )
 
     return vars(parser.parse_args(args))

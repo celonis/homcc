@@ -43,7 +43,7 @@ class TCPServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
     )
 
     def __init__(
-        self, address: Optional[str], port: Optional[int], limit: Optional[int], profiles: Optional[List[str]]
+        self, address: Optional[str], port: Optional[int], limit: Optional[int], profiles: List[str]
     ):
         address = address or self.DEFAULT_ADDRESS
         port = port or self.DEFAULT_PORT
@@ -61,7 +61,7 @@ class TCPServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
             )
 
         self.profiles_enabled: bool = shutil.which("schroot") is not None
-        self.profiles: List[str] = profiles or []
+        self.profiles: List[str] = profiles
 
         self.root_temp_folder: TemporaryDirectory = create_root_temp_folder()
 
@@ -123,8 +123,7 @@ class TCPRequestHandler(socketserver.BaseRequestHandler):
     def _handle_argument_message(self, message: ArgumentMessage):
         logger.info("Handling ArgumentMessage...")
 
-        profile: Optional[str] = message.get_profile()
-        if profile is not None:
+        if (profile := message.get_profile()) is not None:
             if not self.server.profiles_enabled:
                 refused_message = ConnectionRefusedMessage(
                     f"Profile {profile} could not be used as 'schroot' is not installed on the server"
@@ -142,8 +141,7 @@ class TCPRequestHandler(socketserver.BaseRequestHandler):
 
             logger.info("Using %s profile.", profile)
 
-        compression: Compression = message.get_compression()
-        if not isinstance(compression, NoCompression):
+        if compression := message.get_compression():
             logger.info("Using %s compression.", compression.name())
 
         self.environment = Environment(
@@ -306,7 +304,7 @@ class TCPRequestHandler(socketserver.BaseRequestHandler):
 
 
 def start_server(
-    address: Optional[str], port: Optional[int], limit: Optional[int], profiles: Optional[List[str]] = None
+    address: Optional[str], port: Optional[int], limit: Optional[int], profiles: List[str]
 ) -> Tuple[TCPServer, threading.Thread]:
     server: TCPServer = TCPServer(address, port, limit, profiles)
 

@@ -17,8 +17,8 @@
 
 ## Installation
 - Download or [build](#build-debian-packages) the Debian packages
-- Install the `homcc` client via: ```sudo apt install ./target/homcc.deb```
-- Install the `homccd` server via: ```sudo apt install ./target/homccd.deb```
+- Install the `homcc` client via: ```sudo apt install homcc.deb```
+- Install the `homccd` server via: ```sudo apt install homccd.deb```
 
 **Note**: Currently, installing both packages leads to an issue with conflicting files. Therefore, to install the second package, use `sudo dpkg -i --force-overwrite ./target/{package.deb}`!
 
@@ -34,7 +34,7 @@
 ## Usage and Configuration
 
 ### Client: `homcc`
-- Follow the client [Installation](#Installation) guide
+- Follow the client [Installation](#installation) guide
 - Find usage description and client defaults: `homcc --help`
 - Overwrite defaults via a `client.conf` configuration file:
   - Possible `client.conf` locations:
@@ -89,7 +89,7 @@
 
 
 ### Server: `homccd` 
-- Follow the server [Installation](#Installation) guide
+- Follow the server [Installation](#installation) guide
 - Find usage description and server defaults: `homccd --help`
 - Overwrite defaults via a `server.conf` configuration file:
   - Possible `server.conf` locations:
@@ -148,14 +148,22 @@
 - Format a specified python file: `black ./path/to/file.py`
 
 ### Build Debian packages
-- Run `make homcc`, `make homccd` or `make all` in the repository root to build the corresponding `client` and `server` packages
+- Install required tools:<br/>
+  ```
+  sudo apt install -y \
+    python3 python3-dev python3-pip python3-venv python3-all \
+    dh-python debhelper devscripts dput software-properties-common \
+    python3-distutils python3-setuptools python3-wheel python3-stdeb \
+    liblzo2-dev
+  ```
+- Run `make homcc`, `make homccd` or `make all` to build the corresponding `client` and `server` package
 - The generated `.deb` files are then contained in the `./target/` directory
 
 
 ### `schroot` testing setup for Debian systems
-- Install necessary tools: `sudo apt install schroot debootstrap`
+- Install required tools: `sudo apt install schroot debootstrap`
 - Create `chroot` environment:
-  - Download and install selected distribution at your desired location, e.g. `Ubuntu 22.04 Jammy Jellyfish` from [Ubuntu Releases](https://wiki.ubuntu.com/Releases) at `/var/chroot/`:<br/>
+  - Download and install selected distribution to your desired location, e.g. `Ubuntu 22.04 Jammy Jellyfish` from [Ubuntu Releases](https://wiki.ubuntu.com/Releases) at `/var/chroot/`:<br/>
     `sudo debootstrap jammy /var/chroot/jammy http://archive.ubuntu.com/ubuntu`
   - Configure the environment by creating a corresponding file in the `/etc/schroot/chroot.d/` directory or by appending it to `/etc/schroot/schroot.conf`, e.g. by replacing `USERNAME` in `jammy.conf`:<br/>
     ```
