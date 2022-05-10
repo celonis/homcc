@@ -78,6 +78,7 @@
         - `lzo`: Lempel-Ziv-Oberhumer compression algorithm
         - `lzma`: Lempel-Ziv-Markov chain algorithm
       - No compression is used per default, specifying `lzo` is however advised
+  - **WARNING**: Currently do not include `localhost` in your hosts file!
   - Example:
     ```
     # homcc: example hosts
@@ -85,7 +86,7 @@
     127.0.0.1:3633/21
     [::1]:3633/42,lzo
     ```
-- Use `homcc` via specifying `CCACHE_PREFIX=homcc` in your `conan` profile
+- Use `homcc` by specifying `CCACHE_PREFIX=homcc` in your `conan` profile and only have `CONAN_CPU_COUNT` smaller or equal to the sum of all remote host limits, e.g. `≤ 12+21+42` for the example above!
 
 
 ### Server: `homccd` 
