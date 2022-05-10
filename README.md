@@ -17,10 +17,10 @@
 
 ## Installation
 - Download or [build](#build-debian-packages) the Debian packages
-- Install the `homcc` client via: ```sudo apt install homcc.deb```
-- Install the `homccd` server via: ```sudo apt install homccd.deb```
+- Install the `homcc` client via: ```sudo apt install ./homcc.deb```
+- Install the `homccd` server via: ```sudo apt install ./homccd.deb```
 
-**Note**: Currently, installing both packages leads to an issue with conflicting files. Therefore, to install the second package, use `sudo dpkg -i --force-overwrite ./target/{package.deb}`!
+**Note**: Currently, installing both packages leads to an issue with conflicting files. Therefore, to install the second package, use `sudo dpkg -i --force-overwrite ./{package.deb}`!
 
 
 ## Documentation

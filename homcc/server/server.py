@@ -13,7 +13,6 @@ from tempfile import TemporaryDirectory
 from threading import Lock
 from typing import Dict, List, Optional, Tuple
 
-from homcc.common.compression import Compression, NoCompression
 from homcc.common.hashing import hash_file_with_bytes
 from homcc.common.messages import (
     ArgumentMessage,
@@ -42,9 +41,7 @@ class TCPServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
         or -1  # fallback error value
     )
 
-    def __init__(
-        self, address: Optional[str], port: Optional[int], limit: Optional[int], profiles: List[str]
-    ):
+    def __init__(self, address: Optional[str], port: Optional[int], limit: Optional[int], profiles: List[str]):
         address = address or self.DEFAULT_ADDRESS
         port = port or self.DEFAULT_PORT
 
