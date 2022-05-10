@@ -32,6 +32,7 @@ class TestEndToEnd:
         return subprocess.run(
             [  # specify all relevant args explicitly so that config files may not disturb e2e testing
                 "./homcc/client/main.py",
+                "--log-level=DEBUG",
                 "--verbose",
                 f"--host={TestEndToEnd.ADDRESS}:{unused_tcp_port}",
                 "--no-profile" if profile is None else f"--profile={profile}",

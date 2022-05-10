@@ -142,7 +142,7 @@ def parse_cli_args(args: List[str]) -> Dict[str, Any]:
         required=False,
         type=str,
         choices=[level.name for level in LogLevel],
-        help="set detail level for log messages",
+        help=f"set detail level for log messages, defaults to {LogLevel.INFO.name}",
     )
 
     debug_group.add_argument(

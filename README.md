@@ -25,7 +25,7 @@
 
 ## Documentation
 - TODO:
-  - Brief overview of what `homcc` is and why it exists: distribtued compilation -> faster build times, modern alternative
+  - Brief overview of what `homcc` is and why it exists: distributed compilation -> faster build times, modern alternative
   - Differences to `distcc`: thin connection as priority, caching, local pre-processing
   - Description of client-server interaction
   - Description of server-side caching
@@ -43,19 +43,21 @@
     - `~/.config/homcc/client.conf`
     - `/etc/homcc/client.conf`
   - Possible `homcc` configurations:
-    - `verbose`: enable a verbose mode by specifying `True` which implies detailed and colored logging of debug messages
     - `compiler`: compiler if none is explicitly specified via the CLI
     - `timeout`: timeout value in seconds for each remote compilation attempt
     - `compression`: compression algorithm, choose from `{lzo, lzma}`
     - `profile`: `schroot` environment profile that will be used on the server side for compilations
+    - `log_level`: detail level for log messages, choose from `{DEBUG,INFO,WARNING,ERROR,CRITICAL}`
+    - `verbose`: enable a verbose mode by specifying `True` which implies detailed and colored logging of debug messages, can be combined with `log_level`
   - Example:
     ```
     # homcc: example client.conf
-    verbose=True
     compiler=g++
     timeout=180
     compression=lzo
     profile=schroot_environment
+    log_level=DEBUG
+    verbose=True
     ```
 - Specify your remote compilation server in a `hosts` file or in the `$HOMCC_HOSTS` environment variable:
   - Possible `hosts` file locations:
@@ -68,14 +70,14 @@
       - `HOST`: TCP connection to specified `HOST` with default port `3633`
       - `HOST:PORT`: TCP connection to specified `HOST` with specified `PORT`
     - `HOST/LIMIT` format:
-      - define any of the above `HOST` format with an additional `LIMIT` parameter that specifies the maximum connection limit to the corresponding `HOST`
-      - it is advised to always specify your `LIMIT`s as they will otherwise default to 2 and only enable minor levels of concurrency
+      - Define any of the above `HOST` format with an additional `LIMIT` parameter that specifies the maximum connection limit to the corresponding `HOST`
+      - It is advised to always specify your `LIMIT`s as they will otherwise default to 2 and only enable minor levels of concurrency
     - `HOST,COMPRESSION` format:
-      - define any of the above `HOST` or `HOST/LIMIT` format with an additional `COMPRESSION` algorithm information
-      - choose from:
+      - Define any of the above `HOST` or `HOST/LIMIT` format with an additional `COMPRESSION` algorithm information
+      - Choose from:
         - `lzo`: Lempel-Ziv-Oberhumer compression algorithm
         - `lzma`: Lempel-Ziv-Markov chain algorithm
-      - per default, no compression is used as it is usually not necessary for high bandwidth connections
+      - No compression is used per default, specifying `lzo` is however advised
   - Example:
     ```
     # homcc: example hosts
@@ -83,7 +85,7 @@
     127.0.0.1:3633/21
     [::1]:3633/42,lzo
     ```
-- Use `homcc` in your `conan` profile by specifying: `CCACHE_PREFIX=homcc`
+- Use `homcc` via specifying `CCACHE_PREFIX=homcc` in your `conan` profile
 
 
 ### Server: `homccd` 
@@ -100,14 +102,14 @@
     - `port`: TCP port to listen on
     - `address`: IP address to listen on
     - `log_level`: detail level for log messages, choose from `{DEBUG,INFO,WARNING,ERROR,CRITICAL}`
-    - `verbose`: enable a verbose mode by specifying `True` which implies detailed and colored logging of debug messages
+    - `verbose`: enable a verbose mode by specifying `True` which implies detailed and colored logging of debug messages, can be combined with `log_level`
   - Example:
     ```
     # homccd: example server.conf
     limit=64
-    log_level=DEBUG
     port=3633
     address=0.0.0.0
+    log_level=DEBUG
     verbose=True
     ```
 - \[Optional]: Setup your `chroot` environments at `/etc/schroot/schroot.conf` or in the<br/>
@@ -146,7 +148,7 @@
 - Format a specified python file: `black ./path/to/file.py`
 
 ### Build Debian packages
-- Run `make all` in the repository root to build the `server` and `client` target
+- Run `make homcc`, `make homccd` or `make all` in the repository root to build the corresponding `client` and `server` packages
 - The generated `.deb` files are then contained in the `./target/` directory
 
 

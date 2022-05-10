@@ -14,7 +14,6 @@ from homcc.client.errors import ClientParsingError, HostsExhaustedError, HostPar
 from homcc.client.parsing import ConnectionType, Host, parse_host
 from homcc.common.arguments import Arguments
 from homcc.common.messages import ArgumentMessage, DependencyReplyMessage, Message
-from homcc.common.compression import Compression, NoCompression
 
 
 logger = logging.getLogger(__name__)
@@ -93,7 +92,7 @@ class TCPClient:
         # default buffer size limit of StreamReader is 64 KiB
         self.buffer_limit: int = buffer_limit or 65_536
 
-        self.compression = Compression.from_name(host.compression) if host.compression is not None else NoCompression()
+        self.compression = host.compression
 
         self._data: bytes = bytes()
         self._reader: asyncio.StreamReader

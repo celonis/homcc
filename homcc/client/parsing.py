@@ -13,6 +13,7 @@ from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 from homcc.common.arguments import Arguments
 from homcc.common.compression import Compression
+from homcc.common.logging import LogLevel
 from homcc.common.parsing import default_locations, load_config_file_from, parse_config_keys
 from homcc.client.errors import HostParsingError, NoHostsFoundError
 
@@ -29,6 +30,9 @@ class ConnectionType(str, Enum):
     LOCAL = "localhost"
     TCP = "TCP"
     SSH = "SSH"
+
+    def is_local(self) -> bool:
+        return self == ConnectionType.LOCAL
 
 
 class ShowAndExitAction(ABC, Action):
@@ -101,27 +105,27 @@ class Host:
 
     type: ConnectionType
     host: str
+    limit: int
+    compression: Compression
     port: Optional[int]
     user: Optional[str]
-    limit: int
-    compression: Optional[str]
 
     def __init__(
         self,
         *,
         type: ConnectionType,  # pylint: disable=redefined-builtin
         host: str,
-        port: Optional[str] = None,
-        user: Optional[str] = None,
         limit: Optional[str] = None,
         compression: Optional[str] = None,
+        port: Optional[str] = None,
+        user: Optional[str] = None,
     ):
         self.type = ConnectionType.LOCAL if host == ConnectionType.LOCAL else type
         self.host = host
-        self.port = int(port) if port is not None else None
-        self.user = user
         self.limit = int(limit) if limit is not None else 2  # enable minor level of concurrency on default
-        self.compression = compression
+        self.compression = Compression.from_name(compression)
+        self.port = int(port) if port is not None else None  # TCP
+        self.user = user  # SSH
 
 
 @dataclass
@@ -129,9 +133,10 @@ class ClientConfig:
     """Class to encapsulate and default client configuration information"""
 
     compiler: str
-    compression: Optional[str]
+    compression: Compression
     profile: Optional[str]
     timeout: Optional[float]
+    log_level: Optional[LogLevel]
     verbose: bool
 
     def __init__(
@@ -141,12 +146,14 @@ class ClientConfig:
         compression: Optional[str] = None,
         profile: Optional[str] = None,
         timeout: Optional[str] = None,
+        log_level: Optional[str] = None,
         verbose: Optional[str] = None,
     ):
         self.compiler = compiler or Arguments.DEFAULT_COMPILER
-        self.compression = compression
+        self.compression = Compression.from_name(compression)
         self.profile = profile
         self.timeout = float(timeout) if timeout is not None else None
+        self.log_level = LogLevel[log_level] if log_level else None
 
         # additional parsing step for verbosity
         self.verbose = verbose is not None and re.match(r"^true$", verbose, re.IGNORECASE) is not None
@@ -175,6 +182,14 @@ def parse_cli_args(args: List[str]) -> Tuple[Dict[str, Any], Arguments]:
         action="store_true",
         help="show all header dependencies that would be sent to the server, as calculated from the given arguments, "
         "and exit",
+    )
+
+    parser.add_argument(
+        "--log-level",
+        required=False,
+        type=str,
+        choices=[level.name for level in LogLevel],
+        help=f"set detail level for log messages, defaults to {LogLevel.INFO.name}",
     )
 
     parser.add_argument(
@@ -261,43 +276,17 @@ def parse_host(host: str) -> Host:
     host_dict: Dict[str, str] = {}
     connection_type: ConnectionType
 
-    # trim trailing comment
-    host_comment_match = re.match(r"^(\S+)#(\S+)$", host)  # HOST#COMMENT
-
-    if host_comment_match:  # HOST#COMMENT
+    # trim trailing comment: HOST#COMMENT
+    if (host_comment_match := re.match(r"^(\S+)#(\S+)$", host)) is not None:
         host, _ = host_comment_match.groups()
 
-    # use trailing compression info
-    host_compression_match = re.match(r"^(\S+),(\S+)$", host)  # HOST,COMPRESSION
-
-    if host_compression_match:  # HOST,COMPRESSION
+    # use trailing compression info: HOST,COMPRESSION
+    if (host_compression_match := re.match(r"^(\S+),(\S+)$", host)) is not None:
         host, compression = host_compression_match.groups()
+        host_dict["compression"] = compression
 
-        if Compression.from_name(compression):
-            host_dict["compression"] = compression
-        else:
-            logger.error(
-                'Compression "%s" is currently not supported! '
-                "The remote compilation will be executed without compression enabled!",
-                compression,
-            )
-
-    # categorize host format
-    user_at_host_match = re.match(r"^(\w+)@([\w.:/]+)$", host)  # USER@HOST
-    at_host_match = re.match(r"^@([\w.:/]+)$", host)  # @HOST
-    host_port_limit_match = re.match(r"^(([\w./]+)|\[(\S+)]):(\d+)(/(\d+))?$", host)  # HOST:PORT/LIMIT
-    host_match = re.match(r"^([\w.:/]+)$", host)  # HOST
-
-    if user_at_host_match:  # USER@HOST
-        user, host = user_at_host_match.groups()
-        connection_type = ConnectionType.SSH
-        host_dict["user"] = user
-
-    elif at_host_match:  # @HOST
-        host = at_host_match.group(1)
-        connection_type = ConnectionType.SSH
-
-    elif host_port_limit_match:  # HOST:PORT
+    # HOST:PORT/LIMIT
+    if (host_port_limit_match := re.match(r"^(([\w./]+)|\[(\S+)]):(\d+)(/(\d+))?$", host)) is not None:
         _, name_or_ipv4, ipv6, port, _, limit = host_port_limit_match.groups()
         host = name_or_ipv4 or ipv6
         connection_type = ConnectionType.TCP
@@ -305,16 +294,26 @@ def parse_host(host: str) -> Host:
         host_dict["limit"] = limit
         return Host(type=connection_type, host=host, **host_dict)
 
-    elif host_match:  # HOST
+    # USER@HOST
+    elif (user_at_host_match := re.match(r"^(\w+)@([\w.:/]+)$", host)) is not None:
+        user, host = user_at_host_match.groups()
+        connection_type = ConnectionType.SSH
+        host_dict["user"] = user
+
+    # @HOST
+    elif (at_host_match := re.match(r"^@([\w.:/]+)$", host)) is not None:
+        host = at_host_match.group(1)
+        connection_type = ConnectionType.SSH
+
+    # HOST
+    elif re.match(r"^([\w.:/]+)$", host) is not None:
         connection_type = ConnectionType.TCP
 
     else:
         raise HostParsingError(f'Host "{host}" could not be parsed correctly, please provide it in the correct format!')
 
-    # extract remaining limit info
-    host_limit_match = re.match(r"^(\S+)/(\d+)$", host)  # HOST/LIMIT
-
-    if host_limit_match:  # HOST/LIMIT
+    # extract remaining limit info: HOST_FORMAT/LIMIT
+    if (host_limit_match := re.match(r"^(\S+)/(\d+)$", host)) is not None:
         host, limit = host_limit_match.groups()
         host_dict["limit"] = limit
 

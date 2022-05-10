@@ -224,8 +224,8 @@ class ArgumentMessage(Message):
             json_dict["args"],
             json_dict["cwd"],
             json_dict["dependencies"],
-            json_dict.get("profile", None),
-            Compression.from_name(json_dict.get("compression", str(NoCompression))),
+            json_dict.get("profile"),
+            Compression.from_name(json_dict.get("compression")),
         )
 
 

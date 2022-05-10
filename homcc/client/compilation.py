@@ -15,7 +15,7 @@ from homcc.client.client import (
     TCPClient,
 )
 from homcc.client.errors import HostsExhaustedError, RemoteCompilationError, UnexpectedMessageTypeError
-from homcc.client.parsing import ConnectionType, ClientConfig, Host
+from homcc.client.parsing import ClientConfig, Host
 from homcc.common.arguments import Arguments, ArgumentsExecutionResult
 from homcc.common.hashing import hash_file_with_path
 from homcc.common.messages import (
@@ -32,15 +32,18 @@ logger = logging.getLogger(__name__)
 async def compile_remotely(arguments: Arguments, hosts: List[str], config: ClientConfig) -> int:
     """main function to control remote compilation"""
 
-    # try to connect to 3 different remote compilation hosts before giving up
+    # try to connect to 3 different hosts before falling back to local compilation
     for host in HostSelector(hosts, 3):
-        timeout: float = config.timeout or 180
-        profile: Optional[str] = config.profile
-        host.compression = host.compression or config.compression
-
-        if host.type == ConnectionType.LOCAL:
+        # execute compilation requests for localhost directly
+        if host.type.is_local():
             logger.info("Compiling locally:\n%s", arguments)
             return compile_locally(arguments)
+
+        timeout: float = config.timeout or 180
+        profile: Optional[str] = config.profile
+
+        # overwrite host compression if none was specified
+        host.compression = host.compression or config.compression
 
         try:
             return await asyncio.wait_for(compile_remotely_at(arguments, host, profile), timeout=timeout)
@@ -59,7 +62,7 @@ async def compile_remotely_at(arguments: Arguments, host: Host, profile: Optiona
     async with TCPClient(host) as client:
         await client.send_argument_message(remote_arguments, os.getcwd(), dependency_dict, profile)
 
-        # invert dependency dictionary
+        # invert dependency dictionary to access dependencies via hash
         dependency_dict = {file_hash: dependency for dependency, file_hash in dependency_dict.items()}
 
         host_response: Message = await client.receive()
