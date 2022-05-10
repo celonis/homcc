@@ -114,6 +114,9 @@ class TCPRequestHandler(socketserver.BaseRequestHandler):
     server: TCPServer
     """The TCP server belonging to this handler. (redefine for typing)"""
     environment: Environment
+    """Environment created for this compilation request."""
+    terminate: bool
+    """Flag to indicate closing the connection from the server side."""
 
     @singledispatchmethod
     def _handle_message(self, message):
@@ -126,18 +129,26 @@ class TCPRequestHandler(socketserver.BaseRequestHandler):
         profile: Optional[str] = message.get_profile()
         if profile is not None:
             if not self.server.profiles_enabled:
+                logger.info("Refusing client because 'schroot' compilation could not be executed.")
                 refused_message = ConnectionRefusedMessage(
                     f"Profile {profile} could not be used as 'schroot' is not installed on the server"
                 )
                 self.request.sendall(refused_message.to_bytes())
+                self.request.shutdown(SHUT_RD)
+                self.request.close()
+                self.terminate = True
                 return
 
             if profile not in self.server.profiles:
+                logger.info("Refusing client because 'schroot' environment '%s' is not provided.", profile)
                 refused_message = ConnectionRefusedMessage(
-                    f"Profile {profile} could not be used as it is not in the provided profiles "
-                    f"[{', '.join(self.server.profiles)}]"
+                    f"Profile {profile} could not be used as it is not a provided profile "
+                    f"[{', '.join(self.server.profiles)}]."
                 )
                 self.request.sendall(refused_message.to_bytes())
+                self.request.shutdown(SHUT_RD)
+                self.request.close()
+                self.terminate = True
                 return
 
             logger.info("Using %s profile.", profile)
@@ -267,7 +278,9 @@ class TCPRequestHandler(socketserver.BaseRequestHandler):
 
     def recv_loop(self):
         """Indefinitely tries to receive data and parse messages until the connection has been closed."""
-        while True:
+        self.terminate = False
+
+        while not self.terminate:
             recv_bytes: bytearray = self.recv()
 
             if len(recv_bytes) == 0:
