@@ -104,7 +104,7 @@ class TCPClient:
         logger.debug("Connecting to %s:%i", self.host, self.port)
         self._reader, self._writer = await asyncio.wait_for(
             asyncio.open_connection(host=self.host, port=self.port, limit=self.buffer_limit),
-            timeout=self.DEFAULT_OPEN_CONNECTION_TIMEOUT
+            timeout=self.DEFAULT_OPEN_CONNECTION_TIMEOUT,
         )
         return self
 
