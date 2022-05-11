@@ -297,7 +297,7 @@ class TCPRequestHandler(socketserver.BaseRequestHandler):
                     recv_bytes += further_recv_bytes
 
     def handle(self):
-        """Handles incoming requests. Returning from this functions means
+        """Handles incoming requests. Returning from this function means
         that the connection will be closed from the server side."""
         with self.server.current_amount_connections_mutex:
             self.server.current_amount_connections += 1

@@ -28,6 +28,8 @@ from homcc.common.messages import (
 
 logger = logging.getLogger(__name__)
 
+DEFAULT_COMPILATION_REQUEST_TIMEOUT: float = 180
+
 
 async def compile_remotely(arguments: Arguments, hosts: List[str], config: ClientConfig) -> int:
     """main function to control remote compilation"""
@@ -39,7 +41,7 @@ async def compile_remotely(arguments: Arguments, hosts: List[str], config: Clien
             logger.info("Compiling locally:\n%s", arguments)
             return compile_locally(arguments)
 
-        timeout: float = config.timeout or 180
+        timeout: float = config.timeout or DEFAULT_COMPILATION_REQUEST_TIMEOUT
         profile: Optional[str] = config.profile
 
         # overwrite host compression if none was specified
@@ -48,10 +50,12 @@ async def compile_remotely(arguments: Arguments, hosts: List[str], config: Clien
         try:
             return await asyncio.wait_for(compile_remotely_at(arguments, host, profile), timeout=timeout)
 
-        except (asyncio.TimeoutError, ConnectionError) as error:
+        except ConnectionError as error:
             logger.warning("%s", error)
+        except asyncio.TimeoutError:
+            logger.warning("Compilation request for host '%s' timed out.", host.host)
 
-    raise HostsExhaustedError(f"All hosts {hosts} are exhausted!")
+    raise HostsExhaustedError(f"All hosts {hosts} are exhausted.")
 
 
 async def compile_remotely_at(arguments: Arguments, host: Host, profile: Optional[str]) -> int:
