@@ -19,8 +19,8 @@ def parse_config_keys(config_keys: Iterable[str], config_lines: List[str]) -> Di
         # remove leading and trailing whitespace as well as in-between space chars
         config_line = line.strip().replace(" ", "")
 
-        # ignore comment lines
-        if config_line.startswith("#"):
+        # ignore empty and comment lines
+        if not config_line or config_line.startswith("#"):
             continue
 
         # remove trailing comment
