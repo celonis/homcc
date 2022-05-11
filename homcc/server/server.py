@@ -70,6 +70,12 @@ class TCPServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
 
         self.cache = Cache(Path(self.root_temp_folder.name))
 
+    @staticmethod
+    def close_connection(request, info: str):
+        request.sendall(ConnectionRefusedMessage(info).to_bytes())
+        request.shutdown(SHUT_RD)
+        request.close()
+
     def verify_request(self, request, _) -> bool:
         with self.current_amount_connections_mutex:
             accept_connection = self.current_amount_connections < self.connections_limit
@@ -80,13 +86,7 @@ class TCPServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
                 self.connections_limit,
             )
 
-            refused_message: ConnectionRefusedMessage = ConnectionRefusedMessage(
-                f"Limit {self.connections_limit} reached"
-            )
-
-            request.sendall(refused_message.to_bytes())
-            request.shutdown(SHUT_RD)
-            request.close()
+            self.close_connection(request, f"Limit {self.connections_limit} reached")
 
         return accept_connection
 
@@ -114,6 +114,9 @@ class TCPRequestHandler(socketserver.BaseRequestHandler):
     server: TCPServer
     """The TCP server belonging to this handler. (redefine for typing)"""
     environment: Environment
+    """Environment created for this compilation request."""
+    terminate: bool
+    """Flag to indicate closing the connection from the server side."""
 
     @singledispatchmethod
     def _handle_message(self, message):
@@ -126,18 +129,22 @@ class TCPRequestHandler(socketserver.BaseRequestHandler):
         profile: Optional[str] = message.get_profile()
         if profile is not None:
             if not self.server.profiles_enabled:
-                refused_message = ConnectionRefusedMessage(
-                    f"Profile {profile} could not be used as 'schroot' is not installed on the server"
+                logger.info("Refusing client because 'schroot' compilation could not be executed.")
+                self.server.close_connection(
+                    self.request,
+                    f"Profile {profile} could not be used as 'schroot' is not installed on the server",
                 )
-                self.request.sendall(refused_message.to_bytes())
+                self.terminate = True
                 return
 
             if profile not in self.server.profiles:
-                refused_message = ConnectionRefusedMessage(
-                    f"Profile {profile} could not be used as it is not in the provided profiles "
-                    f"[{', '.join(self.server.profiles)}]"
+                logger.info("Refusing client because 'schroot' environment '%s' is not provided.", profile)
+                self.server.close_connection(
+                    self.request,
+                    f"Profile {profile} could not be used as it is not a provided profile "
+                    f"[{', '.join(self.server.profiles)}].",
                 )
-                self.request.sendall(refused_message.to_bytes())
+                self.terminate = True
                 return
 
             logger.info("Using %s profile.", profile)
@@ -267,7 +274,9 @@ class TCPRequestHandler(socketserver.BaseRequestHandler):
 
     def recv_loop(self):
         """Indefinitely tries to receive data and parse messages until the connection has been closed."""
-        while True:
+        self.terminate = False
+
+        while not self.terminate:
             recv_bytes: bytearray = self.recv()
 
             if len(recv_bytes) == 0:
