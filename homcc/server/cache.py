@@ -18,7 +18,7 @@ class Cache:
     cache_folder: Path
     """Path to the cache on the file system."""
 
-    def __init__(self, root_folder: Path) -> None:
+    def __init__(self, root_folder: Path):
         self.cache_folder = self._create_cache_folder(root_folder)
         self.cache: Dict[str, str] = {}
         self.cache_mutex: Lock = Lock()

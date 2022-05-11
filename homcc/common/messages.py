@@ -38,7 +38,7 @@ class Message(ABC):
     MESSAGE_TYPE_FIELD_NAME = "message_type"
     """Field inside the JSON that indicates the message type."""
 
-    def __init__(self, message_type: MessageType) -> None:
+    def __init__(self, message_type: MessageType):
         """Create a new message of given type."""
         self.message_type = message_type
 
@@ -232,7 +232,7 @@ class ArgumentMessage(Message):
 class DependencyRequestMessage(Message):
     """Message that lets the server request exactly one dependency from the client."""
 
-    def __init__(self, sha1sum: str) -> None:
+    def __init__(self, sha1sum: str):
         self.sha1sum = sha1sum
 
         super().__init__(MessageType.DependencyRequestMessage)
@@ -262,7 +262,7 @@ class DependencyRequestMessage(Message):
 class DependencyReplyMessage(Message):
     """Message that contains exactly one previously requested file."""
 
-    def __init__(self, content: Optional[bytearray], compression: Compression, size: Optional[int] = None) -> None:
+    def __init__(self, content: Optional[bytearray], compression: Compression, size: Optional[int] = None):
         if content is not None:
             self.content = CompressedBytes(content, compression)
             self.size = len(self.content)
@@ -333,7 +333,7 @@ class ObjectFile:
 
     def __init__(
         self, file_name: str, content: Optional[bytearray], compression: Compression, size: Optional[int] = None
-    ) -> None:
+    ):
         self.file_name = file_name
 
         if content is not None:
@@ -383,7 +383,7 @@ class CompilationResultMessage(Message):
 
     def __init__(
         self, object_files: List[ObjectFile], stdout: str, stderr: str, return_code: int, compression: Compression
-    ) -> None:
+    ):
         self.object_files = object_files
         self.stdout = stdout
         self.stderr = stderr

@@ -18,7 +18,7 @@ class CompressedBytes:
     compressed_data: Optional[bytearray]
     """Compressed data. Field is only written when compressed data is requested and acts as a cache."""
 
-    def __init__(self, data: bytearray, compression: Compression) -> None:
+    def __init__(self, data: bytearray, compression: Compression):
         self.compression = compression
         self.data = data
         self.compressed_data = None

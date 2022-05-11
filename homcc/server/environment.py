@@ -2,6 +2,7 @@
 from tempfile import TemporaryDirectory
 import uuid
 import os
+import shutil
 import logging
 from pathlib import Path
 from typing import Dict, List, Optional
@@ -21,6 +22,10 @@ class Environment:
     """Path to the current compilation inside /tmp/."""
     mapped_cwd: str
     """Mapped cwd, valid on server side."""
+    profile: Optional[str]
+    """schroot profile for the compilation."""
+    compression: Compression
+    """Compression used for data transfer."""
 
     def __init__(self, root_folder: Path, cwd: str, profile: Optional[str], compression: Compression):
         self.instance_folder: str = self.create_instance_folder(root_folder)
@@ -63,10 +68,10 @@ class Environment:
 
         return needed_dependencies
 
-    def map_arguments(self, arguments: List[str]) -> List[str]:
+    def map_args(self, args: List[str]) -> Arguments:
         """Maps arguments that should be translated (e.g. -I{dir}, .cpp files,
         or the -o argument) to paths valid on the server."""
-        return list(Arguments.from_args(arguments).map(self.instance_folder, self.mapped_cwd))
+        return Arguments.from_args(args).map(self.instance_folder, self.mapped_cwd)
 
     @staticmethod
     def create_instance_folder(root_folder: Path) -> str:
@@ -102,16 +107,20 @@ class Environment:
     def map_source_file_to_object_file(self, source_file: str) -> str:
         return os.path.join(self.mapped_cwd, f"{Path(source_file).stem}.o")
 
-    def do_compilation(self, args: List[str]) -> CompilationResultMessage:
+    @staticmethod
+    def compiler_exists(arguments: Arguments) -> bool:
+        """Returns true if the compiler specified in the arguments exists on the system, else false."""
+        compiler = arguments.compiler
+        return compiler is not None and shutil.which(compiler) is not None
+
+    def do_compilation(self, arguments: Arguments) -> CompilationResultMessage:
         """Does the compilation and returns the filled result message."""
         logger.info("Compiling...")
 
         # create the mapped current working directory if it doesn't exist yet
         Path(self.mapped_cwd).mkdir(parents=True, exist_ok=True)
 
-        arguments: Arguments = Arguments.from_args(args).no_linking()
-
-        result = self.invoke_compiler(list(arguments))
+        result = self.invoke_compiler(arguments.no_linking())
 
         object_files: List[ObjectFile] = []
         if result.return_code == 0:
@@ -139,10 +148,8 @@ class Environment:
             self.compression,
         )
 
-    def invoke_compiler(self, args: List[str]) -> ArgumentsExecutionResult:
+    def invoke_compiler(self, arguments: Arguments) -> ArgumentsExecutionResult:
         """Actually invokes the compiler process."""
-        arguments: Arguments = Arguments.from_args(args)
-
         result: ArgumentsExecutionResult = (
             arguments.execute(cwd=self.mapped_cwd)
             if self.profile is None
@@ -153,7 +160,7 @@ class Environment:
             logger.debug("Compiler gave output:\n'%s'", result.stdout)
 
         if result.stderr:
-            logger.warning("Compiler gave error output:\n'%s'", result.stderr)
+            logger.warning("Compiler gave error output %s:\n'%s'", self.instance_folder, result.stderr)
 
         return result
 

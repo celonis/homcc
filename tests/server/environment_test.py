@@ -1,11 +1,13 @@
 """Tests for the server environment."""
 from pytest_mock.plugin import MockerFixture
 import pytest
+import shutil
 from pathlib import Path
 
 from homcc.common.compression import NoCompression
 from homcc.server.environment import ArgumentsExecutionResult, Environment
 from homcc.server.cache import Cache
+from homcc.common.arguments import Arguments
 
 
 def create_mock_environment(instance_folder: str, mapped_cwd: str) -> Environment:
@@ -25,7 +27,7 @@ class TestServerEnvironment:
     """Tests the server environment."""
 
     def test_map_arguments(self):
-        arguments = [
+        args = [
             "gcc",
             "-Irelative_path/relative.h",
             "-I/var/includes/absolute.h",
@@ -39,21 +41,21 @@ class TestServerEnvironment:
             "/opt/src/absolute.cpp",
         ]
         environment = create_mock_environment("/client1", "/client1/test/xyz")
-        mapped_arguments = environment.map_arguments(arguments)
+        mapped_args = list(environment.map_args(args))
 
-        assert mapped_arguments.pop(0) == "gcc"
-        assert mapped_arguments.pop(0) == f"-I{environment.mapped_cwd}/relative_path/relative.h"
-        assert mapped_arguments.pop(0) == f"-I{environment.instance_folder}/var/includes/absolute.h"
-        assert mapped_arguments.pop(0) == f"-I{environment.instance_folder}/var/includes/absolute.h"
-        assert mapped_arguments.pop(0) == f"-isysroot{environment.instance_folder}/var/lib/sysroot.h"
-        assert mapped_arguments.pop(0) == f"-o{environment.instance_folder}/home/user/output.o"
-        assert mapped_arguments.pop(0) == f"-isystem{environment.instance_folder}/var/lib/system.h"
-        assert mapped_arguments.pop(0) == f"{environment.mapped_cwd}/main.cpp"
-        assert mapped_arguments.pop(0) == f"{environment.mapped_cwd}/relative/relative.cpp"
-        assert mapped_arguments.pop(0) == f"{environment.instance_folder}/opt/src/absolute.cpp"
+        assert mapped_args.pop(0) == "gcc"
+        assert mapped_args.pop(0) == f"-I{environment.mapped_cwd}/relative_path/relative.h"
+        assert mapped_args.pop(0) == f"-I{environment.instance_folder}/var/includes/absolute.h"
+        assert mapped_args.pop(0) == f"-I{environment.instance_folder}/var/includes/absolute.h"
+        assert mapped_args.pop(0) == f"-isysroot{environment.instance_folder}/var/lib/sysroot.h"
+        assert mapped_args.pop(0) == f"-o{environment.instance_folder}/home/user/output.o"
+        assert mapped_args.pop(0) == f"-isystem{environment.instance_folder}/var/lib/system.h"
+        assert mapped_args.pop(0) == f"{environment.mapped_cwd}/main.cpp"
+        assert mapped_args.pop(0) == f"{environment.mapped_cwd}/relative/relative.cpp"
+        assert mapped_args.pop(0) == f"{environment.instance_folder}/opt/src/absolute.cpp"
 
     def test_map_arguments_relative_paths(self):
-        arguments = [
+        args = [
             "gcc",
             "-BsomeOtherArgument",
             "-FooArgument",
@@ -71,20 +73,20 @@ class TestServerEnvironment:
         ]
 
         environment = create_mock_environment("/client1", "/client1/test/xyz")
-        mapped_arguments = environment.map_arguments(arguments)
+        mapped_args = list(environment.map_args(args))
 
-        assert mapped_arguments.pop(0) == "gcc"
-        assert mapped_arguments.pop(0) == "-BsomeOtherArgument"
-        assert mapped_arguments.pop(0) == "-FooArgument"
-        assert mapped_arguments.pop(0) == "should_not_be_mapped"
-        assert mapped_arguments.pop(0) == f"-o{environment.mapped_cwd}/output_folder/b.out"
-        assert mapped_arguments.pop(0) == "-I/client1/test/abc/include/foo.h"
-        assert mapped_arguments.pop(0) == f"-I{environment.mapped_cwd}/include/foo2.h"
-        assert mapped_arguments.pop(0) == "-isystem/client1/include/sys.h"
-        assert mapped_arguments.pop(0) == "/client1/test/main.cpp"
-        assert mapped_arguments.pop(0) == f"{environment.mapped_cwd}/relative.cpp"
-        assert mapped_arguments.pop(0) == "-c"
-        assert mapped_arguments.pop(0) == f"{environment.mapped_cwd}/some_file.cpp"
+        assert mapped_args.pop(0) == "gcc"
+        assert mapped_args.pop(0) == "-BsomeOtherArgument"
+        assert mapped_args.pop(0) == "-FooArgument"
+        assert mapped_args.pop(0) == "should_not_be_mapped"
+        assert mapped_args.pop(0) == f"-o{environment.mapped_cwd}/output_folder/b.out"
+        assert mapped_args.pop(0) == "-I/client1/test/abc/include/foo.h"
+        assert mapped_args.pop(0) == f"-I{environment.mapped_cwd}/include/foo2.h"
+        assert mapped_args.pop(0) == "-isystem/client1/include/sys.h"
+        assert mapped_args.pop(0) == "/client1/test/main.cpp"
+        assert mapped_args.pop(0) == f"{environment.mapped_cwd}/relative.cpp"
+        assert mapped_args.pop(0) == "-c"
+        assert mapped_args.pop(0) == f"{environment.mapped_cwd}/some_file.cpp"
 
     def test_map_cwd(self):
         instance_path = "/client1/"
@@ -145,12 +147,14 @@ class TestServerCompilation:
     def test_multiple_files(self):
         instance_path = "/tmp/homcc/test-id"
         mapped_cwd = "/tmp/homcc/test-id/home/user/cwd"
-        arguments = [
-            "gcc",
-            "-I../abc/include/foo.h",
-            f"{mapped_cwd}/src/main.cpp",
-            f"{mapped_cwd}/other.cpp",
-        ]
+        arguments = Arguments.from_args(
+            [
+                "gcc",
+                "-I../abc/include/foo.h",
+                f"{mapped_cwd}/src/main.cpp",
+                f"{mapped_cwd}/other.cpp",
+            ]
+        )
 
         environment = create_mock_environment(instance_path, mapped_cwd)
         result_message = environment.do_compilation(arguments)
@@ -162,14 +166,24 @@ class TestServerCompilation:
     def test_single_file(self):
         instance_path = "/tmp/homcc/test-id"
         mapped_cwd = "/tmp/homcc/test-id/home/user/cwd"
-        arguments = [
-            "gcc",
-            "-I../abc/include/foo.h",
-            f"{mapped_cwd}/src/this_is_a_source_file.cpp",
-        ]
+        arguments = Arguments.from_args(
+            [
+                "gcc",
+                "-I../abc/include/foo.h",
+                f"{mapped_cwd}/src/this_is_a_source_file.cpp",
+            ]
+        )
 
         environment = create_mock_environment(instance_path, mapped_cwd)
         result_message = environment.do_compilation(arguments)
 
         assert len(result_message.object_files) == 1
         assert result_message.object_files[0].file_name == "/home/user/cwd/this_is_a_source_file.o"
+
+    @pytest.mark.skipif(shutil.which("g++") is None, reason="g++ is not installed")
+    def test_compiler_exists(self):
+        gpp_arguments = Arguments.from_args(["g++", "do_something"])
+        assert Environment.compiler_exists(gpp_arguments)
+
+        non_existing_compiler_arguments = Arguments.from_args(["non-existing-compiler", "do_something"])
+        assert not Environment.compiler_exists(non_existing_compiler_arguments)
