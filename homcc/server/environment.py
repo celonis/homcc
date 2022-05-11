@@ -2,6 +2,7 @@
 from tempfile import TemporaryDirectory
 import uuid
 import os
+import shutil
 import logging
 from pathlib import Path
 from typing import Dict, List, Optional
@@ -105,6 +106,12 @@ class Environment:
 
     def map_source_file_to_object_file(self, source_file: str) -> str:
         return os.path.join(self.mapped_cwd, f"{Path(source_file).stem}.o")
+
+    @staticmethod
+    def compiler_exists(arguments: Arguments) -> bool:
+        """Returns true if the compiler specified in the arguments exists on the system, else false."""
+        compiler = arguments.compiler
+        return False if compiler is None else shutil.which(compiler) is not None
 
     def do_compilation(self, arguments: Arguments) -> CompilationResultMessage:
         """Does the compilation and returns the filled result message."""
