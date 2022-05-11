@@ -70,6 +70,12 @@ class TCPServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
 
         self.cache = Cache(Path(self.root_temp_folder.name))
 
+    @staticmethod
+    def close_connection(request, info: str):
+        request.sendall(ConnectionRefusedMessage(info).to_bytes())
+        request.shutdown(SHUT_RD)
+        request.close()
+
     def verify_request(self, request, _) -> bool:
         with self.current_amount_connections_mutex:
             accept_connection = self.current_amount_connections < self.connections_limit
@@ -80,13 +86,7 @@ class TCPServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
                 self.connections_limit,
             )
 
-            refused_message: ConnectionRefusedMessage = ConnectionRefusedMessage(
-                f"Limit {self.connections_limit} reached"
-            )
-
-            request.sendall(refused_message.to_bytes())
-            request.shutdown(SHUT_RD)
-            request.close()
+            self.close_connection(request, f"Limit {self.connections_limit} reached")
 
         return accept_connection
 
@@ -130,24 +130,20 @@ class TCPRequestHandler(socketserver.BaseRequestHandler):
         if profile is not None:
             if not self.server.profiles_enabled:
                 logger.info("Refusing client because 'schroot' compilation could not be executed.")
-                refused_message = ConnectionRefusedMessage(
-                    f"Profile {profile} could not be used as 'schroot' is not installed on the server"
+                self.server.close_connection(
+                    self.request,
+                    f"Profile {profile} could not be used as 'schroot' is not installed on the server",
                 )
-                self.request.sendall(refused_message.to_bytes())
-                self.request.shutdown(SHUT_RD)
-                self.request.close()
                 self.terminate = True
                 return
 
             if profile not in self.server.profiles:
                 logger.info("Refusing client because 'schroot' environment '%s' is not provided.", profile)
-                refused_message = ConnectionRefusedMessage(
+                self.server.close_connection(
+                    self.request,
                     f"Profile {profile} could not be used as it is not a provided profile "
-                    f"[{', '.join(self.server.profiles)}]."
+                    f"[{', '.join(self.server.profiles)}].",
                 )
-                self.request.sendall(refused_message.to_bytes())
-                self.request.shutdown(SHUT_RD)
-                self.request.close()
                 self.terminate = True
                 return
 
