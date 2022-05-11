@@ -168,7 +168,8 @@ class TCPRequestHandler(socketserver.BaseRequestHandler):
                 self.compiler_arguments.compiler,
             )
             self.close_connection(
-                f"Compiler '{self.compiler_arguments.compiler}' is not available on the server, can not compile remotely",
+                f"""Compiler '{self.compiler_arguments.compiler}' is not available on the server, 
+                can not compile remotely""",
             )
             return
 
