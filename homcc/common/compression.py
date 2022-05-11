@@ -63,7 +63,12 @@ class Compression(ABC):
             if algorithm.name() == name:
                 return algorithm()
 
-        logger.error("No compression algorithm with name '%s'!", name)
+        logger.error(
+            "No compression algorithm with name '%s'!"
+            "The remote compilation will be executed without compression enabled!",
+            name,
+        )
+
         return NoCompression()
 
     @abstractmethod

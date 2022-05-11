@@ -16,7 +16,7 @@
 
 
 ## Installation
-- Download or [build](#build-debian-packages) the Debian packages
+- [Download](https://github.com/celonis/homcc/releases) the latest release or [build](#build-debian-packages) the Debian packages yourself
 - Install the `homcc` client via: ```sudo apt install ./homcc.deb```
 - Install the `homccd` server via: ```sudo apt install ./homccd.deb```
 
