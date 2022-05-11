@@ -251,17 +251,18 @@ class TestParsingConfig:
         "",
         " ",
         "# HOMCC TEST CONFIG COMMENT",
-        " # comment with whitespace ",
-        "COMPILER=g++",
-        "verbose=TRUE  # DEBUG",
+        " # comment with leading whitespace ",
+        "COMPILER=g++ # trailing comment",
         " TIMEOUT = 180 ",
         "\tCoMpReSsIoN=lzo",
         "profile=foobar",
+        "verbose=TRUE",
+        "log_level=INFO",
     ]
 
     def test_parse_config(self):
         assert parse_config(self.config) == ClientConfig(
-            compiler="g++", compression="lzo", verbose="True", timeout="180", profile="foobar"
+            compiler="g++", compression="lzo", timeout="180", profile="foobar", log_level="INFO", verbose="True"
         )
 
     def test_parse_loaded_config_file(self, tmp_path: Path):
@@ -273,5 +274,5 @@ class TestParsingConfig:
         config: List[str] = load_config_file(config_file_locations)
         assert config == self.config
         assert parse_config(config) == ClientConfig(
-            compiler="g++", compression="lzo", verbose="True", timeout="180", profile="foobar"
+            compiler="g++", compression="lzo", timeout="180", profile="foobar", log_level="INFO", verbose="True"
         )

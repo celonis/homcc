@@ -13,7 +13,6 @@ from tempfile import TemporaryDirectory
 from threading import Lock
 from typing import Dict, List, Optional, Tuple
 
-from homcc.common.compression import Compression, NoCompression
 from homcc.common.hashing import hash_file_with_bytes
 from homcc.common.messages import (
     ArgumentMessage,
@@ -44,9 +43,7 @@ class TCPServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
         or -1  # fallback error value
     )
 
-    def __init__(
-        self, address: Optional[str], port: Optional[int], limit: Optional[int], profiles: Optional[List[str]]
-    ):
+    def __init__(self, address: Optional[str], port: Optional[int], limit: Optional[int], profiles: List[str]):
         address = address or self.DEFAULT_ADDRESS
         port = port or self.DEFAULT_PORT
 
@@ -63,7 +60,7 @@ class TCPServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
             )
 
         self.profiles_enabled: bool = shutil.which("schroot") is not None
-        self.profiles: List[str] = profiles or []
+        self.profiles: List[str] = profiles
 
         self.root_temp_folder: TemporaryDirectory = create_root_temp_folder()
 
@@ -129,8 +126,7 @@ class TCPRequestHandler(socketserver.BaseRequestHandler):
     def _handle_argument_message(self, message: ArgumentMessage):
         logger.info("Handling ArgumentMessage...")
 
-        profile: Optional[str] = message.get_profile()
-        if profile is not None:
+        if (profile := message.get_profile()) is not None:
             if not self.server.profiles_enabled:
                 logger.info("Refusing client because 'schroot' compilation could not be executed.")
                 self.close_connection(
@@ -148,8 +144,7 @@ class TCPRequestHandler(socketserver.BaseRequestHandler):
 
             logger.info("Using %s profile.", profile)
 
-        compression: Compression = message.get_compression()
-        if not isinstance(compression, NoCompression):
+        if compression := message.get_compression():
             logger.info("Using %s compression.", compression.name())
 
         self.environment = Environment(
@@ -258,7 +253,18 @@ class TCPRequestHandler(socketserver.BaseRequestHandler):
         """Checks if all dependencies exist. If yes, starts compiling. If no, requests missing dependencies."""
         if not self._request_next_dependency():
             # no further dependencies needed, compile now
-            result_message = self.environment.do_compilation(self.compiler_arguments)
+            try:
+                result_message = self.environment.do_compilation(self.compiler_arguments)
+            except IOError as error:
+                logger.error("Error during compilation: %s", error)
+
+                result_message = CompilationResultMessage(
+                    object_files=[],
+                    stdout="",
+                    stderr=f"Invocation of compiler failed:\n{error}",
+                    return_code=os.EX_IOERR,
+                    compression=self.environment.compression,
+                )
 
             self.request.sendall(result_message.to_bytes())
 
@@ -319,7 +325,7 @@ class TCPRequestHandler(socketserver.BaseRequestHandler):
                     recv_bytes += further_recv_bytes
 
     def handle(self):
-        """Handles incoming requests. Returning from this functions means
+        """Handles incoming requests. Returning from this function means
         that the connection will be closed from the server side."""
         with self.server.current_amount_connections_mutex:
             self.server.current_amount_connections += 1
@@ -332,7 +338,7 @@ class TCPRequestHandler(socketserver.BaseRequestHandler):
 
 
 def start_server(
-    address: Optional[str], port: Optional[int], limit: Optional[int], profiles: Optional[List[str]] = None
+    address: Optional[str], port: Optional[int], limit: Optional[int], profiles: List[str]
 ) -> Tuple[TCPServer, threading.Thread]:
     server: TCPServer = TCPServer(address, port, limit, profiles)
 

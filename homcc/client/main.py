@@ -19,6 +19,7 @@ from homcc.client.compilation import (  # pylint: disable=wrong-import-position
 from homcc.client.errors import RecoverableClientError, RemoteCompilationError  # pylint: disable=wrong-import-position
 from homcc.client.parsing import (  # pylint: disable=wrong-import-position
     ClientConfig,
+    LogLevel,
     load_config_file,
     load_hosts,
     parse_cli_args,
@@ -38,26 +39,37 @@ logger: logging.Logger = logging.getLogger(__name__)
 def main():
     # load and parse arguments and configuration information
     homcc_args_dict, compiler_arguments = parse_cli_args(sys.argv[1:])
-    client_config: ClientConfig = parse_config(load_config_file())
+    homcc_config: ClientConfig = parse_config(load_config_file())
     logging_config: LoggingConfig = LoggingConfig(
         config=FormatterConfig.COLORED,
         formatter=Formatter.CLIENT,
         destination=FormatterDestination.STREAM,
     )
 
-    # VERBOSE; enables verbose mode
-    if homcc_args_dict["verbose"] or client_config.verbose:
+    # LOG_LEVEL and VERBOSITY
+    log_level: str = homcc_args_dict["log_level"]
+
+    # verbosity implies debug mode
+    if (
+        homcc_args_dict["verbose"]
+        or homcc_config.verbose
+        or log_level == "DEBUG"
+        or homcc_config.log_level == LogLevel.DEBUG
+    ):
         logging_config.config |= FormatterConfig.DETAILED
         logging_config.level = logging.DEBUG
+
+    # overwrite verbose debug logging level
+    if log_level is not None:
+        logging_config.level = LogLevel[log_level].value
+    elif homcc_config.log_level is not None:
+        logging_config.level = int(homcc_config.log_level)
 
     setup_logging(logging_config)
 
     # COMPILER; default: "cc"
-    compiler: Optional[str] = compiler_arguments.compiler
-
-    if not compiler:
-        compiler = client_config.compiler
-        compiler_arguments.compiler = compiler
+    if compiler_arguments.compiler is None:
+        compiler_arguments.compiler = homcc_config.compiler
 
     # SCAN-INCLUDES; and exit
     if homcc_args_dict["scan_includes"]:
@@ -74,15 +86,15 @@ def main():
     profile: Optional[str] = homcc_args_dict["profile"]
 
     if homcc_args_dict["no_profile"]:
-        client_config.profile = None
+        homcc_config.profile = None
     elif profile:
-        client_config.profile = profile
+        homcc_config.profile = profile
 
     # TIMEOUT
     timeout: Optional[float] = homcc_args_dict["timeout"]
 
     if timeout:
-        client_config.timeout = timeout
+        homcc_config.timeout = timeout
 
     if compiler_arguments.is_linking_only():
         logger.debug("Linking [%s] to %s", ", ".join(compiler_arguments.object_files), compiler_arguments.output)
@@ -91,7 +103,7 @@ def main():
     # try to compile remotely
     if compiler_arguments.is_sendable():
         try:
-            sys.exit(asyncio.run(compile_remotely(compiler_arguments, hosts, client_config)))
+            sys.exit(asyncio.run(compile_remotely(compiler_arguments, hosts, homcc_config)))
 
         # exit on unrecoverable errors
         except RemoteCompilationError as error:
