@@ -253,7 +253,18 @@ class TCPRequestHandler(socketserver.BaseRequestHandler):
         """Checks if all dependencies exist. If yes, starts compiling. If no, requests missing dependencies."""
         if not self._request_next_dependency():
             # no further dependencies needed, compile now
-            result_message = self.environment.do_compilation(self.compiler_arguments)
+            try:
+                result_message = self.environment.do_compilation(self.compiler_arguments)
+            except IOError as error:
+                logger.error("Error during compilation: %s", error)
+
+                result_message = CompilationResultMessage(
+                    object_files=[],
+                    stdout="",
+                    stderr=f"Invocation of compiler failed:\n{error}",
+                    return_code=os.EX_IOERR,
+                    compression=self.environment.compression,
+                )
 
             self.request.sendall(result_message.to_bytes())
 
