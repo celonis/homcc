@@ -55,12 +55,21 @@ class Compression(ABC):
     """Base class for compression algorithms"""
 
     @staticmethod
-    def from_name(name: str) -> Compression:
+    def from_name(name: Optional[str]) -> Compression:
+        if name is None:
+            return NoCompression()
+
         for algorithm in Compression.algorithms():
             if algorithm.name() == name:
                 return algorithm()
 
-        raise ValueError(f"No compression algorithm with name {name}!")
+        logger.error(
+            "No compression algorithm with name '%s'!"
+            "The remote compilation will be executed without compression enabled!",
+            name,
+        )
+
+        return NoCompression()
 
     @abstractmethod
     def compress(self, data: bytearray) -> bytearray:
@@ -79,14 +88,14 @@ class Compression(ABC):
     def descriptions() -> List[str]:
         return [
             f"{str(compression.name())}: {compression.__doc__}"
-            for compression in Compression.algorithms(without_no_compression=True)
+            for compression in Compression.algorithms(with_no_compression=False)
         ]
 
     @staticmethod
-    def algorithms(without_no_compression: bool = False) -> List[Type[Compression]]:
-        algorithms = Compression.__subclasses__()
+    def algorithms(with_no_compression: bool = True) -> List[Type[Compression]]:
+        algorithms: List[Type[Compression]] = Compression.__subclasses__()
 
-        if without_no_compression:
+        if not with_no_compression:
             algorithms.remove(NoCompression)
         return algorithms
 
@@ -97,6 +106,9 @@ class Compression(ABC):
         if isinstance(other, Compression):
             return self.name() == other.name()
         return False
+
+    def __bool__(self):
+        return True
 
 
 class NoCompression(Compression):
@@ -111,6 +123,9 @@ class NoCompression(Compression):
     @staticmethod
     def name() -> str:
         return "no_compression"
+
+    def __bool__(self):
+        return False
 
 
 class LZO(Compression):

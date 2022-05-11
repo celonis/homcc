@@ -14,8 +14,6 @@ from homcc.client.errors import ClientParsingError, HostsExhaustedError, HostPar
 from homcc.client.parsing import ConnectionType, Host, parse_host
 from homcc.common.arguments import Arguments
 from homcc.common.messages import ArgumentMessage, DependencyReplyMessage, Message
-from homcc.common.compression import Compression, NoCompression
-
 
 logger = logging.getLogger(__name__)
 
@@ -78,10 +76,10 @@ class TCPClient:
     """Wrapper class to exchange homcc protocol messages via TCP"""
 
     DEFAULT_PORT: int = 3633
-    DEFAULT_TIMEOUT: float = 180
+    DEFAULT_BUFFER_SIZE_LIMIT: int = 65_536  # default buffer size limit of StreamReader is 64 KiB
     DEFAULT_OPEN_CONNECTION_TIMEOUT: float = 5
 
-    def __init__(self, host: Host, buffer_limit: Optional[int] = None):
+    def __init__(self, host: Host):
         connection_type: ConnectionType = host.type
 
         if connection_type != ConnectionType.TCP:
@@ -89,11 +87,7 @@ class TCPClient:
 
         self.host: str = host.host
         self.port: int = host.port or self.DEFAULT_PORT
-
-        # default buffer size limit of StreamReader is 64 KiB
-        self.buffer_limit: int = buffer_limit or 65_536
-
-        self.compression = Compression.from_name(host.compression) if host.compression is not None else NoCompression()
+        self.compression = host.compression
 
         self._data: bytes = bytes()
         self._reader: asyncio.StreamReader
@@ -101,22 +95,26 @@ class TCPClient:
 
     async def __aenter__(self) -> TCPClient:
         """connect to specified server at host:port"""
-        logger.debug("Connecting to %s:%i", self.host, self.port)
-        self._reader, self._writer = await asyncio.wait_for(
-            asyncio.open_connection(host=self.host, port=self.port, limit=self.buffer_limit),
-            timeout=self.DEFAULT_OPEN_CONNECTION_TIMEOUT,
-        )
+        logger.debug("Connecting to '%s:%i'.", self.host, self.port)
+        try:
+            self._reader, self._writer = await asyncio.wait_for(
+                asyncio.open_connection(host=self.host, port=self.port, limit=self.DEFAULT_BUFFER_SIZE_LIMIT),
+                timeout=self.DEFAULT_OPEN_CONNECTION_TIMEOUT,
+            )
+        except asyncio.TimeoutError as error:
+            logger.warning("Connection establishment to '%s:%s' timed out.", self.host, self.port)
+            raise error from None
         return self
 
     async def __aexit__(self, *_):
         """disconnect from server and close client socket"""
-        logger.debug("Disconnecting from %s:%i", self.host, self.port)
+        logger.debug("Disconnecting from '%s:%i'.", self.host, self.port)
         self._writer.close()
         await self._writer.wait_closed()
 
     async def _send(self, message: Message):
         """send a message to homcc server"""
-        logger.debug("Sending %s to %s:%i:\n%s", message.message_type, self.host, self.port, message.get_json_str())
+        logger.debug("Sending %s to '%s:%i':\n%s", message.message_type, self.host, self.port, message.get_json_str())
         self._writer.write(message.to_bytes())  # type: ignore[union-attr]
         await self._writer.drain()  # type: ignore[union-attr]
 
@@ -134,30 +132,30 @@ class TCPClient:
     async def receive(self) -> Message:
         """receive data from homcc server and convert it to Message"""
         #  read stream into internal buffer
-        self._data += await self._reader.read(self.buffer_limit)
+        self._data += await self._reader.read(self.DEFAULT_BUFFER_SIZE_LIMIT)
         bytes_needed, parsed_message = Message.from_bytes(bytearray(self._data))
 
         # if message is incomplete, continue reading from stream until no more bytes are missing
         while bytes_needed > 0:
-            logger.debug("Message is incomplete by %i bytes", bytes_needed)
+            logger.debug("Message is incomplete by #%i bytes.", bytes_needed)
             self._data += await self._reader.read(bytes_needed)
             bytes_needed, parsed_message = Message.from_bytes(bytearray(self._data))
 
         # manage internal buffer consistency
         if bytes_needed == 0:
             # reset the internal buffer
-            logger.debug("Resetting internal buffer")
+            logger.debug("Resetting internal buffer.")
             self._data = bytes()
         elif bytes_needed < 0:
             # remove the already parsed message
-            logger.debug("Additional data of %i bytes in buffer", abs(bytes_needed))
+            logger.debug("Additional data of #%i bytes in buffer.", abs(bytes_needed))
             self._data = self._data[len(self._data) - abs(bytes_needed) :]
 
         if not parsed_message:
             raise ClientParsingError("Received data could not be parsed to a message!")
 
         logger.debug(
-            "Received %s message from %s:%i:\n%s",
+            "Received %s message from '%s:%i':\n%s",
             parsed_message.message_type,
             self.host,
             self.port,

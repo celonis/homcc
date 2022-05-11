@@ -142,14 +142,14 @@ def parse_cli_args(args: List[str]) -> Dict[str, Any]:
         required=False,
         type=str,
         choices=[level.name for level in LogLevel],
-        help="set detail level for log messages",
+        help=f"set detail level for log messages, defaults to {LogLevel.INFO.name}",
     )
 
     debug_group.add_argument(
         "--verbose",
         required=False,
         action="store_true",
-        help="set logging to a detailed DEBUG mode",
+        help="enable a verbose mode which implies detailed and colored logging of debug messages",
     )
 
     return vars(parser.parse_args(args))

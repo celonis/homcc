@@ -45,7 +45,8 @@ class Environment:
         remove_path(Path(self.instance_folder))
         logger.info("Deleted instance folder '%s'.", self.instance_folder)
 
-    def link_dependency_to_cache(self, dependency_file: str, dependency_hash: str, cache: Cache):
+    @staticmethod
+    def link_dependency_to_cache(dependency_file: str, dependency_hash: str, cache: Cache):
         """Links the dependency to a cached dependency with the same hash."""
         # first create the folder structure (if needed), else linking won't work
         dependency_folder = os.path.dirname(dependency_file)
@@ -123,7 +124,7 @@ class Environment:
         result = self.invoke_compiler(arguments.no_linking())
 
         object_files: List[ObjectFile] = []
-        if result.return_code == 0:
+        if result.return_code == os.EX_OK:
             for source_file in arguments.source_files:
                 object_file_path: str = self.map_source_file_to_object_file(source_file)
                 object_file_content = Path.read_bytes(Path(object_file_path))

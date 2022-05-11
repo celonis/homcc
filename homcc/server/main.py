@@ -42,10 +42,17 @@ def main():
     # LOG_LEVEL and VERBOSITY
     log_level: str = homccd_args_dict["log_level"]
 
-    if homccd_args_dict["verbose"] or log_level == "DEBUG" or homccd_config.log_level == LogLevel.DEBUG:
+    # verbosity implies debug mode
+    if (
+        homccd_args_dict["verbose"]
+        or homccd_config.verbose
+        or log_level == "DEBUG"
+        or homccd_config.log_level == LogLevel.DEBUG
+    ):
         logging_config.config |= FormatterConfig.DETAILED
         logging_config.level = logging.DEBUG
 
+    # overwrite verbose debug logging level
     if log_level is not None:
         logging_config.level = LogLevel[log_level].value
     elif homccd_config.log_level is not None:
