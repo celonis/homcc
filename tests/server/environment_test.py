@@ -41,18 +41,18 @@ class TestServerEnvironment:
             "/opt/src/absolute.cpp",
         ]
         environment = create_mock_environment("/client1", "/client1/test/xyz")
-        mapped_arguments = list(environment.map_args(args))
+        mapped_args = list(environment.map_args(args))
 
-        assert mapped_arguments.pop(0) == "gcc"
-        assert mapped_arguments.pop(0) == f"-I{environment.mapped_cwd}/relative_path/relative.h"
-        assert mapped_arguments.pop(0) == f"-I{environment.instance_folder}/var/includes/absolute.h"
-        assert mapped_arguments.pop(0) == f"-I{environment.instance_folder}/var/includes/absolute.h"
-        assert mapped_arguments.pop(0) == f"-isysroot{environment.instance_folder}/var/lib/sysroot.h"
-        assert mapped_arguments.pop(0) == f"-o{environment.instance_folder}/home/user/output.o"
-        assert mapped_arguments.pop(0) == f"-isystem{environment.instance_folder}/var/lib/system.h"
-        assert mapped_arguments.pop(0) == f"{environment.mapped_cwd}/main.cpp"
-        assert mapped_arguments.pop(0) == f"{environment.mapped_cwd}/relative/relative.cpp"
-        assert mapped_arguments.pop(0) == f"{environment.instance_folder}/opt/src/absolute.cpp"
+        assert mapped_args.pop(0) == "gcc"
+        assert mapped_args.pop(0) == f"-I{environment.mapped_cwd}/relative_path/relative.h"
+        assert mapped_args.pop(0) == f"-I{environment.instance_folder}/var/includes/absolute.h"
+        assert mapped_args.pop(0) == f"-I{environment.instance_folder}/var/includes/absolute.h"
+        assert mapped_args.pop(0) == f"-isysroot{environment.instance_folder}/var/lib/sysroot.h"
+        assert mapped_args.pop(0) == f"-o{environment.instance_folder}/home/user/output.o"
+        assert mapped_args.pop(0) == f"-isystem{environment.instance_folder}/var/lib/system.h"
+        assert mapped_args.pop(0) == f"{environment.mapped_cwd}/main.cpp"
+        assert mapped_args.pop(0) == f"{environment.mapped_cwd}/relative/relative.cpp"
+        assert mapped_args.pop(0) == f"{environment.instance_folder}/opt/src/absolute.cpp"
 
     def test_map_arguments_relative_paths(self):
         arguments = [

@@ -111,7 +111,7 @@ class Environment:
     def compiler_exists(arguments: Arguments) -> bool:
         """Returns true if the compiler specified in the arguments exists on the system, else false."""
         compiler = arguments.compiler
-        return False if compiler is None else shutil.which(compiler) is not None
+        return compiler is not None and shutil.which(compiler) is not None
 
     def do_compilation(self, arguments: Arguments) -> CompilationResultMessage:
         """Does the compilation and returns the filled result message."""
