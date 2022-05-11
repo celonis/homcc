@@ -26,6 +26,8 @@ from homcc.common.messages import (
 
 from homcc.server.environment import Environment, create_root_temp_folder
 
+from homcc.common.arguments import Arguments
+
 from homcc.server.cache import Cache
 
 logger = logging.getLogger(__name__)
@@ -71,7 +73,8 @@ class TCPServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
         self.cache = Cache(Path(self.root_temp_folder.name))
 
     @staticmethod
-    def close_connection(request, info: str):
+    def close_connection_for_request(request, info: str):
+        """Close a connection for a certain request."""
         request.sendall(ConnectionRefusedMessage(info).to_bytes())
         request.shutdown(SHUT_RD)
         request.close()
@@ -86,7 +89,7 @@ class TCPServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
                 self.connections_limit,
             )
 
-            self.close_connection(request, f"Limit {self.connections_limit} reached")
+            self.close_connection_for_request(request, f"Limit {self.connections_limit} reached")
 
         return accept_connection
 
@@ -105,7 +108,7 @@ class TCPRequestHandler(socketserver.BaseRequestHandler):
     """Further dependencies needed from the client."""
     needed_dependency_keys: List[str]
     """Shuffled list of keys for the needed dependencies dict."""
-    compiler_arguments: List[str]
+    compiler_arguments: Arguments
     """List of compiler arguments."""
     instance_path: str = ""
     """Path to the current compilation inside /tmp/."""
@@ -130,21 +133,17 @@ class TCPRequestHandler(socketserver.BaseRequestHandler):
         if profile is not None:
             if not self.server.profiles_enabled:
                 logger.info("Refusing client because 'schroot' compilation could not be executed.")
-                self.server.close_connection(
-                    self.request,
+                self.close_connection(
                     f"Profile {profile} could not be used as 'schroot' is not installed on the server",
                 )
-                self.terminate = True
                 return
 
             if profile not in self.server.profiles:
                 logger.info("Refusing client because 'schroot' environment '%s' is not provided.", profile)
-                self.server.close_connection(
-                    self.request,
+                self.close_connection(
                     f"Profile {profile} could not be used as it is not a provided profile "
                     f"[{', '.join(self.server.profiles)}].",
                 )
-                self.terminate = True
                 return
 
             logger.info("Using %s profile.", profile)
@@ -160,8 +159,21 @@ class TCPRequestHandler(socketserver.BaseRequestHandler):
             compression=compression,
         )
 
-        self.compiler_arguments = self.environment.map_arguments(message.get_args())
+        self.compiler_arguments = self.environment.map_args(message.get_args())
         logger.debug("Mapped compiler args: %s", str(self.compiler_arguments))
+
+        if not self.environment.compiler_exists(self.compiler_arguments):
+            logger.warning(
+                "Compilation with compiler '%s' requested, but this compiler is not installed on the system.",
+                self.compiler_arguments.compiler,
+            )
+            self.close_connection(
+                (
+                    f"Compiler '{self.compiler_arguments.compiler}' is not available on the server, "
+                    "can not compile remotely"
+                ),
+            )
+            return
 
         self.mapped_dependencies = self.environment.map_dependency_paths(message.get_dependencies())
         logger.debug("Mapped dependencies: %s", self.mapped_dependencies)
@@ -263,6 +275,11 @@ class TCPRequestHandler(socketserver.BaseRequestHandler):
             self._handle_message(parsed_message)
 
         return bytes_needed
+
+    def close_connection(self, info: str):
+        """Closes the connection for this particular request."""
+        self.server.close_connection_for_request(self.request, info)
+        self.terminate = True
 
     def recv(self) -> bytearray:
         """Function that receives from the connection and returns an empty
