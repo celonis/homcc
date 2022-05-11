@@ -55,7 +55,7 @@ class TestServerEnvironment:
         assert mapped_args.pop(0) == f"{environment.instance_folder}/opt/src/absolute.cpp"
 
     def test_map_arguments_relative_paths(self):
-        arguments = [
+        args = [
             "gcc",
             "-BsomeOtherArgument",
             "-FooArgument",
@@ -73,20 +73,20 @@ class TestServerEnvironment:
         ]
 
         environment = create_mock_environment("/client1", "/client1/test/xyz")
-        mapped_arguments = list(environment.map_args(arguments))
+        mapped_args = list(environment.map_args(args))
 
-        assert mapped_arguments.pop(0) == "gcc"
-        assert mapped_arguments.pop(0) == "-BsomeOtherArgument"
-        assert mapped_arguments.pop(0) == "-FooArgument"
-        assert mapped_arguments.pop(0) == "should_not_be_mapped"
-        assert mapped_arguments.pop(0) == f"-o{environment.mapped_cwd}/output_folder/b.out"
-        assert mapped_arguments.pop(0) == "-I/client1/test/abc/include/foo.h"
-        assert mapped_arguments.pop(0) == f"-I{environment.mapped_cwd}/include/foo2.h"
-        assert mapped_arguments.pop(0) == "-isystem/client1/include/sys.h"
-        assert mapped_arguments.pop(0) == "/client1/test/main.cpp"
-        assert mapped_arguments.pop(0) == f"{environment.mapped_cwd}/relative.cpp"
-        assert mapped_arguments.pop(0) == "-c"
-        assert mapped_arguments.pop(0) == f"{environment.mapped_cwd}/some_file.cpp"
+        assert mapped_args.pop(0) == "gcc"
+        assert mapped_args.pop(0) == "-BsomeOtherArgument"
+        assert mapped_args.pop(0) == "-FooArgument"
+        assert mapped_args.pop(0) == "should_not_be_mapped"
+        assert mapped_args.pop(0) == f"-o{environment.mapped_cwd}/output_folder/b.out"
+        assert mapped_args.pop(0) == "-I/client1/test/abc/include/foo.h"
+        assert mapped_args.pop(0) == f"-I{environment.mapped_cwd}/include/foo2.h"
+        assert mapped_args.pop(0) == "-isystem/client1/include/sys.h"
+        assert mapped_args.pop(0) == "/client1/test/main.cpp"
+        assert mapped_args.pop(0) == f"{environment.mapped_cwd}/relative.cpp"
+        assert mapped_args.pop(0) == "-c"
+        assert mapped_args.pop(0) == f"{environment.mapped_cwd}/some_file.cpp"
 
     def test_map_cwd(self):
         instance_path = "/client1/"
