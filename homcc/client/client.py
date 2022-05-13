@@ -12,7 +12,7 @@ import struct
 
 from enum import Enum, auto
 from pathlib import Path
-from typing import Dict, Iterable, Iterator, List, Optional, Tuple
+from typing import Dict, Iterable, Iterator, List, Optional
 
 from homcc.client.errors import ClientParsingError, FailedHostNameResolutionError, HostsExhaustedError, HostParsingError
 from homcc.client.parsing import ConnectionType, Host, parse_host
@@ -89,9 +89,9 @@ class LockFile:
         if host.type == ConnectionType.LOCAL:
             host_type_name = "localhost"
         elif host.type == ConnectionType.TCP:
-            host_type_name = f"tcp_{host.host}_{host.port}"
+            host_type_name = f"tcp_{host.name}_{host.port}"
         elif host.type == ConnectionType.SSH:
-            host_type_name = f"ssh_{host.host}"
+            host_type_name = f"ssh_{host.name}"
         else:
             raise ValueError(f"Unhandled connection type '{host.type}'")
 
@@ -100,10 +100,10 @@ class LockFile:
         self.file: Path = self.HOMCC_LOCK_DIR / filename
 
 
-class ClientState:
+class ClientStateFile:
     """
-    Class to encapsulate and manage the current task state of a client.
-    This is heavily adapted from distcc such that we can use their monitor to display our compilation progress as well.
+    Class to encapsulate and manage the current compilation status of a client via a state file.
+    This is heavily adapted from distcc so that we can use their monitoring tools.
 
     The distcc task state struct is given as following:
     struct dcc_task_state {
@@ -123,47 +123,83 @@ class ClientState:
         STARTUP = 0
         BLOCKED = auto()
         CONNECT = auto()
-        CPP = auto()
+        CPP = auto()  # unused
         SEND = auto()
-        COMPILE = auto()  # or unknown
+        COMPILE = auto()
         RECEIVE = auto()
         DONE = auto()
 
     # size_t; unsigned long; unsigned long; char[128]; char[128]; int; enum (int); struct* (void*)
     DISTCC_TASK_STATE_STRUCT_FORMAT: str = "NLL128s128siiP"
+    """Format string for the dcc_task_state struct to pack and unpack bytes for the state file"""
     DISTCC_TASK_STATE_STRUCT_SIZE: int = struct.calcsize(DISTCC_TASK_STATE_STRUCT_FORMAT)
-
-    DISTCC_STATE_MAGIC: int = 0x44494800  # DIH\0
+    """Total size of the dcc_task_state struct"""
+    DISTCC_STATE_MAGIC: int = 0x44_49_48_00  # equal to: b"DIH\0"
+    """Magic number for the dcc_task_state struct"""
+    DISTCC_NEXT_TASK_STATE: int = 0xFF_FF_FF_FF_FF_FF_FF_FF
+    """Undefined and unused pointer address for the next dcc_task_state struct"""
 
     HOMCC_STATE_DIR: Path = Path.home() / ".homcc/state/"
+    """Path to the directory storing our temporary state files"""
     STATE_DIR_PREFIX: str = "binstate_"
+    """Prefix for for state files"""
 
-    def __init__(self, arguments: Arguments, host: Host):
-        self.HOMCC_STATE_DIR.mkdir(exist_ok=True, parents=True)
+    pid: int
+    """Client Process ID"""
+    source_base_filename: bytes
+    """Encoded source_base_filename"""
+    hostname: bytes
+    """Encoded hostname"""
+    slot: int
+    """Used Host slot"""
+    phase: DistccClientPhases
+    """Current Compilation Phase"""
 
-        self.pid: int = os.getpid()
-        self.file: Path = self.HOMCC_STATE_DIR / f"{self.STATE_DIR_PREFIX}{self.pid}"
-        self.hostname: str = host.host
+    file: Path
+    """Path to actual state file"""
 
-        if len(arguments.source_files) == 0:
-            logger.error("Cannot start tracking a compilation without a source file!")
+    def __init__(self, source_file: str, hostname: str, slot: int, state_dir: Path = HOMCC_STATE_DIR):
+        # size_t struct_size: DISTCC_TASK_STATE_STRUCT_SIZE
 
-        self.source_base_filename: str = Path(arguments.source_files[0]).name
+        # unsigned long magic: DISTCC_STATE_MAGIC
 
-        if len(arguments.source_files) > 1:
-            logger.info("Only tracking ")
+        # unsigned long cpid
+        self.pid = os.getpid()
 
-        self.slot: int = 23
+        # char file[128]
+        # if not arguments.source_files:
+        #    raise ValueError("No source file provided!")
 
-        self.phase = self.DistccClientPhases.STARTUP
+        self.source_base_filename = Path(source_file).name.encode()
 
-        try:
-            self.file.touch(exist_ok=False)
-        except FileExistsError:
-            logger.error("Could not create client state file '%s' as it does already exist!")
+        if len(self.source_base_filename) > 127:
+            raise ValueError  # TODO
+
+        # if len(arguments.source_files) > 1:
+        #    logger.info(
+        #        "Only monitoring file '%s' (excluding files ['%s']).",
+        #        arguments.source_files[0],
+        #        "', '".join(arguments.source_files[1:]),
+        #    )
+
+        # char host[128]
+        self.hostname = hostname.encode()
+
+        if len(self.hostname) > 127:
+            raise ValueError  # TODO
+
+        # int slot
+        self.slot = slot
+
+        # enum dcc_phase curr_phase: unassigned
+        # self.phase: ClientState.DistccClientPhases = self.DistccClientPhases.STARTUP
+
+        # struct dcc_task_state *next: DISTCC_NEXT_TASK_STATE
+
+        self.file = state_dir / f"{self.STATE_DIR_PREFIX}{self.pid}"
 
     @classmethod
-    def from_bytes(cls, buffer: bytes) -> ClientState:
+    def from_bytes(cls, buffer: bytes) -> ClientStateFile:
         (  # ignore constants: DISTCC_TASK_STATE_STRUCT_SIZE, DISTCC_STATE_MAGIC, 0 (void*)
             _,
             _,
@@ -175,14 +211,10 @@ class ClientState:
             _,
         ) = struct.unpack(cls.DISTCC_TASK_STATE_STRUCT_FORMAT, buffer)
 
-        source_base_filename = source_base_filename.decode().rstrip("\x00")
-        hostname = hostname.decode().rstrip("\x00")
-
-        state = cls(Arguments.from_args([source_base_filename]), Host(type=ConnectionType.LOCAL, host=hostname))
+        # trim trailing null bytes
+        state = cls(source_base_filename.rstrip(b"\x00").decode(), hostname.rstrip(b"\x00").decode(), slot)
 
         state.pid = pid
-        state.source_base_filename = source_base_filename
-        state.slot = slot
         state.phase = phase
 
         return state
@@ -193,19 +225,19 @@ class ClientState:
             # struct format
             self.DISTCC_TASK_STATE_STRUCT_FORMAT,
             # struct fields
-            self.DISTCC_TASK_STATE_STRUCT_SIZE,   # size_t struct_size
-            self.DISTCC_STATE_MAGIC,              # unsigned long magic
-            self.pid,                             # unsigned long cpid
-            self.source_base_filename.encode(),   # char file[128]
-            self.hostname.encode(),               # char host[128]
-            self.slot,                            # int slot
-            int(self.phase),                      # enum dcc_phase curr_phase
-            0,                                    # struct dcc_task_state *next
+            self.DISTCC_TASK_STATE_STRUCT_SIZE,  # size_t struct_size
+            self.DISTCC_STATE_MAGIC,             # unsigned long magic
+            self.pid,                            # unsigned long cpid
+            self.source_base_filename,           # char file[128]
+            self.hostname,                       # char host[128]
+            self.slot,                           # int slot
+            self.phase,                          # enum dcc_phase curr_phase
+            self.DISTCC_NEXT_TASK_STATE,         # struct dcc_task_state *next
         )
         # fmt: on
 
     def __eq__(self, other):
-        if isinstance(other, ClientState):
+        if isinstance(other, ClientStateFile):
             return (  # ignore constants: DISTCC_TASK_STATE_STRUCT_SIZE, DISTCC_STATE_MAGIC, 0 (void*)
                 self.pid == other.pid
                 and self.source_base_filename == other.source_base_filename
@@ -215,17 +247,59 @@ class ClientState:
             )
         return False
 
-    def unpack(self, buffer: bytes) -> Tuple:
-        return struct.unpack(self.DISTCC_TASK_STATE_STRUCT_FORMAT, buffer)
+    def __enter__(self) -> ClientStateFile:
+        self.HOMCC_STATE_DIR.mkdir(exist_ok=True, parents=True)
 
-    def note(self):
-        self.file.write_bytes(bytes(self))
+        try:
+            self.file.touch(exist_ok=False)
+        except FileExistsError as error:
+            logger.error("Could not create client state file '%s' as it does already exist!", self.file.absolute())
+            raise error from None
 
-    def __del__(self):
+        return self
+
+    def __exit__(self, *_):
         try:
             self.file.unlink()
         except FileNotFoundError:
-            logger.error("Could not delete client state file '%s' as it does not exist!")
+            logger.error("File '%s' was already deleted!", self.file.absolute())
+
+    def startup(self):
+        self.phase = self.DistccClientPhases.STARTUP
+        self.file.write_bytes(bytes(self))
+
+    def blocked(self):
+        self.phase = self.DistccClientPhases.BLOCKED
+        self.file.write_bytes(bytes(self))
+        raise NotImplementedError
+
+    def connect(self):
+        self.phase = self.DistccClientPhases.CONNECT
+        self.file.write_bytes(bytes(self))
+        raise NotImplementedError
+
+    def cpp(self):
+        raise NotImplementedError("TODO")  # TODO: write proper Error message
+
+    def send(self):
+        self.phase = self.DistccClientPhases.SEND
+        self.file.write_bytes(bytes(self))
+        raise NotImplementedError
+
+    def compile(self):
+        self.phase = self.DistccClientPhases.COMPILE
+        self.file.write_bytes(bytes(self))
+        raise NotImplementedError
+
+    def receive(self):
+        self.phase = self.DistccClientPhases.RECEIVE
+        self.file.write_bytes(bytes(self))
+        raise NotImplementedError
+
+    def done(self):
+        self.phase = self.DistccClientPhases.DONE
+        self.file.write_bytes(bytes(self))
+        raise NotImplementedError
 
 
 class TCPClient:
@@ -241,7 +315,7 @@ class TCPClient:
         if connection_type != ConnectionType.TCP:
             raise ValueError(f"TCPClient cannot be initialized with {connection_type}!")
 
-        self.host: str = host.host
+        self.host: str = host.name
         self.port: int = host.port or self.DEFAULT_PORT
         self.compression = host.compression
 

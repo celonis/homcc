@@ -104,7 +104,7 @@ class Host:
     """Class to encapsulate host information"""
 
     type: ConnectionType
-    host: str
+    name: str
     limit: int
     compression: Compression
     port: Optional[int]
@@ -114,14 +114,14 @@ class Host:
         self,
         *,
         type: ConnectionType,  # pylint: disable=redefined-builtin
-        host: str,
+        name: str,
         limit: Optional[str] = None,
         compression: Optional[str] = None,
         port: Optional[str] = None,
         user: Optional[str] = None,
     ):
-        self.type = ConnectionType.LOCAL if host == ConnectionType.LOCAL else type
-        self.host = host
+        self.type = ConnectionType.LOCAL if name == ConnectionType.LOCAL else type
+        self.name = name
         self.limit = int(limit) if limit is not None else 2  # enable minor level of concurrency on default
         self.compression = Compression.from_name(compression)
         self.port = int(port) if port is not None else None  # TCP
@@ -292,7 +292,7 @@ def parse_host(host: str) -> Host:
         connection_type = ConnectionType.TCP
         host_dict["port"] = port
         host_dict["limit"] = limit
-        return Host(type=connection_type, host=host, **host_dict)
+        return Host(type=connection_type, name=host, **host_dict)
 
     # USER@HOST
     elif (user_at_host_match := re.match(r"^(\w+)@([\w.:/]+)$", host)) is not None:
@@ -317,7 +317,7 @@ def parse_host(host: str) -> Host:
         host, limit = host_limit_match.groups()
         host_dict["limit"] = limit
 
-    return Host(type=connection_type, host=host, **host_dict)
+    return Host(type=connection_type, name=host, **host_dict)
 
 
 def load_hosts(hosts_file_locations: Optional[List[Path]] = None) -> List[str]:

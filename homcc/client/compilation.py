@@ -58,7 +58,7 @@ async def compile_remotely(arguments: Arguments, hosts: List[str], config: Clien
         except (ConnectionError, FailedHostNameResolutionError) as error:
             logger.warning("%s", error)
         except asyncio.TimeoutError:
-            logger.warning("Compilation request for host '%s' timed out.", host.host)
+            logger.warning("Compilation request for host '%s' timed out.", host.name)
 
     raise HostsExhaustedError(f"All hosts {hosts} are exhausted.")
 

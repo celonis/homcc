@@ -111,13 +111,13 @@ class TestParsingHosts:
 
     def test_parse_host_trailing_comment(self):
         # HOST#COMMENT
-        assert parse_host("localhost#COMMENT") == Host(type=ConnectionType.LOCAL, host="localhost")
-        assert parse_host("localhost/64#COMMENT") == Host(type=ConnectionType.LOCAL, host="localhost", limit="64")
+        assert parse_host("localhost#COMMENT") == Host(type=ConnectionType.LOCAL, name="localhost")
+        assert parse_host("localhost/64#COMMENT") == Host(type=ConnectionType.LOCAL, name="localhost", limit="64")
         assert parse_host("localhost,lzo#COMMENT") == Host(
-            type=ConnectionType.LOCAL, host="localhost", compression="lzo"
+            type=ConnectionType.LOCAL, name="localhost", compression="lzo"
         )
         assert parse_host("localhost/64,lzo#COMMENT") == Host(
-            type=ConnectionType.LOCAL, host="localhost", limit="64", compression="lzo"
+            type=ConnectionType.LOCAL, name="localhost", limit="64", compression="lzo"
         )
 
     def test_host(self):
@@ -125,104 +125,104 @@ class TestParsingHosts:
         tcp: ConnectionType = ConnectionType.TCP
 
         # HOST
-        assert parse_host("localhost") == Host(type=local, host="localhost")
-        assert parse_host("127.0.0.1") == Host(type=tcp, host="127.0.0.1")
-        assert parse_host("::1") == Host(type=tcp, host="::1")
+        assert parse_host("localhost") == Host(type=local, name="localhost")
+        assert parse_host("127.0.0.1") == Host(type=tcp, name="127.0.0.1")
+        assert parse_host("::1") == Host(type=tcp, name="::1")
 
         # HOST/LIMIT
-        assert parse_host("localhost/64") == Host(type=local, host="localhost", limit="64")
-        assert parse_host("127.0.0.1/64") == Host(type=tcp, host="127.0.0.1", limit="64")
-        assert parse_host("::1/64") == Host(type=tcp, host="::1", limit="64")
+        assert parse_host("localhost/64") == Host(type=local, name="localhost", limit="64")
+        assert parse_host("127.0.0.1/64") == Host(type=tcp, name="127.0.0.1", limit="64")
+        assert parse_host("::1/64") == Host(type=tcp, name="::1", limit="64")
 
         # HOST,COMPRESSION
-        assert parse_host("localhost,lzo") == Host(type=local, host="localhost", compression="lzo")
-        assert parse_host("127.0.0.1,lzo") == Host(type=tcp, host="127.0.0.1", compression="lzo")
-        assert parse_host("::1,lzo") == Host(type=tcp, host="::1", compression="lzo")
+        assert parse_host("localhost,lzo") == Host(type=local, name="localhost", compression="lzo")
+        assert parse_host("127.0.0.1,lzo") == Host(type=tcp, name="127.0.0.1", compression="lzo")
+        assert parse_host("::1,lzo") == Host(type=tcp, name="::1", compression="lzo")
 
         # HOST/LIMIT,COMPRESSION
-        assert parse_host("localhost/64,lzo") == Host(type=local, host="localhost", limit="64", compression="lzo")
-        assert parse_host("127.0.0.1/64,lzo") == Host(type=tcp, host="127.0.0.1", limit="64", compression="lzo")
-        assert parse_host("::1/64,lzo") == Host(type=tcp, host="::1", limit="64", compression="lzo")
+        assert parse_host("localhost/64,lzo") == Host(type=local, name="localhost", limit="64", compression="lzo")
+        assert parse_host("127.0.0.1/64,lzo") == Host(type=tcp, name="127.0.0.1", limit="64", compression="lzo")
+        assert parse_host("::1/64,lzo") == Host(type=tcp, name="::1", limit="64", compression="lzo")
 
     def test_host_port(self):
         local: ConnectionType = ConnectionType.LOCAL
         tcp: ConnectionType = ConnectionType.TCP
 
         # HOST:PORT
-        assert parse_host("localhost:3633") == Host(type=local, host="localhost", port="3633")
-        assert parse_host("127.0.0.1:3633") == Host(type=tcp, host="127.0.0.1", port="3633")
-        assert parse_host("[::1]:3633") == Host(type=tcp, host="::1", port="3633")
+        assert parse_host("localhost:3633") == Host(type=local, name="localhost", port="3633")
+        assert parse_host("127.0.0.1:3633") == Host(type=tcp, name="127.0.0.1", port="3633")
+        assert parse_host("[::1]:3633") == Host(type=tcp, name="::1", port="3633")
 
         # HOST:PORT/LIMIT
-        assert parse_host("localhost:3633/64") == Host(type=local, host="localhost", limit="64", port="3633")
-        assert parse_host("127.0.0.1:3633/64") == Host(type=tcp, host="127.0.0.1", limit="64", port="3633")
-        assert parse_host("[::1]:3633/64") == Host(type=tcp, host="::1", limit="64", port="3633")
+        assert parse_host("localhost:3633/64") == Host(type=local, name="localhost", limit="64", port="3633")
+        assert parse_host("127.0.0.1:3633/64") == Host(type=tcp, name="127.0.0.1", limit="64", port="3633")
+        assert parse_host("[::1]:3633/64") == Host(type=tcp, name="::1", limit="64", port="3633")
 
         # HOST:PORT,COMPRESSION
-        assert parse_host("localhost:3633,lzo") == Host(type=local, host="localhost", compression="lzo", port="3633")
-        assert parse_host("127.0.0.1:3633,lzo") == Host(type=tcp, host="127.0.0.1", compression="lzo", port="3633")
-        assert parse_host("[::1]:3633,lzo") == Host(type=tcp, host="::1", compression="lzo", port="3633")
+        assert parse_host("localhost:3633,lzo") == Host(type=local, name="localhost", compression="lzo", port="3633")
+        assert parse_host("127.0.0.1:3633,lzo") == Host(type=tcp, name="127.0.0.1", compression="lzo", port="3633")
+        assert parse_host("[::1]:3633,lzo") == Host(type=tcp, name="::1", compression="lzo", port="3633")
 
         # HOST:PORT/LIMIT,COMPRESSION
         assert parse_host("localhost:3633/64,lzo") == Host(
-            type=local, host="localhost", limit="64", compression="lzo", port="3633"
+            type=local, name="localhost", limit="64", compression="lzo", port="3633"
         )
         assert parse_host("127.0.0.1:3633/64,lzo") == Host(
-            type=tcp, host="127.0.0.1", limit="64", compression="lzo", port="3633"
+            type=tcp, name="127.0.0.1", limit="64", compression="lzo", port="3633"
         )
-        assert parse_host("[::1]:3633/64,lzo") == Host(type=tcp, host="::1", limit="64", compression="lzo", port="3633")
+        assert parse_host("[::1]:3633/64,lzo") == Host(type=tcp, name="::1", limit="64", compression="lzo", port="3633")
 
     def test_at_host(self):
         local: ConnectionType = ConnectionType.LOCAL
         ssh: ConnectionType = ConnectionType.SSH
 
         # @HOST
-        assert parse_host("@localhost") == Host(type=local, host="localhost")
-        assert parse_host("@127.0.0.1") == Host(type=ssh, host="127.0.0.1")
-        assert parse_host("@::1") == Host(type=ssh, host="::1")
+        assert parse_host("@localhost") == Host(type=local, name="localhost")
+        assert parse_host("@127.0.0.1") == Host(type=ssh, name="127.0.0.1")
+        assert parse_host("@::1") == Host(type=ssh, name="::1")
 
         # @HOST/LIMIT
-        assert parse_host("@localhost/64") == Host(type=local, host="localhost", limit="64")
-        assert parse_host("@127.0.0.1/64") == Host(type=ssh, host="127.0.0.1", limit="64")
-        assert parse_host("@::1/64") == Host(type=ssh, host="::1", limit="64")
+        assert parse_host("@localhost/64") == Host(type=local, name="localhost", limit="64")
+        assert parse_host("@127.0.0.1/64") == Host(type=ssh, name="127.0.0.1", limit="64")
+        assert parse_host("@::1/64") == Host(type=ssh, name="::1", limit="64")
 
         # @HOST,COMPRESSION
-        assert parse_host("@localhost,lzo") == Host(type=local, host="localhost", compression="lzo")
-        assert parse_host("@127.0.0.1,lzo") == Host(type=ssh, host="127.0.0.1", compression="lzo")
-        assert parse_host("@::1,lzo") == Host(type=ssh, host="::1", compression="lzo")
+        assert parse_host("@localhost,lzo") == Host(type=local, name="localhost", compression="lzo")
+        assert parse_host("@127.0.0.1,lzo") == Host(type=ssh, name="127.0.0.1", compression="lzo")
+        assert parse_host("@::1,lzo") == Host(type=ssh, name="::1", compression="lzo")
 
         # @HOST/LIMIT,COMPRESSION
-        assert parse_host("@localhost/64,lzo") == Host(type=local, host="localhost", limit="64", compression="lzo")
-        assert parse_host("@127.0.0.1/64,lzo") == Host(type=ssh, host="127.0.0.1", limit="64", compression="lzo")
-        assert parse_host("@::1/64,lzo") == Host(type=ssh, host="::1", limit="64", compression="lzo")
+        assert parse_host("@localhost/64,lzo") == Host(type=local, name="localhost", limit="64", compression="lzo")
+        assert parse_host("@127.0.0.1/64,lzo") == Host(type=ssh, name="127.0.0.1", limit="64", compression="lzo")
+        assert parse_host("@::1/64,lzo") == Host(type=ssh, name="::1", limit="64", compression="lzo")
 
     def test_user_at_host(self):
         local: ConnectionType = ConnectionType.LOCAL
         ssh: ConnectionType = ConnectionType.SSH
 
         # USER@HOST
-        assert parse_host("user@localhost") == Host(type=local, host="localhost", user="user")
-        assert parse_host("user@127.0.0.1") == Host(type=ssh, host="127.0.0.1", user="user")
-        assert parse_host("user@::1") == Host(type=ssh, host="::1", user="user")
+        assert parse_host("user@localhost") == Host(type=local, name="localhost", user="user")
+        assert parse_host("user@127.0.0.1") == Host(type=ssh, name="127.0.0.1", user="user")
+        assert parse_host("user@::1") == Host(type=ssh, name="::1", user="user")
 
         # USER@HOST/LIMIT
-        assert parse_host("user@localhost/64") == Host(type=local, host="localhost", limit="64", user="user")
-        assert parse_host("user@127.0.0.1/64") == Host(type=ssh, host="127.0.0.1", limit="64", user="user")
-        assert parse_host("user@::1/64") == Host(type=ssh, host="::1", limit="64", user="user")
+        assert parse_host("user@localhost/64") == Host(type=local, name="localhost", limit="64", user="user")
+        assert parse_host("user@127.0.0.1/64") == Host(type=ssh, name="127.0.0.1", limit="64", user="user")
+        assert parse_host("user@::1/64") == Host(type=ssh, name="::1", limit="64", user="user")
 
         # USER@HOST,COMPRESSION
-        assert parse_host("user@localhost,lzo") == Host(type=local, host="localhost", compression="lzo", user="user")
-        assert parse_host("user@127.0.0.1,lzo") == Host(type=ssh, host="127.0.0.1", compression="lzo", user="user")
-        assert parse_host("user@::1,lzo") == Host(type=ssh, host="::1", compression="lzo", user="user")
+        assert parse_host("user@localhost,lzo") == Host(type=local, name="localhost", compression="lzo", user="user")
+        assert parse_host("user@127.0.0.1,lzo") == Host(type=ssh, name="127.0.0.1", compression="lzo", user="user")
+        assert parse_host("user@::1,lzo") == Host(type=ssh, name="::1", compression="lzo", user="user")
 
         # USER@HOST/LIMIT,COMPRESSION
         assert parse_host("user@localhost/64,lzo") == Host(
-            type=local, host="localhost", limit="64", compression="lzo", user="user"
+            type=local, name="localhost", limit="64", compression="lzo", user="user"
         )
         assert parse_host("user@127.0.0.1/64,lzo") == Host(
-            type=ssh, host="127.0.0.1", limit="64", compression="lzo", user="user"
+            type=ssh, name="127.0.0.1", limit="64", compression="lzo", user="user"
         )
-        assert parse_host("user@::1/64,lzo") == Host(type=ssh, host="::1", limit="64", compression="lzo", user="user")
+        assert parse_host("user@::1/64,lzo") == Host(type=ssh, name="::1", limit="64", compression="lzo", user="user")
 
     def test_load_hosts(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
         hosts = ["localhost", "localhost:3633 ", "localhost:3633,lzo\t", " ", ""]
