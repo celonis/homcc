@@ -1,12 +1,14 @@
 """ Tests for client/client.py"""
 
+import pytest
+import struct
+
 from typing import Iterator, List
 
-import pytest
-
-from homcc.client.client import HostSelector
+from homcc.client.client import ClientState, HostSelector
 from homcc.client.errors import HostsExhaustedError
-from homcc.client.parsing import Host, parse_host
+from homcc.client.parsing import ConnectionType, Host, parse_host
+from homcc.common.arguments import Arguments
 
 
 class TestHostSelector:
@@ -52,3 +54,42 @@ class TestHostSelector:
         assert len(host_selector) == 0
         with pytest.raises(StopIteration):
             assert next(host_iter)
+
+
+class TestClientState:
+    """Tests for ClientState"""
+
+    def test_constants(self):
+        # sanity checks to keep interoperability with distcc monitoring
+
+        # size_t; unsigned long; unsigned long; char[128]; char[128]; int; enum (int); struct* (void*)
+        assert ClientState.DISTCC_TASK_STATE_STRUCT_SIZE == 8 + 8 + 8 + 128 + 128 + 4 + 4 + 8 == 296
+        assert ClientState.DISTCC_STATE_MAGIC == int.from_bytes(b"DIH\0", byteorder="big")
+
+        for i, phases in enumerate(ClientState.DistccClientPhases):
+            assert i == phases.value
+
+    def test_bytes(self):
+        args: List[str] = ["g++", "foo.cpp"]
+        host: Host = Host(type=ConnectionType.TCP, host="remotehost")
+        state: ClientState = ClientState(Arguments.from_args(args), host)
+        state.pid = 13
+        state.slot = 42
+
+        # packing
+        packed_state: bytes = bytes(state)
+        assert packed_state == b"".join(
+            [  # call individual struct packs here because it would be too tedious to test otherwise
+                struct.pack("N", ClientState.DISTCC_TASK_STATE_STRUCT_SIZE),
+                struct.pack("L", ClientState.DISTCC_STATE_MAGIC),
+                struct.pack("L", state.pid),
+                struct.pack("128s", state.source_base_filename.encode()),
+                struct.pack("128s", state.hostname.encode()),
+                struct.pack("i", state.slot),
+                struct.pack("i", state.phase),
+                struct.pack("P", 0),
+            ]
+        )
+
+        # unpacking
+        assert state == ClientState.from_bytes(packed_state)

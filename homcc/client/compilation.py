@@ -14,7 +14,12 @@ from homcc.client.client import (
     HostSelector,
     TCPClient,
 )
-from homcc.client.errors import HostsExhaustedError, RemoteCompilationError, UnexpectedMessageTypeError
+from homcc.client.errors import (
+    FailedHostNameResolutionError,
+    HostsExhaustedError,
+    RemoteCompilationError,
+    UnexpectedMessageTypeError,
+)
 from homcc.client.parsing import ClientConfig, Host
 from homcc.common.arguments import Arguments, ArgumentsExecutionResult
 from homcc.common.hashing import hash_file_with_path
@@ -50,7 +55,7 @@ async def compile_remotely(arguments: Arguments, hosts: List[str], config: Clien
         try:
             return await asyncio.wait_for(compile_remotely_at(arguments, host, profile), timeout=timeout)
 
-        except ConnectionError as error:
+        except (ConnectionError, FailedHostNameResolutionError) as error:
             logger.warning("%s", error)
         except asyncio.TimeoutError:
             logger.warning("Compilation request for host '%s' timed out.", host.host)

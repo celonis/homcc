@@ -30,6 +30,10 @@ class HostParsingError(RecoverableClientError):
     """Class to indicate an error during parsing a host"""
 
 
+class FailedHostNameResolutionError(Exception):
+    """Error class to indicate that the host name could not be resolved"""
+
+
 @dataclass
 class RemoteCompilationError(Exception):
     """

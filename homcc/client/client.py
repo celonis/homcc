@@ -5,12 +5,16 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import random
+import socket
+import struct
 
+from enum import Enum, auto
 from pathlib import Path
-from typing import Dict, Iterable, Iterator, List, Optional
+from typing import Dict, Iterable, Iterator, List, Optional, Tuple
 
-from homcc.client.errors import ClientParsingError, HostsExhaustedError, HostParsingError
+from homcc.client.errors import ClientParsingError, FailedHostNameResolutionError, HostsExhaustedError, HostParsingError
 from homcc.client.parsing import ConnectionType, Host, parse_host
 from homcc.common.arguments import Arguments
 from homcc.common.messages import ArgumentMessage, DependencyReplyMessage, Message
@@ -72,6 +76,158 @@ class HostSelector:
         return host
 
 
+class LockFile:
+    """TODO: WRITE DOC STRING"""
+
+    HOMCC_LOCK_DIR: Path = Path("~/.homcc/lock/")
+    LOCK_PREFIX: str = "cpu"
+
+    def __init__(self, host: Host, slot: int):
+        self.HOMCC_LOCK_DIR.mkdir(exist_ok=True, parents=True)
+
+        host_type_name: str
+        if host.type == ConnectionType.LOCAL:
+            host_type_name = "localhost"
+        elif host.type == ConnectionType.TCP:
+            host_type_name = f"tcp_{host.host}_{host.port}"
+        elif host.type == ConnectionType.SSH:
+            host_type_name = f"ssh_{host.host}"
+        else:
+            raise ValueError(f"Unhandled connection type '{host.type}'")
+
+        filename: str = f"{self.LOCK_PREFIX}_{host_type_name}_{slot}"
+
+        self.file: Path = self.HOMCC_LOCK_DIR / filename
+
+
+class ClientState:
+    """
+    Class to encapsulate and manage the current task state of a client.
+    This is heavily adapted from distcc such that we can use their monitor to display our compilation progress as well.
+
+    The distcc task state struct is given as following:
+    struct dcc_task_state {
+        size_t struct_size;           // DISTCC_TASK_STATE_STRUCT_SIZE
+        unsigned long magic;          // DISTCC_STATE_MAGIC
+        unsigned long cpid;           // pid
+        char file[128];               // source_base_filename
+        char host[128];               // hostname
+        int slot;                     // slot
+        enum dcc_phase curr_phase;    // DistccClientPhases
+        struct dcc_task_state *next;  // undefined for state file: 0
+    };
+    DISTCC_TASK_STATE_STRUCT_FORMAT provides an (un)packing format string for the dcc_task_state struct.
+    """
+
+    class DistccClientPhases(int, Enum):
+        STARTUP = 0
+        BLOCKED = auto()
+        CONNECT = auto()
+        CPP = auto()
+        SEND = auto()
+        COMPILE = auto()  # or unknown
+        RECEIVE = auto()
+        DONE = auto()
+
+    # size_t; unsigned long; unsigned long; char[128]; char[128]; int; enum (int); struct* (void*)
+    DISTCC_TASK_STATE_STRUCT_FORMAT: str = "NLL128s128siiP"
+    DISTCC_TASK_STATE_STRUCT_SIZE: int = struct.calcsize(DISTCC_TASK_STATE_STRUCT_FORMAT)
+
+    DISTCC_STATE_MAGIC: int = 0x44494800  # DIH\0
+
+    HOMCC_STATE_DIR: Path = Path.home() / ".homcc/state/"
+    STATE_DIR_PREFIX: str = "binstate_"
+
+    def __init__(self, arguments: Arguments, host: Host):
+        self.HOMCC_STATE_DIR.mkdir(exist_ok=True, parents=True)
+
+        self.pid: int = os.getpid()
+        self.file: Path = self.HOMCC_STATE_DIR / f"{self.STATE_DIR_PREFIX}{self.pid}"
+        self.hostname: str = host.host
+
+        if len(arguments.source_files) == 0:
+            logger.error("Cannot start tracking a compilation without a source file!")
+
+        self.source_base_filename: str = Path(arguments.source_files[0]).name
+
+        if len(arguments.source_files) > 1:
+            logger.info("Only tracking ")
+
+        self.slot: int = 23
+
+        self.phase = self.DistccClientPhases.STARTUP
+
+        try:
+            self.file.touch(exist_ok=False)
+        except FileExistsError:
+            logger.error("Could not create client state file '%s' as it does already exist!")
+
+    @classmethod
+    def from_bytes(cls, buffer: bytes) -> ClientState:
+        (  # ignore constants: DISTCC_TASK_STATE_STRUCT_SIZE, DISTCC_STATE_MAGIC, 0 (void*)
+            _,
+            _,
+            pid,
+            source_base_filename,
+            hostname,
+            slot,
+            phase,
+            _,
+        ) = struct.unpack(cls.DISTCC_TASK_STATE_STRUCT_FORMAT, buffer)
+
+        source_base_filename = source_base_filename.decode().rstrip("\x00")
+        hostname = hostname.decode().rstrip("\x00")
+
+        state = cls(Arguments.from_args([source_base_filename]), Host(type=ConnectionType.LOCAL, host=hostname))
+
+        state.pid = pid
+        state.source_base_filename = source_base_filename
+        state.slot = slot
+        state.phase = phase
+
+        return state
+
+    def __bytes__(self) -> bytes:
+        # fmt: off
+        return struct.pack(
+            # struct format
+            self.DISTCC_TASK_STATE_STRUCT_FORMAT,
+            # struct fields
+            self.DISTCC_TASK_STATE_STRUCT_SIZE,   # size_t struct_size
+            self.DISTCC_STATE_MAGIC,              # unsigned long magic
+            self.pid,                             # unsigned long cpid
+            self.source_base_filename.encode(),   # char file[128]
+            self.hostname.encode(),               # char host[128]
+            self.slot,                            # int slot
+            int(self.phase),                      # enum dcc_phase curr_phase
+            0,                                    # struct dcc_task_state *next
+        )
+        # fmt: on
+
+    def __eq__(self, other):
+        if isinstance(other, ClientState):
+            return (  # ignore constants: DISTCC_TASK_STATE_STRUCT_SIZE, DISTCC_STATE_MAGIC, 0 (void*)
+                self.pid == other.pid
+                and self.source_base_filename == other.source_base_filename
+                and self.hostname == other.hostname
+                and self.slot == other.slot
+                and self.phase == other.phase
+            )
+        return False
+
+    def unpack(self, buffer: bytes) -> Tuple:
+        return struct.unpack(self.DISTCC_TASK_STATE_STRUCT_FORMAT, buffer)
+
+    def note(self):
+        self.file.write_bytes(bytes(self))
+
+    def __del__(self):
+        try:
+            self.file.unlink()
+        except FileNotFoundError:
+            logger.error("Could not delete client state file '%s' as it does not exist!")
+
+
 class TCPClient:
     """Wrapper class to exchange homcc protocol messages via TCP"""
 
@@ -104,6 +260,8 @@ class TCPClient:
         except asyncio.TimeoutError as error:
             logger.warning("Connection establishment to '%s:%s' timed out.", self.host, self.port)
             raise error from None
+        except socket.gaierror as error:
+            raise FailedHostNameResolutionError(f"Host {self.host} could not be resolved.") from error
         return self
 
     async def __aexit__(self, *_):
