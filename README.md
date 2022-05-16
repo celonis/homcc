@@ -86,7 +86,7 @@
     127.0.0.1:3633/21
     [::1]:3633/42,lzo
     ```
-- Use `homcc` by specifying `CCACHE_PREFIX=homcc` in your `conan` profile and only have `CONAN_CPU_COUNT` smaller or equal to the sum of all remote host limits, e.g. `≤ 12+21+42` for the example above!
+- Use `homcc` by specifying `CCACHE_PREFIX=homcc` in your `conan` profile or IDE of choice and only have `CONAN_CPU_COUNT` smaller or equal to the sum of all remote host limits, e.g. `≤ 12+21+42` for the example above!
 
 
 ### Server: `homccd` 

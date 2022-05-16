@@ -100,34 +100,33 @@ def main():
         logger.debug("Linking [%s] to %s", ", ".join(compiler_arguments.object_files), compiler_arguments.output)
         sys.exit(compile_locally(compiler_arguments))
 
+    if not compiler_arguments.is_sendable():
+        sys.exit(compile_locally(compiler_arguments))
+
     # try to compile remotely
-    if compiler_arguments.is_sendable():
-        try:
-            sys.exit(asyncio.run(compile_remotely(compiler_arguments, hosts, homcc_config)))
+    try:
+        sys.exit(asyncio.run(compile_remotely(compiler_arguments, hosts, homcc_config)))
 
-        # exit on unrecoverable errors
-        except RemoteCompilationError as error:
-            logger.error("%s", error.message)
-            # sys.exit(error.return_code)
+    # exit on unrecoverable errors
+    except RemoteCompilationError as error:
+        logger.error("%s", error.message)
+        # sys.exit(error.return_code)
 
-            # TODO(s.pirsch): remove local compilation fallback after extensive testing, disable for benchmarking!
-            # for now, we try to recover from remote compilation errors via local compilation to track bugs
-            local_compilation_return_code: int = compile_locally(compiler_arguments)
-            if local_compilation_return_code != error.return_code:
-                logger.critical(
-                    "Different compilation result errors: Client error(%i) - Host error(%i)",
-                    local_compilation_return_code,
-                    error.return_code,
-                )
-            sys.exit(local_compilation_return_code)
+        # TODO(s.pirsch): remove local compilation fallback after extensive testing, disable for benchmarking!
+        # for now, we try to recover from remote compilation errors via local compilation to track bugs
+        local_compilation_return_code: int = compile_locally(compiler_arguments)
+        if local_compilation_return_code != error.return_code:
+            logger.critical(
+                "Different compilation result errors: Client error(%i) - Host error(%i)",
+                local_compilation_return_code,
+                error.return_code,
+            )
+        sys.exit(local_compilation_return_code)
 
-        # compile locally on recoverable errors
-        except RecoverableClientError as error:
-            logger.warning("%s", error)
-
-    # compile locally on unsendable arguments
-    logger.warning("Compiling locally instead:\n%s", compiler_arguments)
-    sys.exit(compile_locally(compiler_arguments))
+    # compile locally on recoverable errors
+    except RecoverableClientError as error:
+        logger.warning("Compiling locally instead (%s):\n%s", error, compiler_arguments)
+        sys.exit(compile_locally(compiler_arguments))
 
 
 if __name__ == "__main__":

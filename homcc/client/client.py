@@ -80,7 +80,9 @@ class LockFile:
     """TODO: WRITE DOC STRING"""
 
     HOMCC_LOCK_DIR: Path = Path("~/.homcc/lock/")
+    """Path to the directory storing temporary homcc lock files."""
     LOCK_PREFIX: str = "cpu"
+    """Prefix for lock filenames"""
 
     def __init__(self, host: Host, slot: int):
         self.HOMCC_LOCK_DIR.mkdir(exist_ok=True, parents=True)
@@ -93,19 +95,20 @@ class LockFile:
         elif host.type == ConnectionType.SSH:
             host_type_name = f"ssh_{host.name}"
         else:
-            raise ValueError(f"Unhandled connection type '{host.type}'")
+            raise ValueError(f"Erroneous connection type '{host.type}'")
 
+        # lock file path, e.g. ~/.homcc/lock/cpu_tcp_remotehost_3633_42
         filename: str = f"{self.LOCK_PREFIX}_{host_type_name}_{slot}"
-
         self.file: Path = self.HOMCC_LOCK_DIR / filename
 
 
-class ClientStateFile:
+class StateFile:
     """
     Class to encapsulate and manage the current compilation status of a client via a state file.
-    This is heavily adapted from distcc so that we can use their monitoring tools.
+    This is heavily adapted from distcc so that we can easily use their monitoring tools.
 
-    The distcc task state struct is given as following:
+    The given distcc task state struct and how we replicate it is shown in the following:
+
     struct dcc_task_state {
         size_t struct_size;           // DISTCC_TASK_STATE_STRUCT_SIZE
         unsigned long magic;          // DISTCC_STATE_MAGIC
@@ -116,10 +119,15 @@ class ClientStateFile:
         enum dcc_phase curr_phase;    // DistccClientPhases
         struct dcc_task_state *next;  // undefined for state file: 0
     };
-    DISTCC_TASK_STATE_STRUCT_FORMAT provides an (un)packing format string for the dcc_task_state struct.
+
+    DISTCC_TASK_STATE_STRUCT_FORMAT provides an (un)packing format string for the above dcc_task_state struct.
     """
 
-    class DistccClientPhases(int, Enum):
+    # pylint: disable=invalid-name
+    # justification: highlight that this is not a regular Python Enum
+    class DISTCC_CLIENT_PHASES(int, Enum):
+        """TODO: WRITE DOC STRING"""
+
         STARTUP = 0
         BLOCKED = auto()
         CONNECT = auto()
@@ -131,46 +139,42 @@ class ClientStateFile:
 
     # size_t; unsigned long; unsigned long; char[128]; char[128]; int; enum (int); struct* (void*)
     DISTCC_TASK_STATE_STRUCT_FORMAT: str = "NLL128s128siiP"
-    """Format string for the dcc_task_state struct to pack and unpack bytes for the state file"""
+    """Format string for the dcc_task_state struct to pack and unpack bytes for the state file."""
+
+    # constant dcc_task_state fields
     DISTCC_TASK_STATE_STRUCT_SIZE: int = struct.calcsize(DISTCC_TASK_STATE_STRUCT_FORMAT)
-    """Total size of the dcc_task_state struct"""
+    """Total size of the dcc_task_state struct."""
     DISTCC_STATE_MAGIC: int = 0x44_49_48_00  # equal to: b"DIH\0"
-    """Magic number for the dcc_task_state struct"""
+    """Magic number for the dcc_task_state struct."""
     DISTCC_NEXT_TASK_STATE: int = 0xFF_FF_FF_FF_FF_FF_FF_FF
-    """Undefined and unused pointer address for the next dcc_task_state struct"""
+    """Undefined and unused pointer address for the next dcc_task_state struct*."""
 
     HOMCC_STATE_DIR: Path = Path.home() / ".homcc/state/"
-    """Path to the directory storing our temporary state files"""
+    """Path to the directory storing temporary homcc state files."""
     STATE_DIR_PREFIX: str = "binstate_"
-    """Prefix for for state files"""
+    """Prefix for for state files."""
 
+    # none-constant dcc_task_state fields
     pid: int
-    """Client Process ID"""
+    """Client Process ID."""
     source_base_filename: bytes
-    """Encoded source_base_filename"""
+    """Encoded base filename of the source file."""
     hostname: bytes
-    """Encoded hostname"""
+    """Encoded host name."""
     slot: int
-    """Used Host slot"""
-    phase: DistccClientPhases
-    """Current Compilation Phase"""
+    """Used host slot."""
+    phase: DISTCC_CLIENT_PHASES
+    """Current compilation phase."""
 
-    file: Path
-    """Path to actual state file"""
+    # additional fields
+    path: Path  # equivalent functionality as: dcc_get_state_filename
+    """Path to the state file."""
 
     def __init__(self, source_file: str, hostname: str, slot: int, state_dir: Path = HOMCC_STATE_DIR):
         # size_t struct_size: DISTCC_TASK_STATE_STRUCT_SIZE
-
         # unsigned long magic: DISTCC_STATE_MAGIC
-
-        # unsigned long cpid
-        self.pid = os.getpid()
-
-        # char file[128]
-        # if not arguments.source_files:
-        #    raise ValueError("No source file provided!")
-
-        self.source_base_filename = Path(source_file).name.encode()
+        self.pid = os.getpid()  # unsigned long cpid
+        self.source_base_filename = Path(source_file).name.encode()  # char file[128]
 
         if len(self.source_base_filename) > 127:
             raise ValueError  # TODO
@@ -182,24 +186,20 @@ class ClientStateFile:
         #        "', '".join(arguments.source_files[1:]),
         #    )
 
-        # char host[128]
-        self.hostname = hostname.encode()
+        self.hostname = hostname.encode()  # char host[128]
 
         if len(self.hostname) > 127:
             raise ValueError  # TODO
 
-        # int slot
-        self.slot = slot
-
+        self.slot = slot  # int slot
         # enum dcc_phase curr_phase: unassigned
-        # self.phase: ClientState.DistccClientPhases = self.DistccClientPhases.STARTUP
-
         # struct dcc_task_state *next: DISTCC_NEXT_TASK_STATE
 
-        self.file = state_dir / f"{self.STATE_DIR_PREFIX}{self.pid}"
+        # state file path, e.g. ~/.homcc/state/binstate_12345
+        self.path = state_dir / f"{self.STATE_DIR_PREFIX}{self.pid}"
 
     @classmethod
-    def from_bytes(cls, buffer: bytes) -> ClientStateFile:
+    def from_bytes(cls, buffer: bytes) -> StateFile:
         (  # ignore constants: DISTCC_TASK_STATE_STRUCT_SIZE, DISTCC_STATE_MAGIC, 0 (void*)
             _,
             _,
@@ -237,7 +237,7 @@ class ClientStateFile:
         # fmt: on
 
     def __eq__(self, other):
-        if isinstance(other, ClientStateFile):
+        if isinstance(other, StateFile):
             return (  # ignore constants: DISTCC_TASK_STATE_STRUCT_SIZE, DISTCC_STATE_MAGIC, 0 (void*)
                 self.pid == other.pid
                 and self.source_base_filename == other.source_base_filename
@@ -247,59 +247,26 @@ class ClientStateFile:
             )
         return False
 
-    def __enter__(self) -> ClientStateFile:
+    def __enter__(self) -> StateFile:
         self.HOMCC_STATE_DIR.mkdir(exist_ok=True, parents=True)
 
         try:
-            self.file.touch(exist_ok=False)
+            self.path.touch(exist_ok=False)
         except FileExistsError as error:
-            logger.error("Could not create client state file '%s' as it does already exist!", self.file.absolute())
-            raise error from None
+            logger.error("Could not create client state file '%s' as it already exists!", self.path.absolute())
+            raise error from None  # TODO
 
         return self
 
     def __exit__(self, *_):
         try:
-            self.file.unlink()
+            self.path.unlink()
         except FileNotFoundError:
-            logger.error("File '%s' was already deleted!", self.file.absolute())
+            logger.error("File '%s' was already deleted!", self.path.absolute())
 
-    def startup(self):
-        self.phase = self.DistccClientPhases.STARTUP
-        self.file.write_bytes(bytes(self))
-
-    def blocked(self):
-        self.phase = self.DistccClientPhases.BLOCKED
-        self.file.write_bytes(bytes(self))
-        raise NotImplementedError
-
-    def connect(self):
-        self.phase = self.DistccClientPhases.CONNECT
-        self.file.write_bytes(bytes(self))
-        raise NotImplementedError
-
-    def cpp(self):
-        raise NotImplementedError("TODO")  # TODO: write proper Error message
-
-    def send(self):
-        self.phase = self.DistccClientPhases.SEND
-        self.file.write_bytes(bytes(self))
-        raise NotImplementedError
-
-    def compile(self):
-        self.phase = self.DistccClientPhases.COMPILE
-        self.file.write_bytes(bytes(self))
-        raise NotImplementedError
-
-    def receive(self):
-        self.phase = self.DistccClientPhases.RECEIVE
-        self.file.write_bytes(bytes(self))
-        raise NotImplementedError
-
-    def done(self):
-        self.phase = self.DistccClientPhases.DONE
-        self.file.write_bytes(bytes(self))
-        raise NotImplementedError
+    def set_phase(self, phase: DISTCC_CLIENT_PHASES):
+        self.phase = phase
+        self.path.write_bytes(bytes(self))
 
 
 class TCPClient:

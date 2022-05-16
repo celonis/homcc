@@ -6,7 +6,7 @@ import struct
 from pathlib import Path
 from typing import Iterator, List
 
-from homcc.client.client import ClientStateFile, HostSelector
+from homcc.client.client import StateFile, HostSelector
 from homcc.client.errors import HostsExhaustedError
 from homcc.client.parsing import Host, parse_host
 
@@ -56,43 +56,47 @@ class TestHostSelector:
             assert next(host_iter)
 
 
-class TestClientStateFile:
+class TestStateFile:
     """Tests for ClientState"""
 
     def test_constants(self):
         """sanity checks to keep interoperability with distcc monitoring"""
 
-        # size_t; unsigned long; unsigned long; char[128]; char[128]; int; enum (int); struct* (void*)
-        assert ClientStateFile.DISTCC_TASK_STATE_STRUCT_SIZE == 8 + 8 + 8 + 128 + 128 + 4 + 4 + 8 == 296
-        assert ClientStateFile.DISTCC_STATE_MAGIC == int.from_bytes(b"DIH\0", byteorder="big")  # confirm comment
+        # size_t(8); unsigned long(8); unsigned long(8); char[128]; char[128]; int(4); enum{=int}(4); struct*{=void*}(8)
+        assert StateFile.DISTCC_TASK_STATE_STRUCT_SIZE == 8 + 8 + 8 + 128 + 128 + 4 + 4 + 8
+        assert StateFile.DISTCC_STATE_MAGIC == int.from_bytes(b"DIH\0", byteorder="big")  # confirm comment
 
-        for i, phases in enumerate(ClientStateFile.DistccClientPhases):
+        for i, phases in enumerate(StateFile.DISTCC_CLIENT_PHASES):
             assert i == phases.value
 
     def test_bytes(self):
-        state_file: ClientStateFile = ClientStateFile("foo.cpp", "hostname", 42)
-        state_file.phase = ClientStateFile.DistccClientPhases.STARTUP
+        state_file: StateFile = StateFile("foo.cpp", "hostname", 42)
+        state_file.phase = StateFile.DISTCC_CLIENT_PHASES.STARTUP
 
         # packing
         packed_state: bytes = bytes(state_file)
         assert packed_state == b"".join(
             [  # call individual struct packing because it would be too tedious to test otherwise
-                struct.pack("N", ClientStateFile.DISTCC_TASK_STATE_STRUCT_SIZE),
-                struct.pack("L", ClientStateFile.DISTCC_STATE_MAGIC),
+                struct.pack("N", StateFile.DISTCC_TASK_STATE_STRUCT_SIZE),
+                struct.pack("L", StateFile.DISTCC_STATE_MAGIC),
                 struct.pack("L", state_file.pid),
                 struct.pack("128s", state_file.source_base_filename),
                 struct.pack("128s", state_file.hostname),
                 struct.pack("i", state_file.slot),
                 struct.pack("i", state_file.phase),
-                struct.pack("P", ClientStateFile.DISTCC_NEXT_TASK_STATE),
+                struct.pack("P", StateFile.DISTCC_NEXT_TASK_STATE),
             ]
         )
 
         # unpacking
-        assert state_file == ClientStateFile.from_bytes(packed_state)
+        assert state_file == StateFile.from_bytes(packed_state)
 
-    def test_startup(self, tmp_path: Path):
-        with ClientStateFile("foo.cpp", "hostname", 42, state_dir=tmp_path) as state_file:
-            # state_file.file = Path()
-            state_file.startup()
-            assert state_file.phase == ClientStateFile.DistccClientPhases.STARTUP
+    def test_set_phase(self, tmp_path: Path):
+        for phase in StateFile.DISTCC_CLIENT_PHASES:
+            with StateFile("foo.cpp", "hostname", 42, state_dir=tmp_path) as state_file:
+                assert state_file.path.exists()  # file touched
+
+                state_file.set_phase(phase)  # phase set and status written to file
+
+                assert state_file.phase == phase
+                assert StateFile.from_bytes(state_file.path.read_bytes()).phase == phase
