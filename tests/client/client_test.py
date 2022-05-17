@@ -1,14 +1,16 @@
 """ Tests for client/client.py"""
 
 import pytest
+
+import fcntl
 import struct
 
 from pathlib import Path
 from typing import Iterator, List
 
-from homcc.client.client import StateFile, HostSelector
-from homcc.client.errors import HostsExhaustedError
-from homcc.client.parsing import Host, parse_host
+from homcc.client.client import HostSelector, HostSlotsLockFile, LockFile, Slots, StateFile
+from homcc.client.errors import HostsExhaustedError, SlotsExhaustedError
+from homcc.client.parsing import Host, parse_host, ConnectionType
 
 
 class TestHostSelector:
@@ -56,8 +58,60 @@ class TestHostSelector:
             assert next(host_iter)
 
 
+class TestSlots:
+    """Tests for Slots"""
+
+    def test_slots(self):
+        for size in [1, 4, 12, 48, 96]:  # some arbitrary values
+            slots: Slots = Slots(b"\x00" * size)
+
+            assert slots == b"\x00" * size
+            assert slots == Slots.with_size(size)
+            assert slots.none_locked()
+
+            assert slots.get_unlocked_slot() is not None
+
+            for i in range(size):
+                assert not slots.is_locked(i)
+                slots.lock_slot(i)
+
+            assert slots == b"\xFF" * size
+            assert slots.all_locked()
+            assert slots.get_unlocked_slot() is None
+
+            assert slots.unlock_slot(0)
+            assert not slots.is_locked(0)
+            assert slots == b"\x00" + b"\xFF" * (size - 1)
+            assert slots.get_unlocked_slot() == 0
+
+
+class TestLockFile:
+    """Tests for LockFile"""
+
+    def test_lockfile(self, tmp_path: Path):
+        filepath: Path = tmp_path / "test"
+        filepath.touch()
+
+        with LockFile(filepath):  # first access
+            with pytest.raises(IOError):
+                with open(filepath, mode="rb+") as file:
+                    fcntl.flock(file, fcntl.LOCK_EX | fcntl.LOCK_UN)  # second access (not blocking)
+
+
+class TestHostSlotsLockFile:
+    """Tests for HostSlotsLockFile"""
+
+    def test_host_slots_lockfile(self, tmp_path: Path):
+        host: Host = Host(type=ConnectionType.LOCAL, name="localhost", limit="1")
+
+        with HostSlotsLockFile(host, tmp_path):
+            with pytest.raises(SlotsExhaustedError):
+                with HostSlotsLockFile(host, tmp_path):
+                    pass
+
+
 class TestStateFile:
-    """Tests for ClientState"""
+    """Tests for StateFile"""
 
     def test_constants(self):
         """sanity checks to keep interoperability with distcc monitoring"""
@@ -73,10 +127,9 @@ class TestStateFile:
         state_file: StateFile = StateFile("foo.cpp", "hostname", 42)
         state_file.phase = StateFile.DISTCC_CLIENT_PHASES.STARTUP
 
-        # packing
         packed_state: bytes = bytes(state_file)
         assert packed_state == b"".join(
-            [  # call individual struct packing because it would be too tedious to test otherwise
+            [  # individual struct packing because it would be too tedious to test byte equality otherwise
                 struct.pack("N", StateFile.DISTCC_TASK_STATE_STRUCT_SIZE),
                 struct.pack("L", StateFile.DISTCC_STATE_MAGIC),
                 struct.pack("L", state_file.pid),
@@ -88,15 +141,13 @@ class TestStateFile:
             ]
         )
 
-        # unpacking
         assert state_file == StateFile.from_bytes(packed_state)
 
     def test_set_phase(self, tmp_path: Path):
-        for phase in StateFile.DISTCC_CLIENT_PHASES:
-            with StateFile("foo.cpp", "hostname", 42, state_dir=tmp_path) as state_file:
-                assert state_file.path.exists()  # file touched
+        with StateFile("foo.cpp", "hostname", 42, state_dir=tmp_path) as state_file:
+            assert state_file.path.exists()  # file touched
 
+            for phase in StateFile.DISTCC_CLIENT_PHASES:
                 state_file.set_phase(phase)  # phase set and status written to file
-
                 assert state_file.phase == phase
                 assert StateFile.from_bytes(state_file.path.read_bytes()).phase == phase

@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Dict, Optional, List, Set
 
 from homcc.client.client import (
+    HostSlotsLockFile,
     HostSelector,
     TCPClient,
 )
@@ -19,6 +20,7 @@ from homcc.client.errors import (
     HostsExhaustedError,
     RemoteCompilationError,
     UnexpectedMessageTypeError,
+    SlotsExhaustedError,
 )
 from homcc.client.parsing import ClientConfig, Host
 from homcc.common.arguments import Arguments, ArgumentsExecutionResult
@@ -55,6 +57,9 @@ async def compile_remotely(arguments: Arguments, hosts: List[str], config: Clien
         try:
             return await asyncio.wait_for(compile_remotely_at(arguments, host, profile), timeout=timeout)
 
+        except SlotsExhaustedError as error:
+            logger.debug("%s", error)
+            logger.info("All remote compilation slots for host are already occupied '%s' by this machine.")
         except (ConnectionError, FailedHostNameResolutionError) as error:
             logger.warning("%s", error)
         except asyncio.TimeoutError:
@@ -72,7 +77,7 @@ async def compile_remotely_at(arguments: Arguments, host: Host, profile: Optiona
     dependency_dict: Dict[str, str] = calculate_dependency_dict(find_dependencies(arguments))
     remote_arguments: Arguments = arguments.copy().remove_local_args()
 
-    async with TCPClient(host) as client:
+    async with HostSlotsLockFile(host), TCPClient(host) as client:
         await client.send_argument_message(remote_arguments, os.getcwd(), dependency_dict, profile)
 
         # invert dependency dictionary to access dependencies via hash

@@ -127,6 +127,16 @@ class Host:
         self.port = int(port) if port is not None else None  # TCP
         self.user = user  # SSH
 
+    def __str__(self):
+        if self.type == ConnectionType.LOCAL:
+            return f"localhost_{self.limit}"
+        elif self.type == ConnectionType.TCP:
+            return f"tcp_{self.name}_{self.port}_{self.limit}"
+        elif self.type == ConnectionType.SSH:
+            return f"ssh_{self.name}_{self.limit}"
+
+        raise ValueError(f"Erroneous connection type '{self.type}'")
+
 
 @dataclass
 class ClientConfig:

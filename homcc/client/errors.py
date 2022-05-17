@@ -27,7 +27,11 @@ class NoHostsFoundError(RecoverableClientError):
 
 
 class HostParsingError(RecoverableClientError):
-    """Class to indicate an error during parsing a host"""
+    """Error class to indicate an error during parsing a host"""
+
+
+class SlotsExhaustedError(Exception):
+    """Error class to indicate that all slots of a host are exhausted."""
 
 
 class FailedHostNameResolutionError(Exception):

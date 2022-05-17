@@ -4,17 +4,25 @@ TCPClient class and related Exception classes for the homcc client
 from __future__ import annotations
 
 import asyncio
+import fcntl
 import logging
 import os
 import random
 import socket
 import struct
+import sys
 
 from enum import Enum, auto
 from pathlib import Path
-from typing import Dict, Iterable, Iterator, List, Optional
+from typing import Any, BinaryIO, Dict, Iterable, Iterator, List, Optional
 
-from homcc.client.errors import ClientParsingError, FailedHostNameResolutionError, HostsExhaustedError, HostParsingError
+from homcc.client.errors import (
+    ClientParsingError,
+    FailedHostNameResolutionError,
+    HostParsingError,
+    HostsExhaustedError,
+    SlotsExhaustedError,
+)
 from homcc.client.parsing import ConnectionType, Host, parse_host
 from homcc.common.arguments import Arguments
 from homcc.common.messages import ArgumentMessage, DependencyReplyMessage, Message
@@ -76,30 +84,144 @@ class HostSelector:
         return host
 
 
+class Slots:
+    """Class that manages locking and unlocking slots of a Host."""
+
+    _data: bytearray
+
+    def __init__(self, data: bytes):
+        self._data = bytearray(data)
+
+    def __bytes__(self) -> bytes:
+        return bytes(self._data)
+
+    def __int__(self) -> int:
+        return int.from_bytes(self._data, sys.byteorder, signed=True)
+
+    def __len__(self) -> int:
+        return len(self._data)
+
+    def __eq__(self, other: Any) -> bool:
+        if isinstance(other, Slots):
+            return self._data == other._data
+        if isinstance(other, (bytearray, bytes)):
+            return self._data == other
+        return False
+
+    @classmethod
+    def with_size(cls, size: int) -> Slots:
+        return cls(bytes(size))
+
+    def none_locked(self) -> bool:
+        return int(self) == 0
+
+    def all_locked(self) -> bool:
+        return int(self) == -1
+
+    def is_locked(self, index: int) -> bool:
+        return self._data[index] != 0
+
+    def get_unlocked_slot(self) -> Optional[int]:
+        for i, byte in enumerate(self._data):
+            if byte == 0:
+                return i
+
+        return None
+
+    def lock_slot(self, index: int) -> Slots:
+        self._data[index] = 0xFF
+        return self
+
+    def unlock_slot(self, index: int) -> Slots:
+        self._data[index] = 0x00
+        return self
+
+
 class LockFile:
-    """TODO: WRITE DOC STRING"""
+    """
+    Class to enable automatic locking of files.
+    Before accessing the file an explicit lock is set with blocking which will be cleared again before closing.
+    """
 
-    HOMCC_LOCK_DIR: Path = Path("~/.homcc/lock/")
-    """Path to the directory storing temporary homcc lock files."""
-    LOCK_PREFIX: str = "cpu"
-    """Prefix for lock filenames"""
+    filepath: Path
+    """Path to the lock file"""
+    _file: BinaryIO
+    """Opened and exclusively locked file"""
 
-    def __init__(self, host: Host, slot: int):
-        self.HOMCC_LOCK_DIR.mkdir(exist_ok=True, parents=True)
+    def __init__(self, filepath: Path):
+        self.filepath = filepath
 
-        host_type_name: str
-        if host.type == ConnectionType.LOCAL:
-            host_type_name = "localhost"
-        elif host.type == ConnectionType.TCP:
-            host_type_name = f"tcp_{host.name}_{host.port}"
-        elif host.type == ConnectionType.SSH:
-            host_type_name = f"ssh_{host.name}"
-        else:
-            raise ValueError(f"Erroneous connection type '{host.type}'")
+    def __enter__(self) -> LockFile:
+        try:
+            self._file: BinaryIO = open(self.filepath, mode="rb+", buffering=0)  # access file in unbuffered binary mode
+            fcntl.flock(self._file, fcntl.LOCK_EX)  # TODO: introduce timeout here?
+        except IOError as error:
+            logger.error("File '%s' could not be opened and locked successfully: %s", self.filepath, error)
+            raise error from None
 
-        # lock file path, e.g. ~/.homcc/lock/cpu_tcp_remotehost_3633_42
-        filename: str = f"{self.LOCK_PREFIX}_{host_type_name}_{slot}"
-        self.file: Path = self.HOMCC_LOCK_DIR / filename
+        return self
+
+    def __exit__(self, *_):
+        try:
+            fcntl.flock(self._file, fcntl.LOCK_UN)
+            self._file.close()
+        except IOError as error:
+            logger.error("File '%s' could not be unlocked and closed successfully: %s", self.filepath, error)
+            raise error from None
+
+    def read_bytes(self) -> bytes:
+        return self._file.read()
+
+    def write_bytes(self, data: bytes):
+        self._file.write(data)
+
+
+class HostSlotsLockFile:
+    """TODO: DOC STRING"""
+
+    HOMCC_LOCK_DIR: Path = Path.home() / ".homcc/lock/"
+    """Path to the directory storing temporary homcc lock files"""
+
+    filepath: Path
+    """Path to the lock file"""
+    _locked_slot: int
+
+    def __init__(self, host: Host, lock_dir: Path = HOMCC_LOCK_DIR):
+        lock_dir.mkdir(exist_ok=True, parents=True)
+
+        # filepath for host slots lock, e.g. ~/.homcc/lock/tcp_remotehost_3633_42 (type, name, port, limit)
+        self.filepath = lock_dir / str(host)
+
+        if not self.filepath.exists():
+            self.filepath.touch()
+
+            with LockFile(self.filepath) as file:
+                file.write_bytes(bytes(Slots.with_size(host.limit)))
+
+    def __enter__(self):
+        with LockFile(self.filepath) as file:
+            slots: Slots = Slots(file.read_bytes())
+            if (slot := slots.get_unlocked_slot()) is None:
+                raise SlotsExhaustedError(f"All slots in '{self.filepath}' exhausted!")
+
+            self._locked_slot = slot
+            file.write_bytes(bytes(slots.lock_slot(self._locked_slot)))
+
+    def __aenter__(self):
+        self.__enter__()
+
+    def __exit__(self, *_):
+        with LockFile(self.filepath) as file:
+            slots: Slots = Slots(file.read_bytes())
+            slots.unlock_slot(self._locked_slot)
+
+            # if slots.none_locked():
+            #    self.filepath.unlink()
+
+            file.write_bytes(bytes(slots))
+
+    def __aexit__(self, *args):
+        self.__aexit__(args)
 
 
 class StateFile:
@@ -131,7 +253,7 @@ class StateFile:
         STARTUP = 0
         BLOCKED = auto()
         CONNECT = auto()
-        CPP = auto()  # unused
+        _CPP = auto()  # unused
         SEND = auto()
         COMPILE = auto()
         RECEIVE = auto()
@@ -139,7 +261,7 @@ class StateFile:
 
     # size_t; unsigned long; unsigned long; char[128]; char[128]; int; enum (int); struct* (void*)
     DISTCC_TASK_STATE_STRUCT_FORMAT: str = "NLL128s128siiP"
-    """Format string for the dcc_task_state struct to pack and unpack bytes for the state file."""
+    """Format string for the dcc_task_state struct to pack to and unpack from bytes for the state file."""
 
     # constant dcc_task_state fields
     DISTCC_TASK_STATE_STRUCT_SIZE: int = struct.calcsize(DISTCC_TASK_STATE_STRUCT_FORMAT)
@@ -171,6 +293,8 @@ class StateFile:
     """Path to the state file."""
 
     def __init__(self, source_file: str, hostname: str, slot: int, state_dir: Path = HOMCC_STATE_DIR):
+        state_dir.mkdir(exist_ok=True, parents=True)
+
         # size_t struct_size: DISTCC_TASK_STATE_STRUCT_SIZE
         # unsigned long magic: DISTCC_STATE_MAGIC
         self.pid = os.getpid()  # unsigned long cpid
@@ -200,15 +324,15 @@ class StateFile:
 
     @classmethod
     def from_bytes(cls, buffer: bytes) -> StateFile:
-        (  # ignore constants: DISTCC_TASK_STATE_STRUCT_SIZE, DISTCC_STATE_MAGIC, 0 (void*)
-            _,
-            _,
+        (
+            _,  # DISTCC_TASK_STATE_STRUCT_SIZE
+            _,  # DISTCC_STATE_MAGIC
             pid,
             source_base_filename,
             hostname,
             slot,
             phase,
-            _,
+            _,  # DISTCC_NEXT_TASK_STATE
         ) = struct.unpack(cls.DISTCC_TASK_STATE_STRUCT_FORMAT, buffer)
 
         # trim trailing null bytes
@@ -248,8 +372,6 @@ class StateFile:
         return False
 
     def __enter__(self) -> StateFile:
-        self.HOMCC_STATE_DIR.mkdir(exist_ok=True, parents=True)
-
         try:
             self.path.touch(exist_ok=False)
         except FileExistsError as error:
