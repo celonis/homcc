@@ -96,7 +96,7 @@ class Slots:
         return bytes(self._data)
 
     def __int__(self) -> int:
-        return int.from_bytes(self._data, sys.byteorder, signed=True)
+        return int.from_bytes(self._data, sys.byteorder, signed=True)  # signedness so we can use literal -1
 
     def __len__(self) -> int:
         return len(self._data)
@@ -139,12 +139,15 @@ class Slots:
 
 class LockFile:
     """
-    Class to enable automatic locking of files.
-    Before accessing the file an explicit lock is set with blocking which will be cleared again before closing.
+    Class to enable automatic locking of a file.
+    Before accessing the file an explicit lock is set with blocking which will be cleared again before closing via the
+    context manager. Blocking on acquiring the lock is intended since we do not want to hold the lock for longer periods
+    as seen in HostSlotsLockFile.
     """
 
     filepath: Path
     """Path to the lock file"""
+
     _file: BinaryIO
     """Opened and exclusively locked file"""
 
@@ -173,18 +176,26 @@ class LockFile:
         return self._file.read()
 
     def write_bytes(self, data: bytes):
+        self._file.seek(0)
         self._file.write(data)
 
 
 class HostSlotsLockFile:
-    """TODO: DOC STRING"""
+    """
+    Class to enable automatic locking of a host slots file.
+    Before accessing the file we lock via the LockFile class. As this class blocks during acquiring the lock we do not
+    want to hold the lock for longer periods. Acquiring and releasing a slot in the locked file happens automatically
+    via the context manager.
+    """
 
     HOMCC_LOCK_DIR: Path = Path.home() / ".homcc/lock/"
     """Path to the directory storing temporary homcc lock files"""
 
     filepath: Path
     """Path to the lock file"""
+
     _locked_slot: int
+    """Slot that will be locked and released"""
 
     def __init__(self, host: Host, lock_dir: Path = HOMCC_LOCK_DIR):
         lock_dir.mkdir(exist_ok=True, parents=True)
@@ -198,7 +209,7 @@ class HostSlotsLockFile:
             with LockFile(self.filepath) as file:
                 file.write_bytes(bytes(Slots.with_size(host.limit)))
 
-    def __enter__(self):
+    def __enter__(self) -> HostSlotsLockFile:
         with LockFile(self.filepath) as file:
             slots: Slots = Slots(file.read_bytes())
             if (slot := slots.get_unlocked_slot()) is None:
@@ -207,8 +218,10 @@ class HostSlotsLockFile:
             self._locked_slot = slot
             file.write_bytes(bytes(slots.lock_slot(self._locked_slot)))
 
-    def __aenter__(self):
-        self.__enter__()
+        return self
+
+    async def __aenter__(self) -> HostSlotsLockFile:
+        return self.__enter__()
 
     def __exit__(self, *_):
         with LockFile(self.filepath) as file:
@@ -220,8 +233,8 @@ class HostSlotsLockFile:
 
             file.write_bytes(bytes(slots))
 
-    def __aexit__(self, *args):
-        self.__aexit__(args)
+    async def __aexit__(self, *args):
+        self.__exit__(args)
 
 
 class StateFile:

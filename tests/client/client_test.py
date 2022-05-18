@@ -68,12 +68,14 @@ class TestSlots:
             assert slots == b"\x00" * size
             assert slots == Slots.with_size(size)
             assert slots.none_locked()
+            assert not slots.all_locked()
 
             assert slots.get_unlocked_slot() is not None
 
             for i in range(size):
                 assert not slots.is_locked(i)
                 slots.lock_slot(i)
+                assert not slots.none_locked()
 
             assert slots == b"\xFF" * size
             assert slots.all_locked()
@@ -94,7 +96,7 @@ class TestLockFile:
 
         with LockFile(filepath):  # first access
             with pytest.raises(IOError):
-                with open(filepath, mode="rb+") as file:
+                with open(filepath, mode="rb") as file:
                     fcntl.flock(file, fcntl.LOCK_EX | fcntl.LOCK_UN)  # second access (not blocking)
 
 
@@ -103,11 +105,19 @@ class TestHostSlotsLockFile:
 
     def test_host_slots_lockfile(self, tmp_path: Path):
         host: Host = Host(type=ConnectionType.LOCAL, name="localhost", limit="1")
+        filepath: Path = tmp_path / str(host)  # will be created by HostSlotsLockFile
+        assert not filepath.exists()
 
         with HostSlotsLockFile(host, tmp_path):
+            assert filepath.exists()
+            assert filepath.read_bytes() == b"\xFF"  # one / all slots locked
+
             with pytest.raises(SlotsExhaustedError):
                 with HostSlotsLockFile(host, tmp_path):
                     pass
+
+        assert filepath.exists()
+        assert filepath.read_bytes() == b"\x00"
 
 
 class TestStateFile:
