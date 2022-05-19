@@ -9,6 +9,7 @@ from typing import List, Set
 
 from homcc.common.arguments import Arguments
 from homcc.client.compilation import (
+    DEFAULT_LOCALHOST,
     compile_locally,
     find_dependencies,
     scan_includes,
@@ -58,7 +59,7 @@ class TestCompilation:
         args: List[str] = ["g++", "-Iexample/include", "example/src/main.cpp", "example/src/foo.cpp", f"-o{output}"]
 
         assert not Path(output).exists()
-        assert compile_locally(Arguments.from_args(args)) == os.EX_OK
+        assert compile_locally(Arguments.from_args(args), DEFAULT_LOCALHOST) == os.EX_OK
         assert Path(output).exists()
 
         executable_stdout: str = subprocess.check_output([f"./{output}"], encoding="utf-8")
@@ -67,4 +68,4 @@ class TestCompilation:
         Path(output).unlink(missing_ok=True)
 
         # intentionally execute an erroneous call
-        assert compile_locally(Arguments.from_args(args + ["-OError"])) != os.EX_OK
+        assert compile_locally(Arguments.from_args(args + ["-OError"]), DEFAULT_LOCALHOST) != os.EX_OK

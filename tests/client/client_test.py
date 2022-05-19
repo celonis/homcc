@@ -21,7 +21,7 @@ class TestHostSelector:
     PARSED_HOSTS: List[Host] = [parse_host(host) for host in HOSTS]
 
     def test_host_selector(self):
-        host_selector: HostSelector = HostSelector(self.HOSTS)
+        host_selector: HostSelector = HostSelector(self.PARSED_HOSTS)
 
         host_iter: Iterator = iter(host_selector)
         for count, host in enumerate(host_iter):
@@ -33,7 +33,7 @@ class TestHostSelector:
             assert next(host_iter)
 
     def test_host_selector_with_tries(self):
-        host_selector: HostSelector = HostSelector(self.HOSTS, 3)
+        host_selector: HostSelector = HostSelector(self.PARSED_HOSTS, 3)
 
         host_iter: Iterator = iter(host_selector)
         for _ in range(3):
@@ -45,7 +45,7 @@ class TestHostSelector:
             assert next(host_iter)
 
     def test_host_selector_with_tries_not_enough_hosts(self):
-        host_selector: HostSelector = HostSelector([self.HOSTS[1]], 3)
+        host_selector: HostSelector = HostSelector([self.PARSED_HOSTS[1]], 3)
 
         assert len(host_selector) == 1
 
@@ -104,7 +104,7 @@ class TestHostSlotsLockFile:
     """Tests for HostSlotsLockFile"""
 
     def test_host_slots_lockfile(self, tmp_path: Path):
-        host: Host = Host(type=ConnectionType.LOCAL, name="localhost", limit="1")
+        host: Host = Host(type=ConnectionType.LOCAL, name="localhost", limit=1)
         filepath: Path = tmp_path / str(host)  # will be created by HostSlotsLockFile
         assert not filepath.exists()
 

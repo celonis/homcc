@@ -9,7 +9,7 @@ from argparse import ArgumentParser, Action, RawTextHelpFormatter
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional, Tuple
+from typing import Any, Dict, Iterable, List, Optional, Tuple, Union
 
 from homcc.common.arguments import Arguments
 from homcc.common.compression import Compression
@@ -30,9 +30,6 @@ class ConnectionType(str, Enum):
     LOCAL = "localhost"
     TCP = "TCP"
     SSH = "SSH"
-
-    def is_local(self) -> bool:
-        return self == ConnectionType.LOCAL
 
 
 class ShowAndExitAction(ABC, Action):
@@ -115,9 +112,9 @@ class Host:
         *,
         type: ConnectionType,  # pylint: disable=redefined-builtin
         name: str,
-        limit: Optional[str] = None,
+        limit: Union[int, str] = None,
         compression: Optional[str] = None,
-        port: Optional[str] = None,
+        port: Union[int, str] = None,
         user: Optional[str] = None,
     ):
         self.type = ConnectionType.LOCAL if name == ConnectionType.LOCAL else type
@@ -137,6 +134,9 @@ class Host:
 
         raise ValueError(f"Erroneous connection type '{self.type}'")
 
+    def is_local(self) -> bool:
+        return self.type == ConnectionType.LOCAL
+
 
 @dataclass
 class ClientConfig:
@@ -155,7 +155,7 @@ class ClientConfig:
         compiler: Optional[str] = None,
         compression: Optional[str] = None,
         profile: Optional[str] = None,
-        timeout: Optional[str] = None,
+        timeout: Union[float, str] = None,
         log_level: Optional[str] = None,
         verbose: Optional[str] = None,
     ):

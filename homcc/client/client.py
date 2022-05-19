@@ -14,16 +14,15 @@ import sys
 
 from enum import Enum, auto
 from pathlib import Path
-from typing import Any, BinaryIO, Dict, Iterable, Iterator, List, Optional
+from typing import Any, BinaryIO, Dict, Iterator, List, Optional
 
 from homcc.client.errors import (
     ClientParsingError,
     FailedHostNameResolutionError,
-    HostParsingError,
     HostsExhaustedError,
     SlotsExhaustedError,
 )
-from homcc.client.parsing import ConnectionType, Host, parse_host
+from homcc.client.parsing import ConnectionType, Host
 from homcc.common.arguments import Arguments
 from homcc.common.messages import ArgumentMessage, DependencyReplyMessage, Message
 
@@ -38,11 +37,11 @@ class HostSelector:
     is not provided, a host will be randomly selected until all hosts are exhausted.
     """
 
-    def __init__(self, hosts: List[str], tries: Optional[int] = None):
+    def __init__(self, hosts: List[Host], tries: Optional[int] = None):
         if tries is not None and tries <= 0:
             raise ValueError(f"Amount of tries must be greater than 0, but was {tries}")
 
-        self._hosts: List[Host] = [host for host in self._parsed_hosts(hosts) if host.limit > 0]
+        self._hosts: List[Host] = [host for host in hosts if host.limit > 0]
         self._limits: List[int] = [host.limit for host in self._hosts]
 
         self._count: int = 0
@@ -58,14 +57,6 @@ class HostSelector:
         if self._hosts:
             return self._get_random_host()
         raise StopIteration
-
-    @staticmethod
-    def _parsed_hosts(hosts: List[str]) -> Iterable[Host]:
-        for host in hosts:
-            try:
-                yield parse_host(host)
-            except HostParsingError as error:
-                logger.warning("%s", error)
 
     def _get_random_host(self) -> Host:
         """return a random host where hosts with higher limits are more likely to be selected"""

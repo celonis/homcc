@@ -6,6 +6,7 @@ import logging
 import os
 import subprocess
 import sys
+import time
 
 from pathlib import Path
 from typing import Dict, Optional, List, Set
@@ -22,7 +23,7 @@ from homcc.client.errors import (
     UnexpectedMessageTypeError,
     SlotsExhaustedError,
 )
-from homcc.client.parsing import ClientConfig, Host
+from homcc.client.parsing import ConnectionType, ClientConfig, Host
 from homcc.common.arguments import Arguments, ArgumentsExecutionResult
 from homcc.common.hashing import hash_file_with_path
 from homcc.common.messages import (
@@ -36,17 +37,23 @@ from homcc.common.messages import (
 logger = logging.getLogger(__name__)
 
 DEFAULT_COMPILATION_REQUEST_TIMEOUT: float = 180
+DEFAULT_LOCALHOST_LIMIT: int = (
+    len(os.sched_getaffinity(0))  # number of available CPUs for this process
+    or os.cpu_count()  # total number of physical CPUs on the machine
+    or 2  # fallback value to enable minor level of concurrency
+)
+DEFAULT_LOCALHOST: Host = Host(type=ConnectionType.LOCAL, name="localhost", limit=DEFAULT_LOCALHOST_LIMIT)
 
 
-async def compile_remotely(arguments: Arguments, hosts: List[str], config: ClientConfig) -> int:
+async def compile_remotely(arguments: Arguments, hosts: List[Host], config: ClientConfig) -> int:
     """main function to control remote compilation"""
 
     # try to connect to 3 different hosts before falling back to local compilation
     for host in HostSelector(hosts, 3):
         # execute compilation requests for localhost directly
-        if host.type.is_local():
+        if host.is_local():
             logger.info("Compiling locally:\n%s", arguments)
-            return compile_locally(arguments)
+            return compile_locally(arguments, host)
 
         timeout: float = config.timeout or DEFAULT_COMPILATION_REQUEST_TIMEOUT
         profile: Optional[str] = config.profile
@@ -64,10 +71,11 @@ async def compile_remotely(arguments: Arguments, hosts: List[str], config: Clien
             logger.warning("%s", error)
         except asyncio.TimeoutError:
             logger.warning(
-                "Compilation request for ['%s'] at host '%s' timed out.",
-                "', '".join(arguments.source_files),
+                "Compilation request %s at host '%s' timed out.",
+                str(arguments),
                 str(host),
             )
+            break
 
     raise HostsExhaustedError(f"All hosts {hosts} are exhausted.")
 
@@ -136,19 +144,26 @@ async def compile_remotely_at(arguments: Arguments, host: Host, profile: Optiona
     return os.EX_OK
 
 
-def compile_locally(arguments: Arguments) -> int:
+def compile_locally(arguments: Arguments, localhost: Host) -> int:
     """execute local compilation"""
-    try:
-        # execute compile command, e.g.: "g++ foo.cpp -o foo"
-        result: ArgumentsExecutionResult = arguments.execute(check=True)
-    except subprocess.CalledProcessError as error:
-        logger.error("Compiler error:\n%s", error.stderr)
-        return error.returncode
 
-    if result.stdout:
-        logger.debug("Compiler result:\n%s", result.stdout)
+    while True:
+        try:
+            with HostSlotsLockFile(localhost):
+                try:
+                    # execute compile command, e.g.: "g++ foo.cpp -o foo"
+                    result: ArgumentsExecutionResult = arguments.execute(check=True)
+                except subprocess.CalledProcessError as error:
+                    logger.error("Compiler error:\n%s", error.stderr)
+                    return error.returncode
 
-    return result.return_code
+                if result.stdout:
+                    logger.debug("Compiler result:\n%s", result.stdout)
+
+                return result.return_code
+        except SlotsExhaustedError as error:
+            logger.debug("%s", error)
+            time.sleep(0.5)
 
 
 def scan_includes(arguments: Arguments) -> List[str]:
