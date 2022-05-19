@@ -78,7 +78,7 @@ def main():
 
         sys.exit(os.EX_OK)
 
-    # HOST; get host from cli or load hosts from env var or file
+    # HOST; get host from cli parameter or load hosts from $HOMCC_HOSTS env var or hosts file
     host: Optional[str] = homcc_args_dict["host"]
     hosts: List[str] = [host] if host else load_hosts()
 

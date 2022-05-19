@@ -108,16 +108,15 @@ class TestHostSlotsLockFile:
         filepath: Path = tmp_path / str(host)  # will be created by HostSlotsLockFile
         assert not filepath.exists()
 
-        with HostSlotsLockFile(host, tmp_path):
+        with HostSlotsLockFile(host, tmp_path):  # locking first and only lock
             assert filepath.exists()
-            assert filepath.read_bytes() == b"\xFF"  # one / all slots locked
+            assert filepath.read_bytes() == b"\xFF"
 
             with pytest.raises(SlotsExhaustedError):
-                with HostSlotsLockFile(host, tmp_path):
+                with HostSlotsLockFile(host, tmp_path):  # trying to lock the same slot
                     pass
 
-        assert filepath.exists()
-        assert filepath.read_bytes() == b"\x00"
+        assert not filepath.exists()
 
 
 class TestStateFile:
@@ -155,9 +154,9 @@ class TestStateFile:
 
     def test_set_phase(self, tmp_path: Path):
         with StateFile("foo.cpp", "hostname", 42, state_dir=tmp_path) as state_file:
-            assert state_file.path.exists()  # file touched
+            assert state_file.filepath.exists()  # file touched
 
             for phase in StateFile.DISTCC_CLIENT_PHASES:
                 state_file.set_phase(phase)  # phase set and status written to file
                 assert state_file.phase == phase
-                assert StateFile.from_bytes(state_file.path.read_bytes()).phase == phase
+                assert StateFile.from_bytes(state_file.filepath.read_bytes()).phase == phase

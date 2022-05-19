@@ -59,14 +59,14 @@ async def compile_remotely(arguments: Arguments, hosts: List[str], config: Clien
 
         except SlotsExhaustedError as error:
             logger.debug("%s", error)
-            logger.info("All remote compilation slots for host are already occupied '%s' by this machine.")
+            logger.info("All remote compilation slots for host '%s' are already occupied by this machine.", str(host))
         except (ConnectionError, FailedHostNameResolutionError) as error:
             logger.warning("%s", error)
         except asyncio.TimeoutError:
             logger.warning(
                 "Compilation request for ['%s'] at host '%s' timed out.",
                 "', '".join(arguments.source_files),
-                host.name,
+                str(host),
             )
 
     raise HostsExhaustedError(f"All hosts {hosts} are exhausted.")
@@ -129,7 +129,7 @@ async def compile_remotely_at(arguments: Arguments, host: Host, profile: Optiona
 
         for object_file in host_response.get_object_files():
             logger.debug("Deleting file %s", object_file.file_name)
-            Path(object_file.file_name).unlink()
+            Path(object_file.file_name).unlink(missing_ok=True)
 
         return linker_return_code
 

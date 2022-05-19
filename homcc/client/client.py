@@ -87,6 +87,8 @@ class HostSelector:
 class Slots:
     """Class that manages locking and unlocking slots of a Host."""
 
+    __slots__ = ("_data",)
+
     _data: bytearray
 
     def __init__(self, data: bytes):
@@ -96,7 +98,8 @@ class Slots:
         return bytes(self._data)
 
     def __int__(self) -> int:
-        return int.from_bytes(self._data, sys.byteorder, signed=True)  # signedness so we can use literal -1
+        # signedness so we can conveniently use literal -1 instead of b"0xFF" * len(self)
+        return int.from_bytes(self._data, sys.byteorder, signed=True)
 
     def __len__(self) -> int:
         return len(self._data)
@@ -110,6 +113,7 @@ class Slots:
 
     @classmethod
     def with_size(cls, size: int) -> Slots:
+        """Return unlocked Slots of specified size."""
         return cls(bytes(size))
 
     def none_locked(self) -> bool:
@@ -144,6 +148,8 @@ class LockFile:
     context manager. Blocking on acquiring the lock is intended since we do not want to hold the lock for longer periods
     as seen in HostSlotsLockFile.
     """
+
+    __slots__ = "filepath", "_file"
 
     filepath: Path
     """Path to the lock file"""
@@ -188,6 +194,8 @@ class HostSlotsLockFile:
     via the context manager.
     """
 
+    __slots__ = "filepath", "_locked_slot"
+
     HOMCC_LOCK_DIR: Path = Path.home() / ".homcc/lock/"
     """Path to the directory storing temporary homcc lock files"""
 
@@ -228,10 +236,11 @@ class HostSlotsLockFile:
             slots: Slots = Slots(file.read_bytes())
             slots.unlock_slot(self._locked_slot)
 
-            # if slots.none_locked():
-            #    self.filepath.unlink()
-
-            file.write_bytes(bytes(slots))
+            if slots.none_locked():
+                logger.debug("Deleted empy host slot file '%s'", self.filepath.absolute())
+                self.filepath.unlink()
+            else:
+                file.write_bytes(bytes(slots))
 
     async def __aexit__(self, *args):
         self.__exit__(args)
@@ -272,6 +281,8 @@ class StateFile:
         RECEIVE = auto()
         DONE = auto()
 
+    __slots__ = "pid", "source_base_filename", "hostname", "slot", "phase", "filepath"
+
     # size_t; unsigned long; unsigned long; char[128]; char[128]; int; enum (int); struct* (void*)
     DISTCC_TASK_STATE_STRUCT_FORMAT: str = "NLL128s128siiP"
     """Format string for the dcc_task_state struct to pack to and unpack from bytes for the state file."""
@@ -302,7 +313,7 @@ class StateFile:
     """Current compilation phase."""
 
     # additional fields
-    path: Path  # equivalent functionality as: dcc_get_state_filename
+    filepath: Path  # equivalent functionality as: dcc_get_state_filename
     """Path to the state file."""
 
     def __init__(self, source_file: str, hostname: str, slot: int, state_dir: Path = HOMCC_STATE_DIR):
@@ -333,7 +344,7 @@ class StateFile:
         # struct dcc_task_state *next: DISTCC_NEXT_TASK_STATE
 
         # state file path, e.g. ~/.homcc/state/binstate_12345
-        self.path = state_dir / f"{self.STATE_DIR_PREFIX}{self.pid}"
+        self.filepath = state_dir / f"{self.STATE_DIR_PREFIX}{self.pid}"
 
     @classmethod
     def from_bytes(cls, buffer: bytes) -> StateFile:
@@ -386,22 +397,22 @@ class StateFile:
 
     def __enter__(self) -> StateFile:
         try:
-            self.path.touch(exist_ok=False)
+            self.filepath.touch(exist_ok=False)
         except FileExistsError as error:
-            logger.error("Could not create client state file '%s' as it already exists!", self.path.absolute())
+            logger.error("Could not create client state file '%s' as it already exists!", self.filepath.absolute())
             raise error from None  # TODO
 
         return self
 
     def __exit__(self, *_):
         try:
-            self.path.unlink()
+            self.filepath.unlink()
         except FileNotFoundError:
-            logger.error("File '%s' was already deleted!", self.path.absolute())
+            logger.error("File '%s' was already deleted!", self.filepath.absolute())
 
     def set_phase(self, phase: DISTCC_CLIENT_PHASES):
         self.phase = phase
-        self.path.write_bytes(bytes(self))
+        self.filepath.write_bytes(bytes(self))
 
 
 class TCPClient:
