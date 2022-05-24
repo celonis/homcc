@@ -30,7 +30,6 @@ from homcc.client.parsing import (  # pylint: disable=wrong-import-position
     load_hosts,
     parse_cli_args,
     parse_config,
-    parse_host,
 )
 from homcc.common.logging import (  # pylint: disable=wrong-import-position
     Formatter,
@@ -89,20 +88,27 @@ def main():
     hosts: List[Host] = []
     localhost: Host = DEFAULT_LOCALHOST
 
-    if (host := homcc_args_dict["host"]) is not None:
-        hosts = [parse_host(host)]
+    if (host_str := homcc_args_dict["host"]) is not None:
+        hosts = [Host.from_str(host_str)]
     else:
-        for host in load_hosts():
+        has_local: bool = False
+
+        for host_str in load_hosts():
             try:
-                hosts.append(parse_host(host))
+                host: Host = Host.from_str(host_str)
             except HostParsingError as error:
                 logger.warning("%s", error)
+                continue
 
-        # if no explicit localhost/LIMIT host is provided, add DEFAULT_LOCALHOST host to limit the amount of local
-        # compilation jobs via the resulting slots of the localhost_LIMIT HostSlotsLockFile
-        if (host := next((host for host in hosts if host.is_local()), None)) is not None:
-            localhost = host
-        else:
+            if host.is_local():
+                has_local = True
+                localhost = host
+
+            hosts.append(host)
+
+        # if no explicit localhost/LIMIT host is provided, add DEFAULT_LOCALHOST host
+        # this will limit the amount of local compilation jobs via the resulting "localhost_LIMIT" HostSlotsLockFile
+        if not has_local:
             hosts.append(localhost)
 
     # PROFILE; if --no-profile is specified do not use any specified profiles from cli or config file

@@ -23,7 +23,7 @@ from homcc.client.errors import (
     UnexpectedMessageTypeError,
     SlotsExhaustedError,
 )
-from homcc.client.parsing import ConnectionType, ClientConfig, Host
+from homcc.client.parsing import ClientConfig, Host
 from homcc.common.arguments import Arguments, ArgumentsExecutionResult
 from homcc.common.hashing import hash_file_with_path
 from homcc.common.messages import (
@@ -42,7 +42,7 @@ DEFAULT_LOCALHOST_LIMIT: int = (
     or os.cpu_count()  # total number of physical CPUs on the machine
     or 2  # fallback value to enable minor level of concurrency
 )
-DEFAULT_LOCALHOST: Host = Host(type=ConnectionType.LOCAL, name="localhost", limit=DEFAULT_LOCALHOST_LIMIT)
+DEFAULT_LOCALHOST: Host = Host.localhost_with_limit(DEFAULT_LOCALHOST_LIMIT)
 
 
 async def compile_remotely(arguments: Arguments, hosts: List[Host], config: ClientConfig) -> int:
@@ -65,8 +65,8 @@ async def compile_remotely(arguments: Arguments, hosts: List[Host], config: Clie
             return await asyncio.wait_for(compile_remotely_at(arguments, host, profile), timeout=timeout)
 
         except SlotsExhaustedError as error:
-            logger.debug("%s", error)
-            logger.info("All remote compilation slots for host '%s' are already occupied by this machine.", str(host))
+            logger.debug("%s", error)  # TODO: remove?
+            logger.info("All compilation slots for host '%s' are occupied.", str(host))
         except (ConnectionError, FailedHostNameResolutionError) as error:
             logger.warning("%s", error)
         except asyncio.TimeoutError:
@@ -77,15 +77,16 @@ async def compile_remotely(arguments: Arguments, hosts: List[Host], config: Clie
             )
             break
 
-    raise HostsExhaustedError(f"All hosts {hosts} are exhausted.")
+    raise HostsExhaustedError(f"All hosts '{', '.join(str(host) for host in hosts)}' are exhausted.")
 
 
 async def compile_remotely_at(arguments: Arguments, host: Host, profile: Optional[str]) -> int:
     """main function for the communication between client and a remote compilation host"""
-    dependency_dict: Dict[str, str] = calculate_dependency_dict(find_dependencies(arguments))
-    remote_arguments: Arguments = arguments.copy().remove_local_args()
 
     async with HostSlotsLockFile(host), TCPClient(host) as client:
+        dependency_dict: Dict[str, str] = calculate_dependency_dict(find_dependencies(arguments))
+        remote_arguments: Arguments = arguments.copy().remove_local_args()
+
         await client.send_argument_message(remote_arguments, os.getcwd(), dependency_dict, profile)
 
         # invert dependency dictionary to access dependencies via hash
@@ -98,8 +99,12 @@ async def compile_remotely_at(arguments: Arguments, host: Host, profile: Optiona
                 f"Host {client.host}:{client.port} refused the connection:\n{host_response.info}!"
             )
 
+        count: int = 0
+
         # provide requested dependencies
         while isinstance(host_response, DependencyRequestMessage):
+            count += 1
+            logger.debug("COUNT:\t%i", count)
             requested_dependency: str = dependency_dict[host_response.get_sha1sum()]
             await client.send_dependency_reply_message(requested_dependency)
 

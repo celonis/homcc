@@ -153,8 +153,9 @@ class LockFile:
 
     def __enter__(self) -> LockFile:
         try:
+            logger.debug("Locking file '%s'.", self.filepath)
             self._file: BinaryIO = open(self.filepath, mode="rb+", buffering=0)  # access file in unbuffered binary mode
-            fcntl.flock(self._file, fcntl.LOCK_EX)  # TODO: introduce timeout here?
+            fcntl.flock(self._file, fcntl.LOCK_EX)
         except IOError as error:
             logger.error("File '%s' could not be opened and locked successfully: %s", self.filepath, error)
             raise error from None
@@ -163,6 +164,7 @@ class LockFile:
 
     def __exit__(self, *_):
         try:
+            logger.debug("Unlocking file '%s'.", self.filepath)
             fcntl.flock(self._file, fcntl.LOCK_UN)
             self._file.close()
         except IOError as error:
@@ -203,6 +205,7 @@ class HostSlotsLockFile:
         self.filepath = lock_dir / str(host)
 
         if not self.filepath.exists():
+            logger.debug("Create file '%s'.", self.filepath)
             self.filepath.touch()
 
             with LockFile(self.filepath) as file:
@@ -226,12 +229,11 @@ class HostSlotsLockFile:
         with LockFile(self.filepath) as file:
             slots: Slots = Slots(file.read_bytes())
             slots.unlock_slot(self._locked_slot)
+            file.write_bytes(bytes(slots))
 
-            if slots.none_locked():
-                logger.debug("Deleted empy host slot file '%s'", self.filepath.absolute())
-                self.filepath.unlink()
-            else:
-                file.write_bytes(bytes(slots))
+        if slots.none_locked():
+            logger.debug("Delete empty host slot file '%s'", self.filepath.absolute())
+            self.filepath.unlink()
 
     async def __aexit__(self, *args):
         self.__exit__(args)

@@ -1,4 +1,6 @@
 """Parsing related functionality regarding the homcc client"""
+from __future__ import annotations
+
 import logging
 import os
 import re
@@ -90,7 +92,7 @@ class ShowConcurrencyLevel(ShowAndExitAction):
 
         concurrency_level: int = 0
         for host in hosts:
-            concurrency_level += parse_host(host).limit or 0
+            concurrency_level += Host.from_str(host).limit or 0
 
         print(concurrency_level)
         sys.exit(os.EX_OK)
@@ -133,6 +135,14 @@ class Host:
             return f"ssh_{self.name}_{self.limit}"
 
         raise ValueError(f"Erroneous connection type '{self.type}'")
+
+    @classmethod
+    def from_str(cls, host_str: str) -> Host:
+        return parse_host(host_str)
+
+    @classmethod
+    def localhost_with_limit(cls, limit: int) -> Host:
+        return Host(type=ConnectionType.LOCAL, name="localhost", limit=limit)
 
     def is_local(self) -> bool:
         return self.type == ConnectionType.LOCAL
@@ -271,10 +281,10 @@ def parse_host(host: str) -> Host:
     - Compression
     - ConnectionType:
         - TCP:
-            - HOST
+            - NAME
             - [PORT]
         - SSH:
-            - HOST
+            - NAME
             - [USER]
     - Limit
     """
@@ -286,16 +296,16 @@ def parse_host(host: str) -> Host:
     host_dict: Dict[str, str] = {}
     connection_type: ConnectionType
 
-    # trim trailing comment: HOST#COMMENT
+    # trim trailing comment: HOST_FORMAT#COMMENT
     if (host_comment_match := re.match(r"^(\S+)#(\S+)$", host)) is not None:
         host, _ = host_comment_match.groups()
 
-    # use trailing compression info: HOST,COMPRESSION
+    # use trailing compression info: HOST_FORMAT,COMPRESSION
     if (host_compression_match := re.match(r"^(\S+),(\S+)$", host)) is not None:
         host, compression = host_compression_match.groups()
         host_dict["compression"] = compression
 
-    # HOST:PORT/LIMIT
+    # NAME:PORT/LIMIT
     if (host_port_limit_match := re.match(r"^(([\w./]+)|\[(\S+)]):(\d+)(/(\d+))?$", host)) is not None:
         _, name_or_ipv4, ipv6, port, _, limit = host_port_limit_match.groups()
         host = name_or_ipv4 or ipv6
@@ -304,18 +314,18 @@ def parse_host(host: str) -> Host:
         host_dict["limit"] = limit
         return Host(type=connection_type, name=host, **host_dict)
 
-    # USER@HOST
+    # USER@HOST_FORMAT
     elif (user_at_host_match := re.match(r"^(\w+)@([\w.:/]+)$", host)) is not None:
         user, host = user_at_host_match.groups()
         connection_type = ConnectionType.SSH
         host_dict["user"] = user
 
-    # @HOST
+    # @HOST_FORMAT
     elif (at_host_match := re.match(r"^@([\w.:/]+)$", host)) is not None:
         host = at_host_match.group(1)
         connection_type = ConnectionType.SSH
 
-    # HOST
+    # HOST_FORMAT
     elif re.match(r"^([\w.:/]+)$", host) is not None:
         connection_type = ConnectionType.TCP
 
