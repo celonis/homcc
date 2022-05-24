@@ -2,6 +2,7 @@
 import pytest
 
 import os
+import shutil
 import subprocess
 
 from pathlib import Path
@@ -38,7 +39,7 @@ class TestCompilation:
         assert not is_sendable_dependency("/usr/bin/../lib/gcc/x86_64-linux-gnu/9/../../../../include/c++/9/cstdlib")
 
     @staticmethod
-    def find_dependencies_without_class_impl_with_compiler(compiler: str):
+    def find_dependencies_with_compiler(compiler: str):
         args: List[str] = [compiler, "-Iexample/include", "example/src/main.cpp"]
         dependencies: Set[str] = find_dependencies(Arguments.from_args(args))
 
@@ -46,14 +47,16 @@ class TestCompilation:
         assert "example/src/main.cpp" in dependencies
         assert "example/include/foo.h" in dependencies
 
-    def test_find_dependencies_without_class_impl_gplusplus(self):
-        self.find_dependencies_without_class_impl_with_compiler("g++")
+    @pytest.mark.skipif(shutil.which("g++") is None, reason="g++ is not installed")
+    def test_find_dependencies_gplusplus(self):
+        self.find_dependencies_with_compiler("g++")
 
-    def test_find_dependencies_without_class_impl_clangplusplus(self):
-        self.find_dependencies_without_class_impl_with_compiler("clang++")
+    @pytest.mark.skipif(shutil.which("clang++") is None, reason="clang++ is not installed")
+    def test_find_dependencies_clangplusplus(self):
+        self.find_dependencies_with_compiler("clang++")
 
     @staticmethod
-    def find_dependencies_with_class_impl_with_compiler(compiler: str):
+    def find_dependencies_class_impl_with_compiler(compiler: str):
         args: List[str] = [compiler, "-Iexample/include", "example/src/main.cpp", "example/src/foo.cpp"]
         dependencies: Set[str] = find_dependencies(Arguments.from_args(args))
 
@@ -62,11 +65,13 @@ class TestCompilation:
         assert "example/src/foo.cpp" in dependencies
         assert "example/include/foo.h" in dependencies
 
+    @pytest.mark.skipif(shutil.which("g++") is None, reason="g++ is not installed")
     def find_dependencies_with_class_impl_gplusplus(self):
-        self.find_dependencies_with_class_impl_with_compiler("g++")
+        self.find_dependencies_class_impl_with_compiler("g++")
 
+    @pytest.mark.skipif(shutil.which("clang++") is None, reason="clang++ is not installed")
     def find_dependencies_with_class_impl_clangplusplus(self):
-        self.find_dependencies_with_class_impl_with_compiler("clang++")
+        self.find_dependencies_class_impl_with_compiler("clang++")
 
     def test_find_dependencies_error(self):
         args: List[str] = ["g++", "-Iexample/include", "example/src/main.cpp", "example/src/foo.cpp", "-OError"]
