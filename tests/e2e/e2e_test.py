@@ -76,7 +76,7 @@ class TestEndToEnd:
             "-Iexample/include",
             "example/src/foo.cpp",
             "example/src/main.cpp",
-            f"-o{TestEndToEnd.OUTPUT}",
+            f"-o{self.OUTPUT}",
         ]
         with self.start_server(unused_tcp_port) as server_process:
             result = self.start_client(args, unused_tcp_port, compression, profile)
@@ -100,7 +100,7 @@ class TestEndToEnd:
             "-Iexample/include",
             "example/src/foo.cpp",
             "example/src/main.cpp",
-            f"-o{TestEndToEnd.OUTPUT}",
+            f"-o{self.OUTPUT}",
             "-c",
         ]
 
@@ -113,6 +113,37 @@ class TestEndToEnd:
 
             server_process.kill()
 
+    def cpp_end_to_end_preprocessor_side_effects(
+        self,
+        compiler: str,
+        unused_tcp_port: int,
+        compression: Compression = NoCompression(),
+        profile: Optional[str] = None,
+    ):
+        args: List[str] = [
+            compiler,
+            "-Iexample/include",
+            "-MD",
+            "-MT",
+            "example/src/main.cpp.o",
+            "-MF",
+            "example/src/main.cpp.o.d",
+            "-o",
+            "example/src/main.cpp.o",
+            "-c",
+            "example/src/main.cpp",
+        ]
+
+        with self.start_server(unused_tcp_port) as server_process:
+            result = self.start_client(args, unused_tcp_port, compression, profile)
+
+            self.check_remote_compilation_assertions(result)
+
+            assert os.path.exists("example/src/main.cpp.o")
+            assert os.path.exists("example/src/main.cpp.o.d")
+
+            server_process.kill()
+
     def cpp_end_to_end_linking_only(
         self,
         compiler: str,
@@ -122,7 +153,7 @@ class TestEndToEnd:
     ):
         main_args: List[str] = [compiler, "-Iexample/include", "example/src/main.cpp", "-c"]
         foo_args: List[str] = [compiler, "-Iexample/include", "example/src/foo.cpp", "-c"]
-        linking_args: List[str] = [compiler, "main.o", "foo.o", f"-o{TestEndToEnd.OUTPUT}"]
+        linking_args: List[str] = [compiler, "main.o", "foo.o", f"-o{self.OUTPUT}"]
 
         with self.start_server(unused_tcp_port) as server_process:
             main_result = self.start_client(main_args, unused_tcp_port, compression, profile)
@@ -169,6 +200,11 @@ class TestEndToEnd:
 
     @pytest.mark.timeout(20)
     @pytest.mark.skipif(shutil.which("g++") is None, reason="g++ is not installed")
+    def test_cpp_end_to_end_gplusplus_preprocessor_side_effects(self, unused_tcp_port: int):
+        self.cpp_end_to_end_preprocessor_side_effects("g++", unused_tcp_port)
+
+    @pytest.mark.timeout(20)
+    @pytest.mark.skipif(shutil.which("g++") is None, reason="g++ is not installed")
     def test_end_to_end_gplusplus_linking_only(self, unused_tcp_port: int):
         self.cpp_end_to_end_linking_only("g++", unused_tcp_port)
 
@@ -181,6 +217,11 @@ class TestEndToEnd:
     @pytest.mark.skipif(shutil.which("clang++") is None, reason="clang++ is not installed")
     def test_end_to_end_clangplusplus_no_linking(self, unused_tcp_port: int):
         self.cpp_end_to_end_no_linking("clang++", unused_tcp_port)
+
+    @pytest.mark.timeout(20)
+    @pytest.mark.skipif(shutil.which("clang++") is None, reason="clang++ is not installed")
+    def test_cpp_end_to_end_clangplusplus_preprocessor_side_effects(self, unused_tcp_port: int):
+        self.cpp_end_to_end_preprocessor_side_effects("clang++", unused_tcp_port)
 
     @pytest.mark.timeout(20)
     @pytest.mark.skipif(shutil.which("clang++") is None, reason="clang++ is not installed")

@@ -145,8 +145,8 @@ def scan_includes(arguments: Arguments) -> List[str]:
 
 
 def is_sendable_dependency(dependency: str) -> bool:
-    # filter preprocessor output target and line breaks
-    if dependency in [f"{Arguments.PREPROCESSOR_TARGET}:", "\\"]:
+    # filter preprocessor output target specified by -MT and line breaks
+    if dependency.endswith((":", "\\")):
         return False
 
     # normalize paths, e.g. convert /usr/bin/../lib/ to /usr/lib/
@@ -160,18 +160,32 @@ def is_sendable_dependency(dependency: str) -> bool:
 
 def find_dependencies(arguments: Arguments) -> Set[str]:
     """get unique set of dependencies by calling the preprocessor and filtering the result"""
+    filename, arguments = arguments.dependency_finding()
     try:
         # execute preprocessor command, e.g.: "g++ foo.cpp -M -MT $(homcc)"
-        result: ArgumentsExecutionResult = arguments.dependency_finding().execute(check=True)
+        result: ArgumentsExecutionResult = arguments.execute(check=True)
     except subprocess.CalledProcessError as error:
         logger.error("Preprocessor error:\n%s", error.stderr)
         sys.exit(error.returncode)
 
-    if result.stdout:
-        logger.debug("Preprocessor result:\n%s", result.stdout)
+    # prefer reading from the dependency file if it was created as a side effect
+    dependency_result: str
+
+    logger.critical(filename)
+
+    if filename is not None and filename != "-":
+        logger.critical("Reading dependencies from file '%s'", filename)
+        dependency_result = Path(filename).read_text(encoding="utf-8")
+    elif result.stdout is not None:
+        dependency_result = result.stdout
+    else:
+        logger.critical("UNREACHABLE!!!")
+        dependency_result = "UNREACHABLE!!!"
+
+    logger.debug("Preprocessor result:\n%s", dependency_result)
 
     # create unique set of dependencies by filtering the preprocessor result for meaningfully sendable dependencies
-    return set(filter(is_sendable_dependency, result.stdout.split()))
+    return set(filter(is_sendable_dependency, dependency_result.split()))
 
 
 def calculate_dependency_dict(dependencies: Set[str]) -> Dict[str, str]:

@@ -9,9 +9,28 @@ import subprocess
 
 from dataclasses import dataclass
 from functools import cached_property
-from typing import Any, Iterator, List, Optional
+from pathlib import Path
+from typing import Any, Iterator, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
+
+
+# TODO: remove this
+@dataclass
+class SplitArguments:
+    """
+    Result of the Arguments.split function. Each arguments field fulfills a different objective:
+    - compilation: required arguments that lead to successful remote compilation without side effects
+    - preprocessor: required arguments to find the necessary dependencies for the remote compilation server, this may
+    imply intended local side effects
+    """
+
+    # - preprocessor_user_only: optional arguments that differ from the above preprocessor arguments as they only
+    #   produce user dependencies, only necessary to produce local side effects
+
+    compilation: Arguments
+    preprocessor: Arguments
+    # preprocessor_user_only: Optional[Arguments]
 
 
 @dataclass
@@ -55,7 +74,7 @@ class Arguments:
         """
 
         # preprocessor args
-        PREPROCESSOR_ARGS: List[str] = ["-MD", "-MMD", "-MG", "-MP"]
+        PREPROCESSOR_ARGS: List[str] = ["-MD", "-MG", "-MP"]
         PREPROCESSOR_OPTION_PREFIX_ARGS: List[str] = ["-MF", "-MT", "-MQ"]
 
         # linking args
@@ -293,6 +312,20 @@ class Arguments:
         return output
 
     @cached_property
+    def dependency_output(self) -> Optional[str]:
+        """if present, return the last explicitly specified dependency output target"""
+        dependency_output: Optional[str] = None
+
+        it: Iterator[str] = iter(self.args)
+        for arg in it:
+            if arg.startswith("-MF"):
+                if arg == "-MF":  # dependency output argument with output target following: e.g.: -MF out
+                    dependency_output = next(it)  # skip dependency output file target
+                else:  # compact dependency output argument: e.g.: -MFout
+                    dependency_output = arg[3:]
+        return dependency_output
+
+    @cached_property
     def source_files(self) -> List[str]:
         """extract and return all source files that will be compiled"""
         source_files: List[str] = []
@@ -335,7 +368,7 @@ class Arguments:
 
     def is_sendable(self) -> bool:
         """check whether the remote execution of arguments would be successful"""
-        # "-o -" might be treated as "write result to stdout" by some compilers
+        # "-o -" might be treated as either "write result to stdout" or "write result to file named '-'"
         if self.output == "-":
             logger.info('Cannot compile %s remotely because output "%s" is ambiguous', self, self.output)
             return False
@@ -372,16 +405,38 @@ class Arguments:
         """check whether the execution of arguments leads to calling only the linker"""
         return not self.source_files and self.is_linking()
 
-    def dependency_finding(self) -> Arguments:
+    def dependency_finding(self) -> Tuple[Optional[str], Arguments]:
         """return a copy of arguments with which to find dependencies via the preprocessor"""
-        return (
-            self.copy()
-            .remove_local_args()
-            .remove_output_args()
-            .add_arg("-M")  # output dependencies to stdout
-            .add_arg("-MT")  # change target of the dependency generation
-            .add_arg(self.PREPROCESSOR_TARGET)
-        )
+
+        # gcc and clang handle the combination of -MD -M differently, this function provides a uniform approach for
+        # both compilers that also preserves side effects like the creation of dependency files
+
+        # check if arguments that imply -M exist, if yes change their output / options
+        # change -MF dependency file to stdout and write to it or read from resulting dependency file
+        # check for multiple -MT targets
+
+        # if MF not provided check output target: e.g foo.o to foo.o.d
+
+        # gcc/clang -MD only creates main.d, main.o
+
+        dependency_output_file: Optional[str] = None
+
+        if self.dependency_output is None:
+            if self.output is not None:
+                dependency_output_file = f"{self.output}.d"
+        else:
+            dependency_output_file = self.dependency_output
+
+        if "-MD" not in self.args:
+            return None, self.copy().remove_output_args().add_arg("-M")
+
+        # TODO(s.pirsch): disallow multiple source files in the future when linker issue was investigated
+        if dependency_output_file is None and len(self.source_files) > 1:
+            logger.warning("Executing %s might not create the intended dependency files.", self)
+
+        # TODO: simply append -M -MF- and write stdout to file after?
+
+        return dependency_output_file or f"{Path(self.source_files[0]).name}.d", self.copy()
 
     def no_linking(self) -> Arguments:
         """return a copy of arguments where all output args are removed and the no linking arg is added"""
