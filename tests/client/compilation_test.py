@@ -56,6 +56,35 @@ class TestCompilation:
         self.find_dependencies_with_compiler("clang++")
 
     @staticmethod
+    def find_dependencies_complex_with_compiler(compiler: str):
+        args: List[str] = [
+            compiler,
+            "-Iexample/include",
+            "-MD",
+            "-MT",
+            "example/src/main.cpp.o",
+            "-MF",
+            "example/src/main.cpp.o.d",
+            "-o",
+            "example/src/main.cpp.o",
+            "-c",
+            "example/src/main.cpp",
+        ]
+        dependencies: Set[str] = find_dependencies(Arguments.from_args(args))
+
+        assert len(dependencies) == 2
+        assert "example/src/main.cpp" in dependencies
+        assert "example/include/foo.h" in dependencies
+
+    @pytest.mark.skipif(shutil.which("g++") is None, reason="g++ is not installed")
+    def test_find_dependencies_complex_gplusplus(self):
+        self.find_dependencies_complex_with_compiler("g++")
+
+    @pytest.mark.skipif(shutil.which("clang++") is None, reason="clang++ is not installed")
+    def test_find_dependencies__complexclangplusplus(self):
+        self.find_dependencies_complex_with_compiler("clang++")
+
+    @staticmethod
     def find_dependencies_class_impl_with_compiler(compiler: str):
         args: List[str] = [compiler, "-Iexample/include", "example/src/main.cpp", "example/src/foo.cpp"]
         dependencies: Set[str] = find_dependencies(Arguments.from_args(args))

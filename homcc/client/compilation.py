@@ -145,8 +145,8 @@ def scan_includes(arguments: Arguments) -> List[str]:
 
 
 def is_sendable_dependency(dependency: str) -> bool:
-    # filter preprocessor output target specified by -MT and line breaks
-    if dependency.endswith((":", "\\")):
+    # filter preprocessor output target and line breaks
+    if dependency in [f"{Arguments.PREPROCESSOR_TARGET}:", "\\"]:
         return False
 
     # normalize paths, e.g. convert /usr/bin/../lib/ to /usr/lib/

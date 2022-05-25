@@ -37,6 +37,7 @@ class Arguments:
 
     # if the compiler is neither specified by the callee nor defined in the config file use this as fallback
     DEFAULT_COMPILER: str = "cc"
+    PREPROCESSOR_TARGET: str = "$(homcc)"
 
     NO_LINKING_ARG: str = "-c"
     OUTPUT_ARG: str = "-o"
@@ -268,14 +269,6 @@ class Arguments:
         self._args.append(arg)
         return self
 
-    def remove_arg(self, arg: str) -> Arguments:
-        """
-        if present, remove the specified arg, this may remove multiple occurrences of this arg and break cached
-        properties when used inconsiderately
-        """
-        self._args = list(filter(lambda _arg: _arg != arg, self.args))
-        return self
-
     @property
     def compiler(self) -> Optional[str]:
         """if present, return the specified compiler"""
@@ -381,7 +374,14 @@ class Arguments:
 
     def dependency_finding(self) -> Arguments:
         """return a copy of arguments with which to find dependencies via the preprocessor"""
-        return self.copy().remove_arg(self.NO_LINKING_ARG).remove_output_args().add_arg("-M")  # output dependencies
+        return (
+            self.copy()
+            .remove_local_args()
+            .remove_output_args()
+            .add_arg("-M")  # output dependencies to stdout
+            .add_arg("-MT")  # change target of the dependency generation
+            .add_arg(self.PREPROCESSOR_TARGET)
+        )
 
     def no_linking(self) -> Arguments:
         """return a copy of arguments where all output args are removed and the no linking arg is added"""
