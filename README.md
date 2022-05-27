@@ -1,18 +1,42 @@
-# homcc - Home-Office friendly distcc replacement
+# 🏠 HOMCC - Home-Office friendly distcc replacement
 
 ## Table of Contents
-1. [Installation](#installation)
-2. [Documentation](#documentation)
+1. [Overview](#overview)
+2. [Installation](#installation)
 3. [Usage and Configuration](#usage-and-configuration)
    1. [Client: homcc](#client-homcc)
-   2. [Server: homccd](#server-homcc)
-4. [Development](#development)
+   2. [Server: homccd](#server-homccd)
+4. [Documentation](#documentation)
+5. [Development](#development)
    1. [Setup](#setup)
    2. [Testing](#testing)
    3. [Linting](#linting)
    4. [Formatting](#formatting)
    5. [Build Debian packages](#build-debian-packages)
    6. [`schroot` testing setup for Debian systems](#schroot-testing-setup-for-debian-systems)
+
+
+## Overview
+`HOMCC`, pronounced `həʊm siː siː`, is a home-office oriented, compilation distribution project.<br/>
+Currently supported languages are C and C++ with their respective `gcc` and `clang` compilers.
+
+While distributing compilation jobs generally improves build times of large code bases, narrow network bandwidths pose a crucial limiting factor.
+This project's primary goal is to find approaches to mitigate this bottleneck.
+Although `HOMCC` is still in an early stage of development, we already see improvements of around 2x compared to alternatives like `distcc`.
+<p align="center">
+  <img src="assets/compilation_times.png" width="61.8%"/>
+  <br/>
+  <div style="width:61.8%">
+    Difference in remote compilation times for a <a href="https://github.com/celonis/">Celonis</a> internal C++ code base built with <code>g++-8</code>, a total server job limit of 112, varying amount of dedicated local threads and an upload rate of 4.0 MiB/s.
+    Note, this plot wrongly still includes negligible local linking times of around 90 seconds.
+  </div>
+</p>
+
+The main solution to enable faster compilation times for thinner connections is the compression and `server`-side caching of dependencies.
+Due to caching, only missing dependencies are requested from `client`s which drastically decreases the overall network traffic once the cache is warmed up.
+Transmitted files like the requested dependencies but also the resulting object files are compressed to further improve build times.
+
+Additional features like the execution of compilation processes in secure `chroot` environments are also added.
 
 
 ## Installation
@@ -32,14 +56,6 @@
   ```
 
 
-## Documentation
-- TODO:
-  - Brief overview of what `homcc` is and why it exists: distributed compilation -> faster build times, modern alternative
-  - Differences to `distcc`: thin connection as priority, caching, local pre-processing
-  - Description of client-server interaction
-  - Description of server-side caching
-
-
 ## Usage and Configuration
 
 ### Client: `homcc`
@@ -57,7 +73,7 @@
   - Example:
   <p align="center">
   <table align="center">
-  <tr><th>File: <code>client.conf</code></th><th>Explanation</th></tr>
+  <tr align="center"><th>File: <code>client.conf</code></th><th>Explanation</th></tr>
   <tr valign="top">
   <td><sub><pre lang="ini">
   # homcc: example config
@@ -102,7 +118,7 @@
   - Example:
   <p align="center">
   <table align="center">
-  <tr><th>File: <code>hosts</code></th><th>Explanation</th></tr>
+  <tr align="center"><th>File: <code>hosts</code></th><th>Explanation</th></tr>
   <tr valign="top">
   <td><sub><pre>
   # homcc: example hosts
@@ -139,7 +155,7 @@
   - Example:
   <p align="center">
   <table align="center">
-  <tr><th>File: <code>server.conf</code></th><th>Explanation</th></tr>
+  <tr align="center"><th>File: <code>server.conf</code></th><th>Explanation</th></tr>
   <tr valign="top">
   <td><sub><pre lang="ini">
   # homccd: example config
@@ -166,6 +182,15 @@
   ```sh
   $ sudo systemctl restart homccd.service
   ```
+
+
+## Documentation
+- Naming: `HOMCC` generally refers to the whole project, while the phrases `homcc` and `client` as well as `homccd` and `server` can be used interchangeably.
+  However, for user facing context `homcc[d]` is preferred whereas `client` & `server` are preferred internally.
+- TODO:
+  - Client: Preprocessing, Hosts Parsing & Selection
+  - Communication: `HOMCC` Message Protocol
+  - Server: Caching, Profile Parsing
 
 
 ## Development
