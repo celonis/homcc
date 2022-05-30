@@ -90,16 +90,10 @@ class RemoteHostSemaphore:
     _host: Host
 
     def __init__(self, host: Host):
-        host_id: str
+        if host.is_local():
+            raise ValueError(f"Invalid remote host: '{host}'")
 
-        if host.type == ConnectionType.TCP:
-            host_id = f"homcc_tcp_{host.name}_{host.port or 3633}_{host.limit}"
-        elif host.type == ConnectionType.SSH:
-            host_id = f"homcc_ssh_{host.user or ''}_{host.name}_{host.limit}"
-        else:
-            raise ValueError(f"Invalid remote host '{host}'.")
-
-        self._semaphore = posix_ipc.Semaphore(host_id, posix_ipc.O_CREAT, initial_value=host.limit)
+        self._semaphore = posix_ipc.Semaphore(host.id(), posix_ipc.O_CREAT, initial_value=host.limit)
         self._host = host
 
     def __enter__(self) -> RemoteHostSemaphore:
@@ -129,20 +123,27 @@ class LocalHostSemaphore:
     still allows for high throughput when localhost slots are not exhausted.
     """
 
-    AVERAGE_COMPILATION_TIME: float = 10.0
+    DEFAULT_COMPILATION_TIME: float = 10.0
 
     _semaphore: posix_ipc.Semaphore
+    _compilation_time: float
     _timeout: float
 
-    def __init__(self, host: Host):
-        host_id: str = f"homcc_localhost_{host.limit}"
-        self._semaphore = posix_ipc.Semaphore(host_id, posix_ipc.O_CREAT, initial_value=host.limit)
-        self._timeout = self.AVERAGE_COMPILATION_TIME - 1
+    def __init__(self, host: Host, compilation_time: float = DEFAULT_COMPILATION_TIME):
+        if not host.is_local():
+            raise ValueError(f"Invalid localhost: '{host}'")
+
+        if compilation_time <= 1.0:
+            raise ValueError(f"Invalid compilation time: {compilation_time}")
+
+        self._semaphore = posix_ipc.Semaphore(host.id(), posix_ipc.O_CREAT, initial_value=host.limit)
+        self._compilation_time = compilation_time
+        self._timeout = compilation_time - 1
 
     def __enter__(self) -> LocalHostSemaphore:
         while True:
             try:
-                self._semaphore.acquire(timeout=self.AVERAGE_COMPILATION_TIME - self._timeout)  # blocking acquisition
+                self._semaphore.acquire(timeout=self._compilation_time - self._timeout)  # blocking acquisition
                 return self
 
             except posix_ipc.BusyError:
@@ -284,13 +285,13 @@ class StateFile:
             self.DISTCC_TASK_STATE_STRUCT_FORMAT,
             # struct fields
             self.DISTCC_TASK_STATE_STRUCT_SIZE,  # size_t struct_size
-            self.DISTCC_STATE_MAGIC,             # unsigned long magic
-            self.pid,                            # unsigned long cpid
-            self.source_base_filename,           # char file[128]
-            self.hostname,                       # char host[128]
-            self.slot,                           # int slot
-            self.phase,                          # enum dcc_phase curr_phase
-            self.DISTCC_NEXT_TASK_STATE,         # struct dcc_task_state *next
+            self.DISTCC_STATE_MAGIC,  # unsigned long magic
+            self.pid,  # unsigned long cpid
+            self.source_base_filename,  # char file[128]
+            self.hostname,  # char host[128]
+            self.slot,  # int slot
+            self.phase,  # enum dcc_phase curr_phase
+            self.DISTCC_NEXT_TASK_STATE,  # struct dcc_task_state *next
         )
         # fmt: on
 

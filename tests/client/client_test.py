@@ -1,15 +1,18 @@
 """ Tests for client/client.py"""
+import threading
+import time
 
 import pytest
 
+import posix_ipc
 import struct
 
 from pathlib import Path
 from typing import Iterator, List
 
-from homcc.client.client import HostSelector, StateFile
-from homcc.client.errors import HostsExhaustedError
-from homcc.client.parsing import Host
+from homcc.client.client import HostSelector, LocalHostSemaphore, RemoteHostSemaphore, StateFile
+from homcc.client.errors import HostsExhaustedError, SlotsExhaustedError
+from homcc.client.parsing import ConnectionType, Host
 
 
 class TestHostSelector:
@@ -63,11 +66,77 @@ class TestHostSelector:
             assert next(host_iter)
 
 
+class TestRemoteHostSemaphore:
+    """Tests for RemoteHostSemaphore"""
+
+    def test_localhost(self):
+        localhost: Host = Host(type=ConnectionType.LOCAL, name="localhost")
+
+        with pytest.raises(ValueError):
+            with RemoteHostSemaphore(localhost):
+                pass
+
+    def test_remotehosts(self, unused_tcp_port: int):
+        name: str = self.test_remotehosts.__name__
+        remotehost: Host = Host(type=ConnectionType.TCP, name=name, port=unused_tcp_port, limit=1)
+        host_id: str = remotehost.id()
+
+        with RemoteHostSemaphore(remotehost):  # successful first acquire
+            assert Path(f"/dev/shm/sem.{host_id}")
+            assert posix_ipc.Semaphore(host_id).value == 0
+
+            with pytest.raises(SlotsExhaustedError):
+                with RemoteHostSemaphore(remotehost):  # failing second acquire
+                    pass
+
+        assert posix_ipc.Semaphore(host_id).value == 1  # successful release
+
+
+class TestLocalHostSemaphore:
+    """Tests for LocalHostSemaphore"""
+
+    def test_remotehost(self):
+        remotehost: Host = Host(type=ConnectionType.TCP, name="remotehost")
+
+        with pytest.raises(ValueError):
+            with LocalHostSemaphore(remotehost):
+                pass
+
+    @pytest.mark.timeout(5)
+    def test_localhosts(self):
+        localhost: Host = Host(type=ConnectionType.LOCAL, name="localhost", limit=1)
+        localhost.name = self.test_localhosts.__name__
+        host_id: str = localhost.id()
+
+        def hold_semaphore(host: Host):
+            with LocalHostSemaphore(host, 2):  # successful acquire
+                assert Path(f"/dev/shm/sem.{host_id}")
+                assert posix_ipc.Semaphore(host_id).value == 0
+                time.sleep(1)
+
+        # single hold
+        hold_semaphore(localhost)
+        assert posix_ipc.Semaphore(host_id).value == 1  # successful release
+
+        # concurrent holds
+        threads: List[threading.Thread] = [
+            threading.Thread(target=task, args=(localhost,)) for task in 2 * [hold_semaphore]
+        ]
+
+        for thread in threads:
+            thread.start()
+
+        for thread in threads:
+            thread.join()
+
+        assert posix_ipc.Semaphore(host_id).value == 1  # successful releases
+
+
 class TestStateFile:
     """Tests for StateFile"""
 
     def test_constants(self):
-        """sanity checks to keep interoperability with distcc monitoring"""
+        """sanity checks to keep interoperability with distcc monitoring tools"""
 
         # size_t(8); unsigned long(8); unsigned long(8); char[128]; char[128]; int(4); enum{=int}(4); struct*{=void*}(8)
         assert StateFile.DISTCC_TASK_STATE_STRUCT_SIZE == 8 + 8 + 8 + 128 + 128 + 4 + 4 + 8

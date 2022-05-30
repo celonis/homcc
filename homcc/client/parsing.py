@@ -126,15 +126,20 @@ class Host:
         self.port = int(port) if port is not None else None  # TCP
         self.user = user  # SSH
 
-    def __str__(self):
+    def __str__(self) -> str:
         if self.type == ConnectionType.LOCAL:
-            return f"localhost_{self.limit}"
-        elif self.type == ConnectionType.TCP:
+            return f"{self.name}_{self.limit}"  # not hardcoded to localhost_limit for testing purposes
+
+        if self.type == ConnectionType.TCP:
             return f"tcp_{self.name}_{self.port}_{self.limit}"
-        elif self.type == ConnectionType.SSH:
-            return f"ssh_{self.name}_{self.limit}"
+
+        if self.type == ConnectionType.SSH:
+            return f"ssh_{f'{self.user}_' or '_'}{self.name}_{self.limit}"
 
         raise ValueError(f"Erroneous connection type '{self.type}'")
+
+    def id(self) -> str:
+        return f"homcc_{str(self)}"
 
     @classmethod
     def from_str(cls, host_str: str) -> Host:
