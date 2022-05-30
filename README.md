@@ -1,5 +1,4 @@
 # :house_with_garden: HOMCC - Home-Office friendly distcc replacement
-=====================================================================
 
 `HOMCC`, pronounced `həʊm siː siː`, is a home-office oriented, compilation distribution project.<br/>
 Currently supported languages are `C` and `C++` with their respective `gcc` and `clang` compilers.
@@ -10,10 +9,10 @@ Although `HOMCC` is still in an early stage of development, we can already see i
 <p align="center">
   <img src="assets/compilation_times.png" align="center" width="61.8%"/>
   <br/>
-  <sub><sup>
-  Difference in remote compilation times for a <a href="https://github.com/celonis/">Celonis</a> internal C++ code base built with <code>g++-8</code>, a total server job limit of 112, an upload rate of 4.0 MiB/s and varying amount of dedicated local threads.
+  <sub>
+  Difference in remote compilation times for a <a href="https://github.com/celonis/">Celonis</a> internal C++ code base built with <code>g++-8</code>, a total server job limit of 112, an upload rate of 4.0 MiB/s and varying amount of dedicated local threads.<br/>
   Note, this plot wrongly still includes negligible local linking times of above 90 seconds.
-  </sup></sub>
+  </sub>
 </p>
 
 The main solution to enable faster compilation times for thinner connections is the compression and `server`-side caching of dependencies.
@@ -65,21 +64,16 @@ Additionally, `HOMCC` provides sandboxed compiler execution for remote compilati
   $ homcc --help
   ```
 - Overwrite defaults globally via a `client.conf` configuration file if necessary:
-  - <p align="center">
-    <table align="center">
+  - <table align="center">
     <tr align="center"><th><code>client.conf</code> file locations</th></tr>
-    <tr valign="top">
-    <td><code>
-    $HOMCC_DIR/client.conf<br/>
-    ~/.homcc/client.conf<br/>
-    ~/.config/homcc/client.conf<br/>
-    /etc/homcc/client.conf
-    </code></td>
-    </tr>
+    <tr valign="top"><td>
+    <code>$HOMCC_DIR/client.conf</code><br/>
+    <code>~/.homcc/client.conf</code><br/>
+    <code>~/.config/homcc/client.conf</code><br/>
+    <code>/etc/homcc/client.conf</code>
+    </td></tr>
     </table>
-    </p>
-  - <p align="center">
-    <table align="center">
+  - <table align="center">
     <tr align="center"><th>Example: <code>client.conf</code></th><th>Explanation</th></tr>
     <tr valign="top">
     <td><sub><pre lang="ini">
@@ -102,21 +96,16 @@ Additionally, `HOMCC` provides sandboxed compiler execution for remote compilati
     </pre></sub></td>
     </tr>
     </table>
-    </p>
 - Specify your remote compilation server via the `$HOMCC_HOSTS` environment variable or in a dedicated `hosts` file:
-  - <p align="center">
-    <table align="center">
+  - <table align="center">
     <tr align="center"><th><code>hosts</code> file locations</th></tr>
-    <tr valign="top">
-    <td><code>
-    $HOMCC_DIR/hosts<br/>
-    ~/.homcc/hosts<br/>
-    ~/.config/homcc/hosts<br/>
-    /etc/homcc/hosts
-    </code></td>
-    </tr>
+    <tr valign="top"><td>
+    <code>$HOMCC_DIR/hosts</code><br/>
+    <code>~/.homcc/hosts</code><br/>
+    <code>~/.config/homcc/hosts</code><br/>
+    <code>/etc/homcc/hosts</code>
+    </td></tr>
     </table>
-    </p>
   - Possible `hosts` formats:
     - `HOST` format:
       - `HOST`: TCP connection to specified `HOST` with default port `3633`
@@ -130,8 +119,7 @@ Additionally, `HOMCC` provides sandboxed compiler execution for remote compilati
         - `lzo`: Lempel-Ziv-Oberhumer compression algorithm
         - `lzma`: Lempel-Ziv-Markov chain algorithm
       - No compression is used per default, specifying `lzo` is however advised
-  - <p align="center">
-    <table align="center">
+  - <table align="center">
     <tr align="center"><th>Example: <code>hosts</code></th><th>Explanation</th></tr>
     <tr valign="top">
     <td><sub><pre>
@@ -148,8 +136,7 @@ Additionally, `HOMCC` provides sandboxed compiler execution for remote compilati
     </pre></sub></td>
     </tr>
     </table>
-    </p>
-    :exclamation:**WARNING**: Currently do not include `localhost` in your `hosts` file!
+    :exclamation: **WARNING**: Currently do not include `localhost` in your `hosts` file!
 - Use `homcc` by specifying `CCACHE_PREFIX=homcc` in your `conan` profile or IDE of choice and have `CONAN_CPU_COUNT` smaller or equal to the sum of all remote host limits, e.g. `≤ 12+21+42`!
 
 
@@ -160,21 +147,16 @@ Additionally, `HOMCC` provides sandboxed compiler execution for remote compilati
   $ homccd --help
   ```
 - Overwrite defaults globally via a `server.conf` configuration file if necessary:
-  - <p align="center">
-    <table align="center">
+  - <table align="center">
     <tr align="center"><th><code>server.conf</code> file locations</th></tr>
-    <tr valign="top">
-    <td><code>
-    $HOMCC_DIR/server.conf<br/>
-    ~/.homcc/server.conf<br/>
-    ~/.config/homcc/server.conf<br/>
-    /etc/homcc/server.conf
-    </code></td>
-    </tr>
+    <tr valign="top"><td>
+    <code>$HOMCC_DIR/server.conf</code><br/>
+    <code>~/.homcc/server.conf</code><br/>
+    <code>~/.config/homcc/server.conf</code><br/>
+    <code>/etc/homcc/server.conf</code>
+    </td></tr>
     </table>
-    </p>
-  - <p align="center">
-    <table align="center">
+  - <table align="center">
     <tr align="center"><th>Example: <code>server.conf</code></th><th>Explanation</th></tr>
     <tr valign="top">
     <td><sub><pre lang="ini">
@@ -195,7 +177,6 @@ Additionally, `HOMCC` provides sandboxed compiler execution for remote compilati
     </pre></sub></td>
     </tr>
     </table>
-    </p>
 - \[Optional]:
   Set up your `schroot` environments at `/etc/schroot/schroot.conf` or in the `/etc/schroot/chroot.d/` directory and mount the `/tmp/` directory to enable sandboxed compiler execution.
   Currently, in order for these changes to apply, you have to restart `homccd`:
@@ -205,8 +186,8 @@ Additionally, `HOMCC` provides sandboxed compiler execution for remote compilati
 
 
 ## Documentation
-- Terms: `HOMCC` generally refers to the whole project, while the terms `homcc` and `client` as well as `homccd` and `server` can be used interchangeably.
-  However, for user facing context `homcc[d]` is preferred whereas `client` & `server` are preferred internally.
+- Terms: `HOMCC` generally refers to the whole project while the terms `homcc` and `client` as well as `homccd` and `server` can be used interchangeably.
+  However, for user facing context `homcc[d]` is preferred whereas `client` & `server` should be used internally.
 - TODO:
   - Client: Preprocessing, Hosts Parsing & Selection
   - Communication: `HOMCC` Message Protocol
@@ -275,7 +256,7 @@ Additionally, `HOMCC` provides sandboxed compiler execution for remote compilati
     ```sh
     $ sudo debootstrap jammy /var/chroot/jammy http://archive.ubuntu.com/ubuntu
     ```
-  - Configure the environment by creating a corresponding file in the `/etc/schroot/chroot.d/` directory or by appending it to `/etc/schroot/schroot.conf`, e.g. by replacing `USERNAME` in `jammy.conf`:
+  - Configure the environment by creating a corresponding file in the `/etc/schroot/chroot.d/` directory or by appending an entry to `/etc/schroot/schroot.conf`, e.g. by replacing `USERNAME` for `jammy.conf`:
     ```ini
     [jammy]
     description=Ubuntu 22.04 Jammy Jellyfish
