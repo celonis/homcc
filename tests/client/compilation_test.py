@@ -26,14 +26,14 @@ class TestCompilation:
 
         includes: List[str] = scan_includes(arguments)
 
-        # assert len(includes) == 1
+        assert len(includes) == 1
         assert "example/include/foo.h" in includes
 
     def test_find_dependencies_without_class_impl(self):
         args: List[str] = ["g++", "-Iexample/include", "example/src/main.cpp"]
         dependencies: Set[str] = find_dependencies(Arguments.from_args(args))
 
-        # assert len(dependencies) == 2
+        assert len(dependencies) == 2
         assert "example/src/main.cpp" in dependencies
         assert "example/include/foo.h" in dependencies
 
@@ -41,7 +41,7 @@ class TestCompilation:
         args: List[str] = ["g++", "-Iexample/include", "example/src/main.cpp", "example/src/foo.cpp"]
         dependencies: Set[str] = find_dependencies(Arguments.from_args(args))
 
-        # assert len(dependencies) == 3
+        assert len(dependencies) == 3
         assert "example/src/main.cpp" in dependencies
         assert "example/src/foo.cpp" in dependencies
         assert "example/include/foo.h" in dependencies

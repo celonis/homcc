@@ -2,15 +2,14 @@
 
 import pytest
 
-import fcntl
 import struct
 
 from pathlib import Path
 from typing import Iterator, List
 
-from homcc.client.client import HostSelector, HostSlotsLockFile, LockFile, Slots, StateFile
-from homcc.client.errors import HostsExhaustedError, SlotsExhaustedError
-from homcc.client.parsing import ConnectionType, Host
+from homcc.client.client import HostSelector, StateFile
+from homcc.client.errors import HostsExhaustedError
+from homcc.client.parsing import Host
 
 
 class TestHostSelector:
@@ -62,67 +61,6 @@ class TestHostSelector:
         assert len(host_selector) == 0
         with pytest.raises(StopIteration):
             assert next(host_iter)
-
-
-class TestSlots:
-    """Tests for Slots"""
-
-    def test_slots(self):
-        for size in [1, 4, 12, 48, 96]:  # some arbitrary values
-            slots: Slots = Slots(b"\x00" * size)
-
-            assert slots == b"\x00" * size
-            assert slots == Slots.with_size(size)
-            assert slots.none_locked()
-            assert not slots.all_locked()
-
-            assert slots.get_unlocked_slot() is not None
-
-            for i in range(size):
-                assert not slots.is_locked(i)
-                slots.lock_slot(i)
-                assert not slots.none_locked()
-
-            assert slots == b"\xFF" * size
-            assert slots.all_locked()
-            assert slots.get_unlocked_slot() is None
-
-            assert slots.unlock_slot(0)
-            assert not slots.is_locked(0)
-            assert slots == b"\x00" + b"\xFF" * (size - 1)
-            assert slots.get_unlocked_slot() == 0
-
-
-class TestLockFile:
-    """Tests for LockFile"""
-
-    def test_lockfile(self, tmp_path: Path):
-        filepath: Path = tmp_path / "test"
-        filepath.touch()
-
-        with LockFile(filepath):  # first access
-            with pytest.raises(IOError):
-                with open(filepath, mode="rb") as file:
-                    fcntl.flock(file, fcntl.LOCK_EX | fcntl.LOCK_UN)  # second access (not blocking)
-
-
-class TestHostSlotsLockFile:
-    """Tests for HostSlotsLockFile"""
-
-    def test_host_slots_lockfile(self, tmp_path: Path):
-        host: Host = Host(type=ConnectionType.LOCAL, name="localhost", limit=1)
-        filepath: Path = tmp_path / str(host)  # will be created by HostSlotsLockFile
-        assert not filepath.exists()
-
-        with HostSlotsLockFile(host, tmp_path):  # locking first and only lock
-            assert filepath.exists()
-            assert filepath.read_bytes() == b"\xFF"
-
-            with pytest.raises(SlotsExhaustedError):
-                with HostSlotsLockFile(host, tmp_path):  # trying to lock the same slot
-                    pass
-
-        assert not filepath.exists()
 
 
 class TestStateFile:

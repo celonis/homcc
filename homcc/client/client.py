@@ -4,17 +4,18 @@ TCPClient class and related Exception classes for the homcc client
 from __future__ import annotations
 
 import asyncio
-import fcntl
 import logging
 import os
+import time
+
+import posix_ipc
 import random
 import socket
 import struct
-import sys
 
 from enum import Enum, auto
 from pathlib import Path
-from typing import Any, BinaryIO, Dict, Iterator, List, Optional
+from typing import Dict, Iterator, List, Optional
 
 from homcc.client.errors import (
     ClientParsingError,
@@ -75,168 +76,84 @@ class HostSelector:
         return host
 
 
-class Slots:
-    """Class that manages locking and unlocking slots of a Host."""
-
-    __slots__ = ("_data",)
-
-    _data: bytearray
-
-    def __init__(self, data: bytes):
-        self._data = bytearray(data)
-
-    def __bytes__(self) -> bytes:
-        return bytes(self._data)
-
-    def __int__(self) -> int:
-        # signedness so we can conveniently use literal -1 instead of b"0xFF" * len(self)
-        return int.from_bytes(self._data, sys.byteorder, signed=True)
-
-    def __len__(self) -> int:
-        return len(self._data)
-
-    def __eq__(self, other: Any) -> bool:
-        if isinstance(other, Slots):
-            return self._data == other._data
-        if isinstance(other, (bytearray, bytes)):
-            return self._data == other
-        return False
-
-    @classmethod
-    def with_size(cls, size: int) -> Slots:
-        """Return unlocked Slots of specified size."""
-        return cls(bytes(size))
-
-    def none_locked(self) -> bool:
-        return int(self) == 0
-
-    def all_locked(self) -> bool:
-        return int(self) == -1
-
-    def is_locked(self, index: int) -> bool:
-        return self._data[index] != 0
-
-    def get_unlocked_slot(self) -> Optional[int]:
-        for i, byte in enumerate(self._data):
-            if byte == 0:
-                return i
-
-        return None
-
-    def lock_slot(self, index: int) -> Slots:
-        self._data[index] = 0xFF
-        return self
-
-    def unlock_slot(self, index: int) -> Slots:
-        self._data[index] = 0x00
-        return self
-
-
-class LockFile:
+class RemoteHostSemaphore:
     """
-    Class to enable automatic locking of a file.
-    Before accessing the file an explicit lock is set with blocking which will be cleared again before closing via the
-    context manager. Blocking on acquiring the lock is intended since we do not want to hold the lock for longer periods
-    as seen in HostSlotsLockFile.
+    Class to track remote compilation jobs via a named posix semaphore.
+
+    Each semaphore for a host is uniquely identified by host_id which includes the host name itself and ConnectionType
+    specific information like the port for TCP and the user for SSH connections. The semaphore will be acquired with a
+    non-blocking call and might therefore throw an exception on failure. This indicates that the current machine already
+    exhausts all slots of the specified host.
     """
 
-    __slots__ = "filepath", "_file"
+    _semaphore: posix_ipc.Semaphore
+    _host: Host
 
-    filepath: Path
-    """Path to the lock file"""
+    def __init__(self, host: Host):
+        host_id: str
 
-    _file: BinaryIO
-    """Opened and exclusively locked file"""
+        if host.type == ConnectionType.TCP:
+            host_id = f"homcc_tcp_{host.name}_{host.port or 3633}_{host.limit}"
+        elif host.type == ConnectionType.SSH:
+            host_id = f"homcc_ssh_{host.user or ''}_{host.name}_{host.limit}"
+        else:
+            raise ValueError(f"Invalid remote host '{host}'.")
 
-    def __init__(self, filepath: Path):
-        self.filepath = filepath
+        self._semaphore = posix_ipc.Semaphore(host_id, posix_ipc.O_CREAT, initial_value=host.limit)
+        self._host = host
 
-    def __enter__(self) -> LockFile:
+    def __enter__(self) -> RemoteHostSemaphore:
         try:
-            logger.debug("Locking file '%s'.", self.filepath)
-            self._file: BinaryIO = open(self.filepath, mode="rb+", buffering=0)  # access file in unbuffered binary mode
-            fcntl.flock(self._file, fcntl.LOCK_EX)
-        except IOError as error:
-            logger.error("File '%s' could not be opened and locked successfully: %s", self.filepath, error)
-            raise error from None
-
+            self._semaphore.acquire(timeout=0)  # non-blocking acquisition
+        except posix_ipc.BusyError as error:
+            raise SlotsExhaustedError(f"All compilation slots for host {self._host} are occupied.") from error
         return self
 
     def __exit__(self, *_):
-        try:
-            logger.debug("Unlocking file '%s'.", self.filepath)
-            fcntl.flock(self._file, fcntl.LOCK_UN)
-            self._file.close()
-        except IOError as error:
-            logger.error("File '%s' could not be unlocked and closed successfully: %s", self.filepath, error)
-            raise error from None
-
-    def read_bytes(self) -> bytes:
-        return self._file.read()
-
-    def write_bytes(self, data: bytes):
-        self._file.seek(0)
-        self._file.write(data)
+        self._semaphore.release()
+        self._semaphore.close()
 
 
-class HostSlotsLockFile:
+class LocalHostSemaphore:
     """
-    Class to enable automatic locking of a host slots file.
-    Before accessing the file we lock via the LockFile class. As this class blocks during acquiring the lock we do not
-    want to hold the lock for longer periods. Acquiring and releasing a slot in the locked file happens automatically
-    via the context manager.
+    Class to track local compilation jobs via a named posix semaphore.
+
+    Due to the behaviour of this class, multiple semaphores may be created in a time period with multiple homcc calls if
+    localhost is specified with different limits. Each localhost semaphore blocks for the specified timeout amount in
+    seconds during acquisition. Adding multiple different or changing localhost hosts during builds with homcc will
+    currently lead to non-deterministic behaviour regarding the total amount of concurrent local compilation jobs.
+
+    In order to increase the chance of longer waiting compilation requests to be chosen, an inverse exponential backoff
+    strategy is used, where newer requests have to wait longer and the timeout value increases exponentially. This
+    should increase the chance of keeping the general order of incoming requests as it is desired by build systems and
+    still allows for high throughput when localhost slots are not exhausted.
     """
 
-    __slots__ = "filepath", "_locked_slot"
+    AVERAGE_COMPILATION_TIME: float = 10.0
 
-    HOMCC_LOCK_DIR: Path = Path.home() / ".homcc/lock/"
-    """Path to the directory storing temporary homcc lock files"""
+    _semaphore: posix_ipc.Semaphore
+    _timeout: float
 
-    filepath: Path
-    """Path to the lock file"""
+    def __init__(self, host: Host):
+        host_id: str = f"homcc_localhost_{host.limit}"
+        self._semaphore = posix_ipc.Semaphore(host_id, posix_ipc.O_CREAT, initial_value=host.limit)
+        self._timeout = self.AVERAGE_COMPILATION_TIME - 1
 
-    _locked_slot: int
-    """Slot that will be locked and released"""
+    def __enter__(self) -> LocalHostSemaphore:
+        while True:
+            try:
+                self._semaphore.acquire(timeout=self.AVERAGE_COMPILATION_TIME - self._timeout)  # blocking acquisition
+                return self
 
-    def __init__(self, host: Host, lock_dir: Path = HOMCC_LOCK_DIR):
-        lock_dir.mkdir(exist_ok=True, parents=True)
-
-        # filepath for host slots lock, e.g. ~/.homcc/lock/tcp_remotehost_3633_42 (type, name, port, limit)
-        self.filepath = lock_dir / str(host)
-
-        if not self.filepath.exists():
-            logger.debug("Create file '%s'.", self.filepath)
-            self.filepath.touch()
-
-            with LockFile(self.filepath) as file:
-                file.write_bytes(bytes(Slots.with_size(host.limit)))
-
-    def __enter__(self) -> HostSlotsLockFile:
-        with LockFile(self.filepath) as file:
-            slots: Slots = Slots(file.read_bytes())
-            if (slot := slots.get_unlocked_slot()) is None:
-                raise SlotsExhaustedError(f"All slots in '{self.filepath}' exhausted!")
-
-            self._locked_slot = slot
-            file.write_bytes(bytes(slots.lock_slot(self._locked_slot)))
-
-        return self
-
-    async def __aenter__(self) -> HostSlotsLockFile:
-        return self.__enter__()
+            except posix_ipc.BusyError:
+                logger.debug("All compilation slots for localhost are occupied.")
+                # inverse exponential backoff: https://www.desmos.com/calculator/uniats0s4c
+                time.sleep(self._timeout)
+                self._timeout = self._timeout / 3 * 2
 
     def __exit__(self, *_):
-        with LockFile(self.filepath) as file:
-            slots: Slots = Slots(file.read_bytes())
-            slots.unlock_slot(self._locked_slot)
-            file.write_bytes(bytes(slots))
-
-        if slots.none_locked():
-            logger.debug("Delete empty host slot file '%s'", self.filepath.absolute())
-            self.filepath.unlink()
-
-    async def __aexit__(self, *args):
-        self.__exit__(args)
+        self._semaphore.release()
+        self._semaphore.close()
 
 
 class StateFile:

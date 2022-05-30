@@ -6,17 +6,18 @@ import logging
 import os
 import subprocess
 import sys
-import time
 
 from pathlib import Path
 from typing import Dict, Optional, List, Set
 
 from homcc.client.client import (
-    HostSlotsLockFile,
     HostSelector,
+    RemoteHostSemaphore,
+    LocalHostSemaphore,
     TCPClient,
 )
 from homcc.client.errors import (
+    CompilationTimeoutError,
     FailedHostNameResolutionError,
     HostsExhaustedError,
     RemoteCompilationError,
@@ -36,7 +37,7 @@ from homcc.common.messages import (
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_COMPILATION_REQUEST_TIMEOUT: float = 180
+DEFAULT_COMPILATION_REQUEST_TIMEOUT: float = 60
 DEFAULT_LOCALHOST_LIMIT: int = (
     len(os.sched_getaffinity(0))  # number of available CPUs for this process
     or os.cpu_count()  # total number of physical CPUs on the machine
@@ -62,20 +63,20 @@ async def compile_remotely(arguments: Arguments, hosts: List[Host], config: Clie
         host.compression = host.compression or config.compression
 
         try:
-            return await asyncio.wait_for(compile_remotely_at(arguments, host, profile), timeout=timeout)
+            with RemoteHostSemaphore(host):
+                return await asyncio.wait_for(compile_remotely_at(arguments, host, profile), timeout=timeout)
 
+        # semaphore could not be acquired
         except SlotsExhaustedError as error:
-            logger.debug("%s", error)  # TODO: remove?
-            logger.info("All compilation slots for host '%s' are occupied.", str(host))
+            logger.debug("%s", error)
+
+        # client could not connect
         except (ConnectionError, FailedHostNameResolutionError) as error:
             logger.warning("%s", error)
-        except asyncio.TimeoutError:
-            logger.warning(
-                "Compilation request %s at host '%s' timed out.",
-                str(arguments),
-                str(host),
-            )
-            break
+
+        # compilation request timed out
+        except asyncio.TimeoutError as error:
+            raise CompilationTimeoutError(f"Compilation request {arguments} at host '{host}' timed out.") from error
 
     raise HostsExhaustedError(f"All hosts '{', '.join(str(host) for host in hosts)}' are exhausted.")
 
@@ -83,7 +84,7 @@ async def compile_remotely(arguments: Arguments, hosts: List[Host], config: Clie
 async def compile_remotely_at(arguments: Arguments, host: Host, profile: Optional[str]) -> int:
     """main function for the communication between client and a remote compilation host"""
 
-    async with HostSlotsLockFile(host), TCPClient(host) as client:
+    async with TCPClient(host) as client:
         dependency_dict: Dict[str, str] = calculate_dependency_dict(find_dependencies(arguments))
         remote_arguments: Arguments = arguments.copy().remove_local_args()
 
@@ -152,23 +153,18 @@ async def compile_remotely_at(arguments: Arguments, host: Host, profile: Optiona
 def compile_locally(arguments: Arguments, localhost: Host) -> int:
     """execute local compilation"""
 
-    while True:
+    with LocalHostSemaphore(localhost):
         try:
-            with HostSlotsLockFile(localhost):
-                try:
-                    # execute compile command, e.g.: "g++ foo.cpp -o foo"
-                    result: ArgumentsExecutionResult = arguments.execute(check=True)
-                except subprocess.CalledProcessError as error:
-                    logger.error("Compiler error:\n%s", error.stderr)
-                    return error.returncode
+            # execute compile command, e.g.: "g++ foo.cpp -o foo"
+            result: ArgumentsExecutionResult = arguments.execute(check=True)
+        except subprocess.CalledProcessError as error:
+            logger.error("Compiler error:\n%s", error.stderr)
+            return error.returncode
 
-                if result.stdout:
-                    logger.debug("Compiler result:\n%s", result.stdout)
+        if result.stdout:
+            logger.debug("Compiler result:\n%s", result.stdout)
 
-                return result.return_code
-        except SlotsExhaustedError as error:
-            logger.debug("%s", error)
-            time.sleep(0.5)
+        return result.return_code
 
 
 def scan_includes(arguments: Arguments) -> List[str]:

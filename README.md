@@ -10,7 +10,7 @@ Although `HOMCC` is still in an early stage of development, we can already see i
   <img src="assets/compilation_times.png" align="center" width="61.8%"/>
   <br/>
   <sub>
-  Difference in remote compilation times for a <a href="https://github.com/celonis/">Celonis</a> internal C++ code base built with <code>g++-8</code>, a total server job limit of 112, an upload rate of 4.0 MiB/s and varying amount of dedicated local threads.
+  Difference in total remote compilation times for a <a href="https://github.com/celonis/">Celonis</a> internal C++ code base built with <code>g++-8</code>, a total server job limit of 112, an upload rate of 4.0 MiB/s and varying amount of dedicated local threads.
   Note, this plot wrongly still includes negligible local linking times of above 90 seconds.
   </sub>
 </p>
@@ -136,6 +136,7 @@ Additionally, `HOMCC` provides sandboxed compiler execution for remote compilati
     </pre></sub></td>
     </tr>
     </table>
+
     :exclamation: **WARNING**: Currently do not include `localhost` in your `hosts` file!
 - Use `homcc` by specifying `CCACHE_PREFIX=homcc` in your `conan` profile or IDE of choice and have `CONAN_CPU_COUNT` smaller or equal to the sum of all remote host limits, e.g. `≤ 12+21+42`!
 
@@ -212,6 +213,10 @@ Additionally, `HOMCC` provides sandboxed compiler execution for remote compilati
 - Execute all default tests in `./tests/` and perform test coverage:
   ```sh
   $ pytest -v -rfEs --cov=homcc
+  ```
+- \[TEMPORARY]: View all `homcc` semaphores:
+  ```sh
+  $ cat /dev/shm/sem.homcc* | xxd -p -c 32
   ```
 
 

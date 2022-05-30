@@ -7,6 +7,10 @@ class RecoverableClientError(Exception):
     """Base class for TCPClient exceptions to indicate recoverability for the client main function"""
 
 
+class CompilationTimeoutError(RecoverableClientError):
+    """Exception for a timed out compilation request"""
+
+
 class ClientParsingError(RecoverableClientError):
     """Exception for failing to parse message from the server"""
 
