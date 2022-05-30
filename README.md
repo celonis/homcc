@@ -1,13 +1,35 @@
-# 🏠 HOMCC - Home-Office friendly distcc replacement
+# :house_with_garden: HOMCC - Home-Office friendly distcc replacement
+=====================================================================
+
+`HOMCC`, pronounced `həʊm siː siː`, is a home-office oriented, compilation distribution project.<br/>
+Currently supported languages are `C` and `C++` with their respective `gcc` and `clang` compilers.
+
+While distributing compilation jobs generally improves build times of large code bases, narrow network bandwidths pose a crucial limiting factor.
+This project's primary goal is to find approaches to mitigate this bottleneck.
+Although `HOMCC` is still in an early stage of development, we can already see improvements of around 2x compared to alternatives like `distcc`.
+<p align="center">
+  <img src="assets/compilation_times.png" align="center" width="61.8%"/>
+  <br/>
+  <sub><sup>
+  Difference in remote compilation times for a <a href="https://github.com/celonis/">Celonis</a> internal C++ code base built with <code>g++-8</code>, a total server job limit of 112, an upload rate of 4.0 MiB/s and varying amount of dedicated local threads.
+  Note, this plot wrongly still includes negligible local linking times of above 90 seconds.
+  </sup></sub>
+</p>
+
+The main solution to enable faster compilation times for thinner connections is the compression and `server`-side caching of dependencies.
+Due to caching, only missing dependencies are requested from `client`s which drastically decreases the overall network traffic once the cache is warmed up.
+Transmitted files like the requested dependencies and also the resulting object files are compressed to further improve build times.
+Additionally, `HOMCC` provides sandboxed compiler execution for remote compilations (via `schroot`).
+
+---
 
 ## Table of Contents
-1. [Overview](#overview)
-2. [Installation](#installation)
-3. [Usage and Configuration](#usage-and-configuration)
+1. [Installation](#installation)
+2. [Usage and Configuration](#usage-and-configuration)
    1. [Client: `homcc`](#client-homcc)
    2. [Server: `homccd`](#server-homccd)
-4. [Documentation](#documentation)
-5. [Development](#development)
+3. [Documentation](#documentation)
+4. [Development](#development)
    1. [Setup](#setup)
    2. [Testing](#testing)
    3. [Linting](#linting)
@@ -15,29 +37,7 @@
    5. [Build Debian packages](#build-debian-packages)
    6. [`schroot` testing setup for Debian systems](#schroot-testing-setup-for-debian-systems)
 
-
-## Overview
-`HOMCC`, pronounced `həʊm siː siː`, is a home-office oriented, compilation distribution project.<br/>
-Currently supported languages are C and C++ with their respective `gcc` and `clang` compilers.
-
-While distributing compilation jobs generally improves build times of large code bases, narrow network bandwidths pose a crucial limiting factor.
-This project's primary goal is to find approaches to mitigate this bottleneck.
-Although `HOMCC` is still in an early stage of development, we already see improvements of around 2x compared to alternatives like `distcc`.
-<p align="center">
-  <img src="assets/compilation_times.png" align="center" width="61.8%"/>
-  <br/>
-  Difference in remote compilation times for a <a href="https://github.com/celonis/">Celonis</a> internal C++ code base built with <code>g++-8</code>, a total server job limit of 112, an upload rate of 4.0 MiB/s and varying amount of dedicated local threads.
-  Note, this plot wrongly still includes negligible local linking times of above 90 seconds.
-</p>
-
-The main solution to enable faster compilation times for thinner connections is the compression and `server`-side caching of dependencies.
-Due to caching, only missing dependencies are requested from `client`s which drastically decreases the overall network traffic once the cache is warmed up.
-Transmitted files like the requested dependencies and also the resulting object files are compressed to further improve build times.
-
-Additional features:
-- Compilation processes can be executed in secure `chroot` environments on the `server`.
-- Interoperability with `distcc` monitoring tools is in progress.
-
+---
 
 ## Installation
 - [Download](https://github.com/celonis/homcc/releases) the latest release or [build](#build-debian-packages) the Debian packages yourself
@@ -64,44 +64,59 @@ Additional features:
   ```sh
   $ homcc --help
   ```
-- Overwrite defaults via a `client.conf` configuration file if necessary:
-  - Possible `client.conf` locations:
-      - `$HOMCC_DIR/client.conf`
-      - `~/.homcc/client.conf`
-      - `~/.config/homcc/client.conf`
-      - `/etc/homcc/client.conf`
-  - Example:
-  <p align="center">
-  <table align="center">
-  <tr align="center"><th>File: <code>client.conf</code></th><th>Explanation</th></tr>
-  <tr valign="top">
-  <td><sub><pre lang="ini">
-  # homcc: example config
-  compiler=g++
-  timeout=60
-  compression=lzo
-  profile=jammy
-  log_level=DEBUG
-  verbose=True
-  </pre></sub></td>
-  <td><sub><pre>
-  # Comment
-  Default compiler
-  Default timeout value in seconds
-  Default compression algorithm: {lzo, lzma}
-  Profile to specify the schroot environment for remote compilations
-  Detail level for log messages: {DEBUG, INFO, WARNING, ERROR, CRITICAL}
-  Enable verbosity mode which implies detailed and colored logging
-  </pre></sub></td>
-  </tr>
-  </table>
-  </p>
-- Specify your remote compilation server in a `hosts` file or in the `$HOMCC_HOSTS` environment variable:
-  - Possible `hosts` file locations:
-    - `$HOMCC_DIR/hosts`
-    - `~/.homcc/hosts`
-    - `~/.config/homcc/hosts`
-    - `/etc/homcc/hosts`
+- Overwrite defaults globally via a `client.conf` configuration file if necessary:
+  - <p align="center">
+    <table align="center">
+    <tr align="center"><th><code>client.conf</code> file locations</th></tr>
+    <tr valign="top">
+    <td><code>
+    $HOMCC_DIR/client.conf<br/>
+    ~/.homcc/client.conf<br/>
+    ~/.config/homcc/client.conf<br/>
+    /etc/homcc/client.conf
+    </code></td>
+    </tr>
+    </table>
+    </p>
+  - <p align="center">
+    <table align="center">
+    <tr align="center"><th>Example: <code>client.conf</code></th><th>Explanation</th></tr>
+    <tr valign="top">
+    <td><sub><pre lang="ini">
+    # homcc: client.conf
+    compiler=g++
+    timeout=60
+    compression=lzo
+    profile=jammy
+    log_level=DEBUG
+    verbose=True
+    </pre></sub></td>
+    <td><sub><pre>
+    # Comment
+    Default compiler
+    Default timeout value in seconds
+    Default compression algorithm: {lzo, lzma}
+    Profile to specify the schroot environment for remote compilations
+    Detail level for log messages: {DEBUG, INFO, WARNING, ERROR, CRITICAL}
+    Enable verbosity mode which implies detailed and colored logging
+    </pre></sub></td>
+    </tr>
+    </table>
+    </p>
+- Specify your remote compilation server via the `$HOMCC_HOSTS` environment variable or in a dedicated `hosts` file:
+  - <p align="center">
+    <table align="center">
+    <tr align="center"><th><code>hosts</code> file locations</th></tr>
+    <tr valign="top">
+    <td><code>
+    $HOMCC_DIR/hosts<br/>
+    ~/.homcc/hosts<br/>
+    ~/.config/homcc/hosts<br/>
+    /etc/homcc/hosts
+    </code></td>
+    </tr>
+    </table>
+    </p>
   - Possible `hosts` formats:
     - `HOST` format:
       - `HOST`: TCP connection to specified `HOST` with default port `3633`
@@ -115,28 +130,26 @@ Additional features:
         - `lzo`: Lempel-Ziv-Oberhumer compression algorithm
         - `lzma`: Lempel-Ziv-Markov chain algorithm
       - No compression is used per default, specifying `lzo` is however advised
-  - Example:
-  <p align="center">
-  <table align="center">
-  <tr align="center"><th>File: <code>hosts</code></th><th>Explanation</th></tr>
-  <tr valign="top">
-  <td><sub><pre>
-  # homcc: example hosts
-  remotehost/12
-  192.168.0.1:3633/21
-  [FC00::1]:3633/42,lzo
-  </pre></sub></td>
-  <td><sub><pre>
-  # Comment
-  Named "remotehost" host with limit of 12
-  IPv4 "192.168.0.1" host at port 3633 with limit of 21
-  IPv6 "FC00::1" host at port 3633 with limit of 42 and lzo compression
-  </pre></sub></td>
-  </tr>
-  </table>
-  </p>
-
-  **WARNING**: Currently do not include `localhost` in your `hosts` file!
+  - <p align="center">
+    <table align="center">
+    <tr align="center"><th>Example: <code>hosts</code></th><th>Explanation</th></tr>
+    <tr valign="top">
+    <td><sub><pre>
+    # homcc: hosts
+    remotehost/12
+    192.168.0.1:3633/21
+    [FC00::1]:3633/42,lzo
+    </pre></sub></td>
+    <td><sub><pre>
+    # Comment
+    Named "remotehost" host with limit of 12
+    IPv4 "192.168.0.1" host at port 3633 with limit of 21
+    IPv6 "FC00::1" host at port 3633 with limit of 42 and lzo compression
+    </pre></sub></td>
+    </tr>
+    </table>
+    </p>
+    :exclamation:**WARNING**: Currently do not include `localhost` in your `hosts` file!
 - Use `homcc` by specifying `CCACHE_PREFIX=homcc` in your `conan` profile or IDE of choice and have `CONAN_CPU_COUNT` smaller or equal to the sum of all remote host limits, e.g. `≤ 12+21+42`!
 
 
@@ -146,46 +159,53 @@ Additional features:
   ```sh
   $ homccd --help
   ```
-- Overwrite defaults via a `server.conf` configuration file:
-  - Possible `server.conf` locations:
-    - `$HOMCC_DIR/server.conf`
-    - `~/.homcc/server.conf`
-    - `~/.config/homcc/server.conf`
-    - `/etc/homcc/server.conf`
-  - Example:
-  <p align="center">
-  <table align="center">
-  <tr align="center"><th>File: <code>server.conf</code></th><th>Explanation</th></tr>
-  <tr valign="top">
-  <td><sub><pre lang="ini">
-  # homccd: example config
-  limit=64
-  port=3633
-  address=0.0.0.0
-  log_level=DEBUG
-  verbose=True
-  </pre></sub></td>
-  <td><sub><pre>
-  # Comment
-  Maximum limit of concurrent compilations
-  TCP port to listen on
-  IP address to listen on
-  Detail level for log messages: {DEBUG, INFO, WARNING, ERROR, CRITICAL}
-  Enable verbosity mode which implies detailed and colored logging
-  </pre></sub></td>
-  </tr>
-  </table>
-  </p>
+- Overwrite defaults globally via a `server.conf` configuration file if necessary:
+  - <p align="center">
+    <table align="center">
+    <tr align="center"><th><code>server.conf</code> file locations</th></tr>
+    <tr valign="top">
+    <td><code>
+    $HOMCC_DIR/server.conf<br/>
+    ~/.homcc/server.conf<br/>
+    ~/.config/homcc/server.conf<br/>
+    /etc/homcc/server.conf
+    </code></td>
+    </tr>
+    </table>
+    </p>
+  - <p align="center">
+    <table align="center">
+    <tr align="center"><th>Example: <code>server.conf</code></th><th>Explanation</th></tr>
+    <tr valign="top">
+    <td><sub><pre lang="ini">
+    # homccd: server.conf
+    limit=64
+    port=3633
+    address=0.0.0.0
+    log_level=DEBUG
+    verbose=True
+    </pre></sub></td>
+    <td><sub><pre>
+    # Comment
+    Maximum limit of concurrent compilations
+    TCP port to listen on
+    IP address to listen on
+    Detail level for log messages: {DEBUG, INFO, WARNING, ERROR, CRITICAL}
+    Enable verbosity mode which implies detailed and colored logging
+    </pre></sub></td>
+    </tr>
+    </table>
+    </p>
 - \[Optional]:
-  Set up your `schroot` environments at `/etc/schroot/schroot.conf` or in the `/etc/schroot/chroot.d/` directory.
-  Currently, in order for changes to apply, you have to restart `homccd`:
+  Set up your `schroot` environments at `/etc/schroot/schroot.conf` or in the `/etc/schroot/chroot.d/` directory and mount the `/tmp/` directory to enable sandboxed compiler execution.
+  Currently, in order for these changes to apply, you have to restart `homccd`:
   ```sh
   $ sudo systemctl restart homccd.service
   ```
 
 
 ## Documentation
-- Naming: `HOMCC` generally refers to the whole project, while the phrases `homcc` and `client` as well as `homccd` and `server` can be used interchangeably.
+- Terms: `HOMCC` generally refers to the whole project, while the terms `homcc` and `client` as well as `homccd` and `server` can be used interchangeably.
   However, for user facing context `homcc[d]` is preferred whereas `client` & `server` are preferred internally.
 - TODO:
   - Client: Preprocessing, Hosts Parsing & Selection
@@ -256,7 +276,7 @@ Additional features:
     $ sudo debootstrap jammy /var/chroot/jammy http://archive.ubuntu.com/ubuntu
     ```
   - Configure the environment by creating a corresponding file in the `/etc/schroot/chroot.d/` directory or by appending it to `/etc/schroot/schroot.conf`, e.g. by replacing `USERNAME` in `jammy.conf`:
-    ```
+    ```ini
     [jammy]
     description=Ubuntu 22.04 Jammy Jellyfish
     directory=/var/chroot/jammy
