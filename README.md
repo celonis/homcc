@@ -10,7 +10,7 @@ Although `HOMCC` is still in an early stage of development, we can already see i
   <img src="assets/compilation_times.png" align="center" width="61.8%"/>
   <br/>
   <sub>
-  Difference in remote compilation times for a <a href="https://github.com/celonis/">Celonis</a> internal C++ code base built with <code>g++-8</code>, a total server job limit of 112, an upload rate of 4.0 MiB/s and varying amount of dedicated local threads.<br/>
+  Difference in remote compilation times for a <a href="https://github.com/celonis/">Celonis</a> internal C++ code base built with <code>g++-8</code>, a total server job limit of 112, an upload rate of 4.0 MiB/s and varying amount of dedicated local threads.
   Note, this plot wrongly still includes negligible local linking times of above 90 seconds.
   </sub>
 </p>
@@ -64,7 +64,7 @@ Additionally, `HOMCC` provides sandboxed compiler execution for remote compilati
   $ homcc --help
   ```
 - Overwrite defaults globally via a `client.conf` configuration file if necessary:
-  - <table align="center">
+  - <table>
     <tr align="center"><th><code>client.conf</code> file locations</th></tr>
     <tr valign="top"><td>
     <code>$HOMCC_DIR/client.conf</code><br/>
@@ -73,7 +73,7 @@ Additionally, `HOMCC` provides sandboxed compiler execution for remote compilati
     <code>/etc/homcc/client.conf</code>
     </td></tr>
     </table>
-  - <table align="center">
+  - <table>
     <tr align="center"><th>Example: <code>client.conf</code></th><th>Explanation</th></tr>
     <tr valign="top">
     <td><sub><pre lang="ini">
@@ -97,7 +97,7 @@ Additionally, `HOMCC` provides sandboxed compiler execution for remote compilati
     </tr>
     </table>
 - Specify your remote compilation server via the `$HOMCC_HOSTS` environment variable or in a dedicated `hosts` file:
-  - <table align="center">
+  - <table>
     <tr align="center"><th><code>hosts</code> file locations</th></tr>
     <tr valign="top"><td>
     <code>$HOMCC_DIR/hosts</code><br/>
@@ -119,7 +119,7 @@ Additionally, `HOMCC` provides sandboxed compiler execution for remote compilati
         - `lzo`: Lempel-Ziv-Oberhumer compression algorithm
         - `lzma`: Lempel-Ziv-Markov chain algorithm
       - No compression is used per default, specifying `lzo` is however advised
-  - <table align="center">
+  - <table>
     <tr align="center"><th>Example: <code>hosts</code></th><th>Explanation</th></tr>
     <tr valign="top">
     <td><sub><pre>
@@ -147,7 +147,7 @@ Additionally, `HOMCC` provides sandboxed compiler execution for remote compilati
   $ homccd --help
   ```
 - Overwrite defaults globally via a `server.conf` configuration file if necessary:
-  - <table align="center">
+  - <table>
     <tr align="center"><th><code>server.conf</code> file locations</th></tr>
     <tr valign="top"><td>
     <code>$HOMCC_DIR/server.conf</code><br/>
@@ -156,7 +156,7 @@ Additionally, `HOMCC` provides sandboxed compiler execution for remote compilati
     <code>/etc/homcc/server.conf</code>
     </td></tr>
     </table>
-  - <table align="center">
+  - <table>
     <tr align="center"><th>Example: <code>server.conf</code></th><th>Explanation</th></tr>
     <tr valign="top">
     <td><sub><pre lang="ini">
