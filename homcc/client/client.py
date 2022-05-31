@@ -236,19 +236,12 @@ class StateFile:
         self.source_base_filename = Path(source_file).name.encode()  # char file[128]
 
         if len(self.source_base_filename) > 127:
-            raise ValueError  # TODO
-
-        # if len(arguments.source_files) > 1:
-        #    logger.info(
-        #        "Only monitoring file '%s' (excluding files ['%s']).",
-        #        arguments.source_files[0],
-        #        "', '".join(arguments.source_files[1:]),
-        #    )
+            raise ValueError(f"Source Base Filename '{self.source_base_filename.decode()}' too long")
 
         self.hostname = hostname.encode()  # char host[128]
 
         if len(self.hostname) > 127:
-            raise ValueError  # TODO
+            raise ValueError(f"Hostname '{self.hostname.decode()}' too long")
 
         self.slot = slot  # int slot
         # enum dcc_phase curr_phase: unassigned
@@ -285,19 +278,19 @@ class StateFile:
             self.DISTCC_TASK_STATE_STRUCT_FORMAT,
             # struct fields
             self.DISTCC_TASK_STATE_STRUCT_SIZE,  # size_t struct_size
-            self.DISTCC_STATE_MAGIC,  # unsigned long magic
-            self.pid,  # unsigned long cpid
-            self.source_base_filename,  # char file[128]
-            self.hostname,  # char host[128]
-            self.slot,  # int slot
-            self.phase,  # enum dcc_phase curr_phase
-            self.DISTCC_NEXT_TASK_STATE,  # struct dcc_task_state *next
+            self.DISTCC_STATE_MAGIC,             # unsigned long magic
+            self.pid,                            # unsigned long cpid
+            self.source_base_filename,           # char file[128]
+            self.hostname,                       # char host[128]
+            self.slot,                           # int slot
+            self.phase,                          # enum dcc_phase curr_phase
+            self.DISTCC_NEXT_TASK_STATE,         # struct dcc_task_state *next
         )
         # fmt: on
 
     def __eq__(self, other):
         if isinstance(other, StateFile):
-            return (  # ignore constants: DISTCC_TASK_STATE_STRUCT_SIZE, DISTCC_STATE_MAGIC, 0 (void*)
+            return (  # ignore constants: DISTCC_TASK_STATE_STRUCT_SIZE, DISTCC_STATE_MAGIC, DISTCC_NEXT_TASK_STATE
                 self.pid == other.pid
                 and self.source_base_filename == other.source_base_filename
                 and self.hostname == other.hostname
@@ -309,9 +302,8 @@ class StateFile:
     def __enter__(self) -> StateFile:
         try:
             self.filepath.touch(exist_ok=False)
-        except FileExistsError as error:
+        except FileExistsError:
             logger.error("Could not create client state file '%s' as it already exists!", self.filepath.absolute())
-            raise error from None  # TODO
 
         return self
 

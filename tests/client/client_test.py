@@ -70,14 +70,14 @@ class TestRemoteHostSemaphore:
     """Tests for RemoteHostSemaphore"""
 
     def test_localhost(self):
-        localhost: Host = Host(type=ConnectionType.LOCAL, name="localhost")
+        localhost: Host = Host.localhost_with_limit(1)
 
         with pytest.raises(ValueError):
             with RemoteHostSemaphore(localhost):
                 pass
 
     def test_remotehosts(self, unused_tcp_port: int):
-        name: str = self.test_remotehosts.__name__
+        name: str = self.test_remotehosts.__name__  # dedicated test semaphore
         remotehost: Host = Host(type=ConnectionType.TCP, name=name, port=unused_tcp_port, limit=1)
         host_id: str = remotehost.id()
 
@@ -104,8 +104,8 @@ class TestLocalHostSemaphore:
 
     @pytest.mark.timeout(5)
     def test_localhosts(self):
-        localhost: Host = Host(type=ConnectionType.LOCAL, name="localhost", limit=1)
-        localhost.name = self.test_localhosts.__name__
+        localhost: Host = Host.localhost_with_limit(1)
+        localhost.name = self.test_localhosts.__name__  # overwrite name to create dedicated test semaphore
         host_id: str = localhost.id()
 
         def hold_semaphore(host: Host):
@@ -114,11 +114,11 @@ class TestLocalHostSemaphore:
                 assert posix_ipc.Semaphore(host_id).value == 0
                 time.sleep(1)
 
-        # single hold
+        # single hold: 1sec total
         hold_semaphore(localhost)
         assert posix_ipc.Semaphore(host_id).value == 1  # successful release
 
-        # concurrent holds
+        # concurrent holds: 2sec total
         threads: List[threading.Thread] = [
             threading.Thread(target=task, args=(localhost,)) for task in 2 * [hold_semaphore]
         ]

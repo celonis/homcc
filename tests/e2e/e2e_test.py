@@ -265,7 +265,3 @@ class TestEndToEnd:
     @pytest.mark.skipif(shutil.which("clang++") is None, reason="clang++ is not installed")
     def test_end_to_end_clangplusplus_shared_host_slot(self, unused_tcp_port: int):
         self.cpp_end_to_end_multiple_clients_shared_host("clang++", unused_tcp_port)
-
-
-if __name__ == "__main__":
-    TestEndToEnd().test_end_to_end_gplusplus_shared_host_slot(3650)
