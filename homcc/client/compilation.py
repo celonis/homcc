@@ -66,7 +66,7 @@ async def compile_remotely(arguments: Arguments, hosts: List[Host], config: Clie
             with RemoteHostSemaphore(host):
                 return await asyncio.wait_for(compile_remotely_at(arguments, host, profile), timeout=timeout)
 
-        # semaphore could not be acquired
+        # remote semaphore could not be acquired
         except SlotsExhaustedError as error:
             logger.debug("%s", error)
 

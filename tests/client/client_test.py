@@ -1,11 +1,12 @@
 """ Tests for client/client.py"""
-import threading
-import time
 
 import pytest
 
+import os
 import posix_ipc
 import struct
+import threading
+import time
 
 from pathlib import Path
 from typing import Iterator, List
@@ -91,6 +92,19 @@ class TestRemoteHostSemaphore:
 
         assert posix_ipc.Semaphore(host_id).value == 1  # successful release
 
+    def test_release(self, unused_tcp_port: int):
+        name: str = self.test_release.__name__  # dedicated test semaphore
+        remotehost: Host = Host(type=ConnectionType.TCP, name=name, port=unused_tcp_port, limit=1)
+        host_id: str = remotehost.id()
+
+        with pytest.raises(SystemExit):
+            with RemoteHostSemaphore(remotehost):
+                assert Path(f"/dev/shm/sem.{host_id}")
+                assert posix_ipc.Semaphore(host_id).value == 0
+                raise SystemExit(os.EX_TEMPFAIL)
+
+        assert posix_ipc.Semaphore(host_id).value == 1  # successful release
+
 
 class TestLocalHostSemaphore:
     """Tests for LocalHostSemaphore"""
@@ -118,7 +132,7 @@ class TestLocalHostSemaphore:
         hold_semaphore(localhost)
         assert posix_ipc.Semaphore(host_id).value == 1  # successful release
 
-        # concurrent holds: 2sec total
+        # concurrent holds: 2 or 3sec total
         threads: List[threading.Thread] = [
             threading.Thread(target=task, args=(localhost,)) for task in 2 * [hold_semaphore]
         ]
@@ -130,6 +144,19 @@ class TestLocalHostSemaphore:
             thread.join()
 
         assert posix_ipc.Semaphore(host_id).value == 1  # successful releases
+
+    def test_release(self):
+        localhost: Host = Host.localhost_with_limit(1)
+        localhost.name = self.test_localhosts.__name__  # overwrite name to create dedicated test semaphore
+        host_id: str = localhost.id()
+
+        with pytest.raises(SystemExit):
+            with LocalHostSemaphore(localhost, 2):
+                assert Path(f"/dev/shm/sem.{host_id}")
+                assert posix_ipc.Semaphore(host_id).value == 0
+                raise SystemExit(os.EX_TEMPFAIL)
+
+        assert posix_ipc.Semaphore(host_id).value == 1  # successful release
 
 
 class TestStateFile:
