@@ -8,7 +8,7 @@ import subprocess
 import sys
 
 from pathlib import Path
-from typing import Dict, Optional, List, Set
+from typing import Dict, Optional, List, Set, Tuple
 
 from homcc.client.client import (
     HostSelector,
@@ -44,6 +44,7 @@ DEFAULT_LOCALHOST_LIMIT: int = (
     or 2  # fallback value to enable minor level of concurrency
 )
 DEFAULT_LOCALHOST: Host = Host.localhost_with_limit(DEFAULT_LOCALHOST_LIMIT)
+EXCLUDED_DEPENDENCY_PREFIXES: Tuple = ("/usr/include", "/usr/lib")
 
 
 async def compile_remotely(arguments: Arguments, hosts: List[Host], config: ClientConfig) -> int:
@@ -173,6 +174,20 @@ def scan_includes(arguments: Arguments) -> List[str]:
     return [dependency for dependency in dependencies if dependency not in arguments.source_files]
 
 
+def is_sendable_dependency(dependency: str) -> bool:
+    # filter preprocessor output target and line breaks
+    if dependency in [f"{Arguments.PREPROCESSOR_TARGET}:", "\\"]:
+        return False
+
+    # normalize paths, e.g. convert /usr/bin/../lib/ to /usr/lib/
+    dependency_path: Path = Path(dependency).resolve()
+
+    if str(dependency_path).startswith(EXCLUDED_DEPENDENCY_PREFIXES):
+        return False
+
+    return True
+
+
 def find_dependencies(arguments: Arguments) -> Set[str]:
     """get unique set of dependencies by calling the preprocessor and filtering the result"""
     try:
@@ -185,19 +200,7 @@ def find_dependencies(arguments: Arguments) -> Set[str]:
     if result.stdout:
         logger.debug("Preprocessor result:\n%s", result.stdout)
 
-    excluded_dependency_prefixes: List[str] = ["/usr/include", "/usr/lib"]
-
-    # create unique set of dependencies by filtering the preprocessor result
-    def is_sendable_dependency(dependency: str) -> bool:
-        if dependency in [f"{Arguments.PREPROCESSOR_TARGET}:", "\\"]:
-            return False
-
-        for excluded_prefix in excluded_dependency_prefixes:
-            if dependency.startswith(excluded_prefix):
-                return False
-
-        return True
-
+    # create unique set of dependencies by filtering the preprocessor result for meaningfully sendable dependencies
     return set(filter(is_sendable_dependency, result.stdout.split()))
 
 
