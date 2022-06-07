@@ -80,22 +80,32 @@ class HostSelector:
 
 
 class HostSemaphore(ABC):
-    """TODO"""
+    """
+    Abstract bass class to create and exit from semaphore contexts.
+
+    Inheriting classes only have to implement the context manager enter method.
+    """
 
     _semaphore: posix_ipc.Semaphore
+    """POSIX named semaphore to manage host slots between client processes."""
 
-    def __init__(self, name: str, initial_value: int):
-        self._semaphore = posix_ipc.Semaphore(name, posix_ipc.O_CREAT, initial_value=initial_value)
+    def __init__(self, host: Host):
+        # signal handling to properly remove the semaphore
+        signal.signal(signal.SIGINT, self._handle_interrupt)
+        signal.signal(signal.SIGTERM, self._handle_termination)
 
-    def _handle_interrupt(self, signum: int, frame):
+        # create host-id semaphore with host slot limit if not already existing
+        self._semaphore = posix_ipc.Semaphore(host.id(), posix_ipc.O_CREAT, initial_value=host.limit)
+
+    def _handle_interrupt(self, _, frame):
         self.__exit__()
-        logger.debug(repr(frame))
-        sys.exit(f"Stopped by SIGINT({signum}) signal")
+        logger.debug("SIGINT:\n%s", repr(frame))
+        sys.exit("Stopped by SIGINT signal")
 
-    def _handle_termination(self, signum: int, frame):
+    def _handle_termination(self, _, frame):
         self.__exit__()
-        logger.debug(repr(frame))
-        sys.exit(f"Stopped by SIGTERM({signum}) signal")
+        logger.debug("SIGTERM:\n%s", repr(frame))
+        sys.exit("Stopped by SIGTERM signal")
 
     @abstractmethod
     def __enter__(self):
@@ -123,12 +133,9 @@ class RemoteHostSemaphore(HostSemaphore):
             raise ValueError(f"Invalid remote host: '{host}'")
 
         self._host = host
-        super().__init__(host.id(), host.limit)
+        super().__init__(host)
 
     def __enter__(self) -> RemoteHostSemaphore:
-        signal.signal(signal.SIGINT, self._handle_interrupt)
-        signal.signal(signal.SIGTERM, self._handle_termination)
-
         try:
             self._semaphore.acquire(timeout=0)  # non-blocking acquisition
         except posix_ipc.BusyError as error:
@@ -152,9 +159,12 @@ class LocalHostSemaphore(HostSemaphore):
     """
 
     DEFAULT_COMPILATION_TIME: float = 10.0
+    """Default compilation time."""
 
     _compilation_time: float
+    """Expected average compilation time [s], defaults to DEFAULT_COMPILATION_TIME."""
     _timeout: float
+    """Timeout [s] after failing semaphore acquisition."""
 
     def __init__(self, host: Host, compilation_time: float = DEFAULT_COMPILATION_TIME):
         if not host.is_local():
@@ -165,12 +175,9 @@ class LocalHostSemaphore(HostSemaphore):
 
         self._compilation_time = compilation_time
         self._timeout = compilation_time - 1
-        super().__init__(host.id(), host.limit)
+        super().__init__(host)
 
     def __enter__(self) -> LocalHostSemaphore:
-        signal.signal(signal.SIGINT, self._handle_interrupt)
-        signal.signal(signal.SIGTERM, self._handle_termination)
-
         while True:
             try:
                 self._semaphore.acquire(timeout=self._compilation_time - self._timeout)  # blocking acquisition
