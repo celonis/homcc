@@ -6,6 +6,8 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import signal
+import sys
 import time
 
 import posix_ipc
@@ -13,6 +15,7 @@ import random
 import socket
 import struct
 
+from abc import ABC, abstractmethod
 from enum import Enum, auto
 from pathlib import Path
 from typing import Dict, Iterator, List, Optional
@@ -76,7 +79,34 @@ class HostSelector:
         return host
 
 
-class RemoteHostSemaphore:
+class HostSemaphore(ABC):
+    """TODO"""
+
+    _semaphore: posix_ipc.Semaphore
+
+    def __init__(self, name: str, initial_value: int):
+        self._semaphore = posix_ipc.Semaphore(name, posix_ipc.O_CREAT, initial_value=initial_value)
+
+    def _handle_interrupt(self, signum: int, frame):
+        self.__exit__()
+        logger.debug(repr(frame))
+        sys.exit(f"Stopped by SIGINT({signum}) signal")
+
+    def _handle_termination(self, signum: int, frame):
+        self.__exit__()
+        logger.debug(repr(frame))
+        sys.exit(f"Stopped by SIGTERM({signum}) signal")
+
+    @abstractmethod
+    def __enter__(self):
+        pass
+
+    def __exit__(self, *_):
+        self._semaphore.release()
+        self._semaphore.close()
+
+
+class RemoteHostSemaphore(HostSemaphore):
     """
     Class to track remote compilation jobs via a named posix semaphore.
 
@@ -86,29 +116,27 @@ class RemoteHostSemaphore:
     exhausts all slots of the specified host.
     """
 
-    _semaphore: posix_ipc.Semaphore
     _host: Host
 
     def __init__(self, host: Host):
         if host.is_local():
             raise ValueError(f"Invalid remote host: '{host}'")
 
-        self._semaphore = posix_ipc.Semaphore(host.id(), posix_ipc.O_CREAT, initial_value=host.limit)
         self._host = host
+        super().__init__(host.id(), host.limit)
 
     def __enter__(self) -> RemoteHostSemaphore:
+        signal.signal(signal.SIGINT, self._handle_interrupt)
+        signal.signal(signal.SIGTERM, self._handle_termination)
+
         try:
             self._semaphore.acquire(timeout=0)  # non-blocking acquisition
         except posix_ipc.BusyError as error:
             raise SlotsExhaustedError(f"All compilation slots for host {self._host} are occupied.") from error
         return self
 
-    def __exit__(self, *_):
-        self._semaphore.release()
-        self._semaphore.close()
 
-
-class LocalHostSemaphore:
+class LocalHostSemaphore(HostSemaphore):
     """
     Class to track local compilation jobs via a named posix semaphore.
 
@@ -125,7 +153,6 @@ class LocalHostSemaphore:
 
     DEFAULT_COMPILATION_TIME: float = 10.0
 
-    _semaphore: posix_ipc.Semaphore
     _compilation_time: float
     _timeout: float
 
@@ -136,11 +163,14 @@ class LocalHostSemaphore:
         if compilation_time <= 1.0:
             raise ValueError(f"Invalid compilation time: {compilation_time}")
 
-        self._semaphore = posix_ipc.Semaphore(host.id(), posix_ipc.O_CREAT, initial_value=host.limit)
         self._compilation_time = compilation_time
         self._timeout = compilation_time - 1
+        super().__init__(host.id(), host.limit)
 
     def __enter__(self) -> LocalHostSemaphore:
+        signal.signal(signal.SIGINT, self._handle_interrupt)
+        signal.signal(signal.SIGTERM, self._handle_termination)
+
         while True:
             try:
                 self._semaphore.acquire(timeout=self._compilation_time - self._timeout)  # blocking acquisition
@@ -151,10 +181,6 @@ class LocalHostSemaphore:
                 # inverse exponential backoff: https://www.desmos.com/calculator/uniats0s4c
                 time.sleep(self._timeout)
                 self._timeout = self._timeout / 3 * 2
-
-    def __exit__(self, *_):
-        self._semaphore.release()
-        self._semaphore.close()
 
 
 class StateFile:

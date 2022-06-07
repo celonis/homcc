@@ -116,6 +116,7 @@ class TestLocalHostSemaphore:
             with LocalHostSemaphore(remotehost):
                 pass
 
+    @pytest.mark.filterwarnings("ignore: signal only works in main thread")
     @pytest.mark.timeout(5)
     def test_localhosts(self):
         localhost: Host = Host.localhost_with_limit(1)

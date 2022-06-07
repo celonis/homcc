@@ -200,7 +200,7 @@ Additionally, `HOMCC` provides sandboxed compiler execution for remote compilati
 ### Setup
 - Install the `liblzo2-dev` apt package (needed for LZO compression):
   ```sh
-  $ sudo apt install liblzo2-dev
+  $ sudo apt install liblzo2-dev liblzma-dev
   ```
 - Install required dependencies:
   ```sh
