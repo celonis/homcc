@@ -38,14 +38,17 @@ class HostSelector:
     Class to enable random but weighted host selection on a load balancing principle. Hosts with more capacity have a
     higher probability of being chosen for remote compilation. The selection policy is agnostic to the server job
     limit and only relies on the limit information provided on the client side via the host format. If parameter tries
-    is not provided, a host will be randomly selected until all hosts are exhausted.
+    is not provided, a host will be randomly selected until all hosts are exhausted. Parameter allow_localhost toggles
+    whether localhost is added to the list of possible selections.
     """
 
-    def __init__(self, hosts: List[Host], tries: Optional[int] = None):
+    def __init__(self, hosts: List[Host], tries: Optional[int] = None, allow_localhost: bool = False):
         if tries is not None and tries <= 0:
             raise ValueError(f"Amount of tries must be greater than 0, but was {tries}")
 
-        self._hosts: List[Host] = [host for host in hosts if host.limit > 0]
+        self._hosts: List[Host] = [
+            host for host in hosts if host.limit > 0 and (not host.is_local() or allow_localhost)
+        ]
         self._limits: List[int] = [host.limit for host in self._hosts]
 
         self._count: int = 0
@@ -127,6 +130,7 @@ class RemoteHostSemaphore(HostSemaphore):
     """
 
     _host: Host
+    """Selected host."""
 
     def __init__(self, host: Host):
         if host.is_local():

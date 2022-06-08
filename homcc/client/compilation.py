@@ -46,17 +46,12 @@ EXCLUDED_DEPENDENCY_PREFIXES: Tuple = ("/usr/include", "/usr/lib")
 async def compile_remotely(arguments: Arguments, hosts: List[Host], config: ClientConfig) -> int:
     """main function to control remote compilation"""
 
-    # try to connect to 3 different hosts before falling back to local compilation
+    # try to connect to 3 different remote hosts before falling back to local compilation
     for host in HostSelector(hosts, 3):
-        # execute compilation requests for localhost directly
-        if host.is_local():
-            logger.info("Compiling locally:\n%s", arguments)
-            return compile_locally(arguments, host)
-
         timeout: float = config.timeout or DEFAULT_COMPILATION_REQUEST_TIMEOUT
         profile: Optional[str] = config.profile
 
-        # overwrite host compression if none was specified
+        # overwrite host compression if none was explicitly specified but provided via config
         host.compression = host.compression or config.compression
 
         try:
@@ -97,12 +92,8 @@ async def compile_remotely_at(arguments: Arguments, host: Host, profile: Optiona
                 f"Host {client.host}:{client.port} refused the connection:\n{host_response.info}!"
             )
 
-        count: int = 0
-
         # provide requested dependencies
         while isinstance(host_response, DependencyRequestMessage):
-            count += 1
-            logger.debug("COUNT:\t%i", count)
             requested_dependency: str = dependency_dict[host_response.get_sha1sum()]
             await client.send_dependency_reply_message(requested_dependency)
 
@@ -140,7 +131,7 @@ async def compile_remotely_at(arguments: Arguments, host: Host, profile: Optiona
 
         for object_file in host_response.get_object_files():
             logger.debug("Deleting file %s", object_file.file_name)
-            Path(object_file.file_name).unlink(missing_ok=True)
+            Path(object_file.file_name).unlink()
 
         return linker_return_code
 

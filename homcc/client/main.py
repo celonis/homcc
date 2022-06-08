@@ -106,8 +106,8 @@ def main():
 
             hosts.append(host)
 
-        # if no explicit localhost/LIMIT host is provided, add DEFAULT_LOCALHOST host
-        # this will limit the amount of local compilation jobs via the resulting "localhost_LIMIT" HostSlotsLockFile
+        # if no explicit localhost/LIMIT host is provided, add DEFAULT_LOCALHOST host which will limit the amount of
+        # locally running compilation jobs
         if not has_local:
             hosts.append(localhost)
 
@@ -121,7 +121,7 @@ def main():
     if (timeout := homcc_args_dict["timeout"]) is not None:
         homcc_config.timeout = timeout
 
-    # force local compilation on specific conditions
+    # force local compilation on specific conditions; TODO(s.pirsch): this should probably be removed!
     if compiler_arguments.is_linking_only():
         logger.debug("Linking [%s] to %s", ", ".join(compiler_arguments.object_files), compiler_arguments.output)
         sys.exit(compile_locally(compiler_arguments, localhost))

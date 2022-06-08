@@ -22,8 +22,25 @@ class TestHostSelector:
     # first host will be ignored by the host selector due to 0 limit
     HOSTS: List[Host] = [
         Host.from_str(host_str)
-        for host_str in ["remotehost0/0", "remotehost1/1", "remotehost2/2", "remotehost3/4", "remotehost4/8"]
+        # the first two hosts will be skipped per default
+        for host_str in [
+            "localhost/1",
+            "remotehost0/0",
+            "remotehost1/1",
+            "remotehost2/2",
+            "remotehost3/4",
+            "remotehost4/8",
+        ]
     ]
+
+    def test_localhost_selector(self):
+        host_selector: HostSelector = HostSelector(self.HOSTS[0:1], tries=1, allow_localhost=True)
+
+        assert len(host_selector) == 1
+
+        host: Host = next(iter(host_selector))
+        assert host == self.HOSTS[0]
+        assert host.is_local()
 
     def test_host_selector(self):
         host_selector: HostSelector = HostSelector(self.HOSTS)
@@ -33,7 +50,7 @@ class TestHostSelector:
         host_iter: Iterator = iter(host_selector)
         for count, host in enumerate(host_iter):
             assert host in self.HOSTS
-            assert count == len(self.HOSTS[1:]) - len(host_selector) - 1
+            assert count == len(self.HOSTS[2:]) - len(host_selector) - 1
 
         assert len(host_selector) == 0
         with pytest.raises(StopIteration):
@@ -54,13 +71,13 @@ class TestHostSelector:
             assert next(host_iter)
 
     def test_host_selector_with_tries_not_enough_hosts(self):
-        host_selector: HostSelector = HostSelector(self.HOSTS[1:2], 3)
+        host_selector: HostSelector = HostSelector(self.HOSTS[2:3], 3)
 
         assert len(host_selector) == 1
 
         host_iter: Iterator = iter(host_selector)
         host: Host = next(host_iter)
-        assert host == self.HOSTS[1]
+        assert host == self.HOSTS[2]
 
         assert len(host_selector) == 0
         with pytest.raises(StopIteration):
@@ -116,7 +133,8 @@ class TestLocalHostSemaphore:
             with LocalHostSemaphore(remotehost):
                 pass
 
-    @pytest.mark.filterwarnings("ignore: signal only works in main thread")
+    # ignore signal handling in non-main threads warning
+    @pytest.mark.filterwarnings("ignore::pytest.PytestUnhandledThreadExceptionWarning")
     @pytest.mark.timeout(5)
     def test_localhosts(self):
         localhost: Host = Host.localhost_with_limit(1)
