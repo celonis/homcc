@@ -218,7 +218,7 @@ class StateFile:
     # pylint: disable=invalid-name
     # justification: highlight that this is not a regular Python Enum
     class DISTCC_CLIENT_PHASES(int, Enum):
-        """TODO: WRITE DOC STRING"""
+        """Client compilation phases equivalent to dcc_phase."""
 
         STARTUP = 0
         BLOCKED = auto()
