@@ -17,7 +17,7 @@ from homcc.common.arguments import Arguments
 from homcc.common.compression import Compression
 from configparser import ConfigParser, SectionProxy
 from homcc.common.logging import LogLevel
-from homcc.common.parsing import default_locations, parse_configs
+from homcc.common.parsing import HOMCC_CONFIG_FILENAME, default_locations, parse_configs
 from homcc.client.errors import HostParsingError, NoHostsFoundError
 
 logger = logging.getLogger(__name__)
@@ -363,7 +363,7 @@ def load_hosts(hosts_file_locations: Optional[List[Path]] = None) -> List[str]:
 
     # HOSTS Files
     if not hosts_file_locations:
-        hosts_file_locations = default_locations()
+        hosts_file_locations = default_locations(HOMCC_HOSTS_FILENAME)
 
     for hosts_file_location in hosts_file_locations:
         if hosts_file_location.exists():
@@ -376,7 +376,7 @@ def load_hosts(hosts_file_locations: Optional[List[Path]] = None) -> List[str]:
 
 
 def parse_config(filenames: List[Path] = None) -> ClientConfig:
-    cfg: ConfigParser = parse_configs(filenames or default_locations())
+    cfg: ConfigParser = parse_configs(filenames or default_locations(HOMCC_CONFIG_FILENAME))
 
     if HOMCC_CLIENT_CONFIG_SECTION not in cfg.sections():
         return ClientConfig()

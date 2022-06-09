@@ -17,13 +17,23 @@ class TestParsingConfig:
     """
 
     config: List[str] = [
-        "[homccd]",  # config section
-        "# HOMCC TEST CONFIG COMMENT",  # comment line
-        "LIMIT=64",  # attribute with capitalized key
-        "LOG_LEVEL=DEBUG ",  # attribute with trailing whitespace
-        "port = 3633 ",  # attribute with whitespace
-        "AdDrEsS=localhost",  # attribute with changing capitalization
-        "verbose=TRUE",  # boolean attribute
+        "[homccd]",
+        "# Server global config",
+        "LIMIT=42",
+        "port=3633",
+        "AdDrEsS=0.0.0.0",
+        "LOG_LEVEL=DEBUG",
+        "verbose=TRUE",
+        # the following configs should be ignored
+        "[homcc]",
+        "LOG_LEVEL=INFO",
+        "verbose=FALSE",
+    ]
+
+    config_overwrite: List[str] = [
+        "[homccd]",
+        "LOG_LEVEL=INFO",
+        "verbose=FALSE",
     ]
 
     def test_parse_config_file(self, tmp_path: Path):
@@ -31,7 +41,18 @@ class TestParsingConfig:
         tmp_config_file.write_text("\n".join(self.config))
 
         assert parse_config([tmp_config_file]) == ServerConfig(
-            limit=64, port=3633, address="localhost", log_level="DEBUG", verbose=True
+            limit=42, port=3633, address="0.0.0.0", log_level="DEBUG", verbose=True
+        )
+
+    def test_parse_multiple_config_files(self, tmp_path: Path):
+        tmp_config_file: Path = tmp_path / HOMCC_CONFIG_FILENAME
+        tmp_config_file.write_text("\n".join(self.config))
+
+        tmp_config_file_overwrite: Path = tmp_path / f"{HOMCC_CONFIG_FILENAME}_overwrite"
+        tmp_config_file_overwrite.write_text("\n".join(self.config_overwrite))
+
+        assert parse_config([tmp_config_file_overwrite, tmp_config_file]) == ServerConfig(
+            limit=42, port=3633, address="0.0.0.0", log_level="INFO", verbose=False
         )
 
 

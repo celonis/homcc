@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 
 from homcc.common.logging import LogLevel
-from homcc.common.parsing import default_locations, parse_configs
+from homcc.common.parsing import HOMCC_CONFIG_FILENAME, default_locations, parse_configs
 from homcc.server.server import TCPServer
 
 logger = logging.getLogger(__name__)
@@ -161,7 +161,7 @@ def parse_cli_args(args: List[str]) -> Dict[str, Any]:
 
 
 def parse_config(filenames: List[Path] = None) -> ServerConfig:
-    cfg: ConfigParser = parse_configs(filenames or default_locations())
+    cfg: ConfigParser = parse_configs(filenames or default_locations(HOMCC_CONFIG_FILENAME))
 
     if HOMCC_SERVER_CONFIG_SECTION not in cfg.sections():
         return ServerConfig()
