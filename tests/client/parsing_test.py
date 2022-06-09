@@ -11,18 +11,17 @@ from typing import List
 
 from homcc.client.errors import HostParsingError
 from homcc.client.parsing import (
-    HOMCC_CLIENT_CONFIG_FILENAME,
     HOMCC_HOSTS_ENV_VAR,
     HOMCC_HOSTS_FILENAME,
     ClientConfig,
     ConnectionType,
     Host,
     parse_cli_args,
-    load_config_file,
     load_hosts,
     parse_host,
     parse_config,
 )
+from homcc.common.parsing import HOMCC_CONFIG_FILENAME
 
 
 class TestCLI:
@@ -248,31 +247,20 @@ class TestParsingConfig:
     """
 
     config: List[str] = [
-        "",
-        " ",
+        "[homcc]",
         "# HOMCC TEST CONFIG COMMENT",
-        " # comment with leading whitespace ",
-        "COMPILER=g++ # trailing comment",
-        " TIMEOUT = 180 ",
-        "\tCoMpReSsIoN=lzo",
+        "COMPILER=g++",
+        "TIMEOUT = 180 ",
+        "CoMpReSsIoN=lzo",
         "profile=foobar",
         "verbose=TRUE",
         "log_level=INFO",
     ]
 
-    def test_parse_config(self):
-        assert parse_config(self.config) == ClientConfig(
-            compiler="g++", compression="lzo", timeout="180", profile="foobar", log_level="INFO", verbose="True"
-        )
-
-    def test_parse_loaded_config_file(self, tmp_path: Path):
-        tmp_config_file: Path = tmp_path / HOMCC_CLIENT_CONFIG_FILENAME
+    def test_parse_config_file(self, tmp_path: Path):
+        tmp_config_file: Path = tmp_path / HOMCC_CONFIG_FILENAME
         tmp_config_file.write_text("\n".join(self.config))
 
-        config_file_locations: List[Path] = [tmp_config_file]
-
-        config: List[str] = load_config_file(config_file_locations)
-        assert config == self.config
-        assert parse_config(config) == ClientConfig(
-            compiler="g++", compression="lzo", timeout="180", profile="foobar", log_level="INFO", verbose="True"
+        assert parse_config([tmp_config_file]) == ClientConfig(
+            compiler="g++", compression="lzo", timeout=180, profile="foobar", log_level="INFO", verbose=True
         )

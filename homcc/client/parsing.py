@@ -1,4 +1,6 @@
 """Parsing related functionality regarding the homcc client"""
+from __future__ import annotations
+
 import logging
 import os
 import re
@@ -9,19 +11,20 @@ from argparse import ArgumentParser, Action, RawTextHelpFormatter
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from homcc.common.arguments import Arguments
 from homcc.common.compression import Compression
+from configparser import ConfigParser, SectionProxy
 from homcc.common.logging import LogLevel
-from homcc.common.parsing import default_locations, load_config_file_from, parse_config_keys
+from homcc.common.parsing import default_locations, parse_configs
 from homcc.client.errors import HostParsingError, NoHostsFoundError
 
 logger = logging.getLogger(__name__)
 
 HOMCC_HOSTS_ENV_VAR: str = "$HOMCC_HOSTS"
 HOMCC_HOSTS_FILENAME: str = "hosts"
-HOMCC_CLIENT_CONFIG_FILENAME: str = "client.conf"
+HOMCC_CLIENT_CONFIG_SECTION: str = "homcc"
 
 
 class ConnectionType(str, Enum):
@@ -145,22 +148,34 @@ class ClientConfig:
         compiler: Optional[str] = None,
         compression: Optional[str] = None,
         profile: Optional[str] = None,
-        timeout: Optional[str] = None,
+        timeout: Optional[float] = None,
         log_level: Optional[str] = None,
-        verbose: Optional[str] = None,
+        verbose: Optional[bool] = None,
     ):
         self.compiler = compiler or Arguments.DEFAULT_COMPILER
         self.compression = Compression.from_name(compression)
         self.profile = profile
-        self.timeout = float(timeout) if timeout is not None else None
+        self.timeout = timeout
         self.log_level = LogLevel[log_level] if log_level else None
+        self.verbose = verbose is not None and verbose
 
-        # additional parsing step for verbosity
-        self.verbose = verbose is not None and re.match(r"^true$", verbose, re.IGNORECASE) is not None
+    @classmethod
+    def from_config_section(cls, homcc_config: SectionProxy) -> ClientConfig:
+        compiler: Optional[str] = homcc_config.get("compiler")
+        compression: Optional[str] = homcc_config.get("compression")
+        profile: Optional[str] = homcc_config.get("profile")
+        timeout: Optional[float] = homcc_config.getfloat("timeout")
+        log_level: Optional[str] = homcc_config.get("log_level")
+        verbose: Optional[bool] = homcc_config.getboolean("verbose")
 
-    @staticmethod
-    def keys() -> Iterable[str]:
-        return ClientConfig.__annotations__.keys()
+        return ClientConfig(
+            compiler=compiler,
+            compression=compression,
+            profile=profile,
+            timeout=timeout,
+            log_level=log_level,
+            verbose=verbose,
+        )
 
 
 def parse_cli_args(args: List[str]) -> Tuple[Dict[str, Any], Arguments]:
@@ -348,7 +363,7 @@ def load_hosts(hosts_file_locations: Optional[List[Path]] = None) -> List[str]:
 
     # HOSTS Files
     if not hosts_file_locations:
-        hosts_file_locations = default_locations(HOMCC_HOSTS_FILENAME)
+        hosts_file_locations = default_locations()
 
     for hosts_file_location in hosts_file_locations:
         if hosts_file_location.exists():
@@ -360,10 +375,10 @@ def load_hosts(hosts_file_locations: Optional[List[Path]] = None) -> List[str]:
     raise NoHostsFoundError("No hosts information were found!")
 
 
-def parse_config(config_lines: List[str]) -> ClientConfig:
-    return ClientConfig(**parse_config_keys(ClientConfig.keys(), config_lines))
+def parse_config(filenames: List[Path] = None) -> ClientConfig:
+    cfg: ConfigParser = parse_configs(filenames or default_locations())
 
+    if HOMCC_CLIENT_CONFIG_SECTION not in cfg.sections():
+        return ClientConfig()
 
-def load_config_file(config_file_locations: Optional[List[Path]] = None) -> List[str]:
-    """Load the client config file as parameterized by config_file_locations or from the default homcc locations"""
-    return load_config_file_from(config_file_locations or default_locations(HOMCC_CLIENT_CONFIG_FILENAME))
+    return ClientConfig.from_config_section(cfg[HOMCC_CLIENT_CONFIG_SECTION])

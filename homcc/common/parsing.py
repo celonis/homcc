@@ -1,80 +1,37 @@
 """Common parsing related functionality"""
 import logging
 import os
-import re
 
+from configparser import ConfigParser
 from pathlib import Path
-from typing import Dict, Iterable, List, Optional
+from typing import List
 
 logger = logging.getLogger(__name__)
 
 HOMCC_DIR_ENV_VAR = "$HOMCC_DIR"
+HOMCC_CONFIG_FILENAME: str = "homcc.conf"
 
 
-def parse_config_keys(config_keys: Iterable[str], config_lines: List[str]) -> Dict[str, str]:
-    config_pattern: str = f"^({'|'.join(config_keys)})=(\\S+)$"
-    parsed_config: Dict[str, str] = {}
-
-    for line in config_lines:
-        # remove leading and trailing whitespace as well as in-between space chars
-        config_line = line.strip().replace(" ", "")
-
-        # ignore empty and comment lines
-        if not config_line or config_line.startswith("#"):
-            continue
-
-        # remove trailing comment
-        match: Optional[re.Match] = re.match(r"^(\S+)#(\S+)$", config_line)
-        if match:
-            config_line, _ = match.groups()
-
-        # parse and save configuration
-        match = re.match(config_pattern, config_line, re.IGNORECASE)
-
-        if match:
-            key, value = match.groups()
-            key = key.lower()
-
-            if key in parsed_config:
-                logger.warning(
-                    'Faulty configuration line "%s" with repeated key "%s" ignored.\n'
-                    "To disable this warning, please correct and unify the corresponding lines!",
-                    line,
-                    key,
-                )
-
-            parsed_config[key] = value
-
-        else:
-            logger.warning(
-                'Faulty configuration line "%s" ignored.\n'
-                "To disable this warning, please correct or comment out the corresponding line!",
-                line,
-            )
-
-    return parsed_config
-
-
-def default_locations(filename: str) -> List[Path]:
+def default_locations() -> List[Path]:
     """
     Look for homcc files in the default locations:
-    - File: $HOMCC_DIR/filename
-    - File: ~/.homcc/filename
-    - File: ~/.config/homcc/filename
-    - File: /etc/homcc/filename
+    - File: $HOMCC_DIR/homcc.conf
+    - File: ~/.homcc/homcc.conf
+    - File: ~/.config/homcc/homcc.conf
+    - File: /etc/homcc/homcc.conf
     """
 
     # HOSTS file locations
     homcc_dir_env_var = os.getenv(HOMCC_DIR_ENV_VAR)
-    home_dir_homcc_hosts = Path.home() / ".homcc" / filename
-    home_dir_config_homcc_hosts = Path.home() / ".config/homcc" / filename
-    etc_dir_homcc_hosts = Path("/etc/homcc") / filename
+    home_dir_homcc_hosts = Path.home() / ".homcc" / HOMCC_CONFIG_FILENAME
+    home_dir_config_homcc_hosts = Path.home() / ".config/homcc" / HOMCC_CONFIG_FILENAME
+    etc_dir_homcc_hosts = Path("/etc/homcc") / HOMCC_CONFIG_FILENAME
 
     hosts_file_locations: List[Path] = []
 
     # $HOMCC_DIR/filename
     if homcc_dir_env_var:
-        homcc_dir_hosts = Path(homcc_dir_env_var) / filename
+        homcc_dir_hosts = Path(homcc_dir_env_var) / HOMCC_CONFIG_FILENAME
         hosts_file_locations.append(homcc_dir_hosts)
 
     # ~/.homcc/filename
@@ -92,13 +49,8 @@ def default_locations(filename: str) -> List[Path]:
     return hosts_file_locations
 
 
-def load_config_file_from(config_file_locations: List[Path]) -> List[str]:
-    """Load a homcc config file from the default locations or as parameterized by config_file_locations"""
-
-    for config_file_location in config_file_locations:
-        if config_file_location.exists():
-            if config_file_location.stat().st_size == 0:
-                logger.warning('Config file "%s" appears to be empty.', config_file_location)
-            return config_file_location.read_text(encoding="utf-8").splitlines()
-
-    return []
+def parse_configs(filenames: List[Path]) -> ConfigParser:
+    # read from all available locations, automatically ignores non-existing files
+    cfg: ConfigParser = ConfigParser()
+    cfg.read(filenames)
+    return cfg

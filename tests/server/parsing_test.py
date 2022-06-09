@@ -2,12 +2,11 @@
 from pathlib import Path
 from typing import List
 
+from homcc.common.parsing import HOMCC_CONFIG_FILENAME
 from homcc.server.parsing import (
-    HOMCC_SERVER_CONFIG_FILENAME,
     SCHROOT_CONF_FILENAME,
     ServerConfig,
     parse_config,
-    load_config_file,
     load_schroot_profiles,
 )
 
@@ -18,32 +17,21 @@ class TestParsingConfig:
     """
 
     config: List[str] = [
-        "",
-        " ",
-        "# HOMCC TEST CONFIG COMMENT",
-        " # comment with whitespace ",
-        "LIMIT=64",
-        "LOG_LEVEL=DEBUG  # DEBUG",
-        " port = 3633 ",
-        "\tAdDrEsS=localhost",
-        "verbose=TRUE",
+        "[homccd]",  # config section
+        "# HOMCC TEST CONFIG COMMENT",  # comment line
+        "LIMIT=64",  # attribute with capitalized key
+        "LOG_LEVEL=DEBUG ",  # attribute with trailing whitespace
+        "port = 3633 ",  # attribute with whitespace
+        "AdDrEsS=localhost",  # attribute with changing capitalization
+        "verbose=TRUE",  # boolean attribute
     ]
 
-    def test_parse_config(self):
-        assert parse_config(self.config) == ServerConfig(
-            limit="64", port="3633", address="localhost", log_level="DEBUG", verbose="True"
-        )
-
-    def test_load_config_file(self, tmp_path: Path):
-        tmp_config_file: Path = tmp_path / HOMCC_SERVER_CONFIG_FILENAME
+    def test_parse_config_file(self, tmp_path: Path):
+        tmp_config_file: Path = tmp_path / HOMCC_CONFIG_FILENAME
         tmp_config_file.write_text("\n".join(self.config))
 
-        config_file_locations: List[Path] = [tmp_config_file]
-        config: List[str] = load_config_file(config_file_locations)
-
-        assert config == self.config
-        assert parse_config(self.config) == ServerConfig(
-            limit="64", port="3633", address="localhost", log_level="DEBUG", verbose="True"
+        assert parse_config([tmp_config_file]) == ServerConfig(
+            limit=64, port=3633, address="localhost", log_level="DEBUG", verbose=True
         )
 
 

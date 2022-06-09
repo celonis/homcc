@@ -21,7 +21,6 @@ from homcc.server.parsing import (  # pylint: disable=wrong-import-position
     ServerConfig,
     parse_cli_args,
     parse_config,
-    load_config_file,
     load_schroot_profiles,
 )
 from homcc.server.server import start_server, stop_server  # pylint: disable=wrong-import-position
@@ -32,7 +31,7 @@ logger: logging.Logger = logging.getLogger(__name__)
 def main():
     # load and parse arguments and configuration information
     homccd_args_dict: Dict[str, Any] = parse_cli_args(sys.argv[1:])
-    homccd_config: ServerConfig = parse_config(load_config_file())
+    homccd_config: ServerConfig = parse_config()
     logging_config: LoggingConfig = LoggingConfig(
         config=FormatterConfig.COLORED,
         formatter=Formatter.SERVER,

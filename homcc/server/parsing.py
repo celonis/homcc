@@ -1,22 +1,23 @@
 """Parsing related functionality regarding the homcc server"""
+from __future__ import annotations
+
 import logging
 import os
-import re
 import sys
 
 from argparse import Action, ArgumentParser, ArgumentTypeError, RawTextHelpFormatter
-from configparser import ConfigParser
+from configparser import ConfigParser, SectionProxy
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional, Union
+from typing import Any, Dict, List, Optional, Union
 
 from homcc.common.logging import LogLevel
-from homcc.common.parsing import default_locations, load_config_file_from, parse_config_keys
+from homcc.common.parsing import default_locations, parse_configs
 from homcc.server.server import TCPServer
 
 logger = logging.getLogger(__name__)
 
-HOMCC_SERVER_CONFIG_FILENAME: str = "server.conf"
+HOMCC_SERVER_CONFIG_SECTION: str = "homccd"
 ETC_SCHROOT_DIR: str = "/etc/schroot/"
 SCHROOT_CONF_FILENAME: str = "schroot.conf"
 CHROOT_D_SUB_DIR: str = "chroot.d/"
@@ -64,23 +65,27 @@ class ServerConfig:
     def __init__(
         self,
         *,
-        limit: Optional[str] = None,
-        port: Optional[str] = None,
+        limit: Optional[int] = None,
+        port: Optional[int] = None,
         address: Optional[str] = None,
         log_level: Optional[str] = None,
-        verbose: Optional[str] = None,
+        verbose: Optional[bool] = None,
     ):
-        self.limit = int(limit) if limit else None
-        self.port = int(port) if port else None
+        self.limit = limit
+        self.port = port
         self.address = address
         self.log_level = LogLevel[log_level] if log_level else None
+        self.verbose = verbose is not None and verbose
 
-        # additional parsing step for verbosity
-        self.verbose = verbose is not None and re.match(r"^true$", verbose, re.IGNORECASE) is not None
+    @classmethod
+    def from_config_section(cls, homccd_config: SectionProxy) -> ServerConfig:
+        limit: Optional[int] = homccd_config.getint("limit")
+        port: Optional[int] = homccd_config.getint("port")
+        address: Optional[str] = homccd_config.get("address")
+        log_level: Optional[str] = homccd_config.get("log_level")
+        verbose: Optional[bool] = homccd_config.getboolean("verbose")
 
-    @staticmethod
-    def keys() -> Iterable[str]:
-        return ServerConfig.__annotations__.keys()
+        return ServerConfig(limit=limit, port=port, address=address, log_level=log_level, verbose=verbose)
 
 
 def parse_cli_args(args: List[str]) -> Dict[str, Any]:
@@ -155,13 +160,13 @@ def parse_cli_args(args: List[str]) -> Dict[str, Any]:
     return vars(parser.parse_args(args))
 
 
-def parse_config(config_lines: List[str]) -> ServerConfig:
-    return ServerConfig(**parse_config_keys(ServerConfig.keys(), config_lines))
+def parse_config(filenames: List[Path] = None) -> ServerConfig:
+    cfg: ConfigParser = parse_configs(filenames or default_locations())
 
+    if HOMCC_SERVER_CONFIG_SECTION not in cfg.sections():
+        return ServerConfig()
 
-def load_config_file(config_file_locations: Optional[List[Path]] = None) -> List[str]:
-    """Load the server config file as parameterized by config_file_locations or from the default homcc locations"""
-    return load_config_file_from(config_file_locations or default_locations(HOMCC_SERVER_CONFIG_FILENAME))
+    return ServerConfig.from_config_section(cfg[HOMCC_SERVER_CONFIG_SECTION])
 
 
 def default_schroot_locations() -> List[Path]:
