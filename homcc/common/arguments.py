@@ -155,9 +155,10 @@ class Arguments:
         if not args:
             raise ValueError("Not enough args supplied to construct Arguments")
 
-        # compiler without args, e.g. ["g++"]
+        # singular arg, e.g. ["g++"] or ["foo.cpp"]
         if len(args) == 1:
-            return cls(args[0], [])
+            arg: str = args[0]
+            return cls(arg, []) if cls.is_compiler_arg(arg) else cls(None, [arg])
 
         # compiler with args, e.g. ["g++", "foo.cpp", "-c"]
         return cls(args[0], args[1:])

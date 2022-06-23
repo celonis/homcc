@@ -1,5 +1,6 @@
 """Creation and parsing for messages transferred between the client and the server."""
 from __future__ import annotations
+
 from typing import List, Dict, Tuple, Optional
 from abc import ABC
 from enum import Enum, auto

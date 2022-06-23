@@ -31,7 +31,7 @@ class TestParsingConfig:
 
     def test_parse_config(self):
         assert parse_config(self.config) == ServerConfig(
-            limit="64", port="3633", address="localhost", log_level="DEBUG", verbose="True"
+            limit=64, port=3633, address="localhost", log_level="DEBUG", verbose="True"
         )
 
     def test_load_config_file(self, tmp_path: Path):
@@ -43,7 +43,7 @@ class TestParsingConfig:
 
         assert config == self.config
         assert parse_config(self.config) == ServerConfig(
-            limit="64", port="3633", address="localhost", log_level="DEBUG", verbose="True"
+            limit=64, port=3633, address="localhost", log_level="DEBUG", verbose="True"
         )
 
 

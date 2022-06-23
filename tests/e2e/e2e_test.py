@@ -15,8 +15,23 @@ from homcc.common.compression import Compression, NoCompression, LZO, LZMA
 class TestEndToEnd:
     """End to end integration tests."""
 
+    BUF_SIZE: int = 65_536  # increased DEFAULT_BUFFER_SIZE to delay subprocess hangs
+
     ADDRESS: str = "127.0.0.1"  # avoid "localhost" in order to ensure remote compilation
     OUTPUT: str = "e2e_test"
+
+    @staticmethod
+    def homcc_args(unused_tcp_port: int, compression: Optional[Compression], profile: Optional[str]) -> List[str]:
+        compression_arg = "" if compression is None or isinstance(compression, NoCompression) else f",{compression}"
+
+        return [  # specify all relevant args explicitly so that config files may not disturb e2e testing
+            "./homcc/client/main.py",
+            "--log-level=DEBUG",
+            "--verbose",
+            f"--host={TestEndToEnd.ADDRESS}:{unused_tcp_port}/1{compression_arg}",
+            "--no-profile" if profile is None else f"--profile={profile}",
+            "--timeout=20",
+        ]
 
     @staticmethod
     def start_server(unused_tcp_port: int) -> subprocess.Popen:
@@ -27,24 +42,17 @@ class TestEndToEnd:
                 f"--port={unused_tcp_port}",
                 "--jobs=1",
                 "--verbose",
-            ]
+            ],
+            bufsize=TestEndToEnd.BUF_SIZE,
+            encoding="utf-8",
         )
 
     @staticmethod
     def start_client(
         args: List[str], unused_tcp_port: int, compression: Compression, profile: Optional[str]
     ) -> subprocess.CompletedProcess:
-        compression_arg = "" if isinstance(compression, NoCompression) else f",{str(compression)}"
         return subprocess.run(
-            [  # specify all relevant args explicitly so that config files may not disturb e2e testing
-                "./homcc/client/main.py",
-                "--log-level=DEBUG",
-                "--verbose",
-                f"--host={TestEndToEnd.ADDRESS}:{unused_tcp_port}{compression_arg}",
-                "--no-profile" if profile is None else f"--profile={profile}",
-                "--timeout=20",
-            ]
-            + args,
+            TestEndToEnd.homcc_args(unused_tcp_port, compression, profile) + args,
             check=True,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
@@ -78,6 +86,7 @@ class TestEndToEnd:
             "example/src/main.cpp",
             f"-o{self.OUTPUT}",
         ]
+
         with self.start_server(unused_tcp_port) as server_process:
             result = self.start_client(args, unused_tcp_port, compression, profile)
 
@@ -97,11 +106,11 @@ class TestEndToEnd:
     ):
         args: List[str] = [
             compiler,
+            "-c",
             "-Iexample/include",
             "example/src/foo.cpp",
             "example/src/main.cpp",
-            f"-o{self.OUTPUT}",
-            "-c",
+            f"-o{TestEndToEnd.OUTPUT}",
         ]
 
         with self.start_server(unused_tcp_port) as server_process:
@@ -171,6 +180,48 @@ class TestEndToEnd:
 
             server_process.kill()
 
+    def cpp_end_to_end_multiple_clients_shared_host(self, compiler: str, unused_tcp_port: int):
+        # specify all relevant homcc args explicitly so that config files may not disturb e2e testing
+        homcc_args: List[str] = self.homcc_args(unused_tcp_port, compression=None, profile=None)
+
+        # specify different compilation args
+        main_args: List[str] = [compiler, "-Iexample/include", "example/src/main.cpp", "-c"]
+        foo_args: List[str] = [compiler, "-Iexample/include", "example/src/foo.cpp", "-c"]
+
+        stdout_main: str = ""
+        stdout_foo: str = ""
+
+        with self.start_server(unused_tcp_port) as server_process, subprocess.Popen(
+            homcc_args + main_args,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            encoding="utf-8",
+        ) as client_process_main, subprocess.Popen(
+            homcc_args + foo_args,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            encoding="utf-8",
+        ) as client_process_foo:
+            while client_process_main.poll() is None and client_process_foo.poll() is None:
+                stdout_main += client_process_main.communicate()[0]
+                stdout_foo += client_process_foo.communicate()[0]
+
+            server_process.kill()
+
+        assert client_process_main.returncode == os.EX_OK
+        assert client_process_foo.returncode == os.EX_OK
+
+        assert os.path.exists("main.o")
+        assert os.path.exists("foo.o")
+
+        # verify only one successful remote compilation by checking the processes stdouts
+        assert ('"return_code": 0' in stdout_main and '"return_code": 0' not in stdout_foo) or (
+            '"return_code": 0' not in stdout_main and '"return_code": 0' in stdout_foo
+        )
+        assert ("Compiling locally instead" not in stdout_main and "Compiling locally instead" in stdout_foo) or (
+            "Compiling locally instead" in stdout_main and "Compiling locally instead" not in stdout_foo
+        )
+
     @pytest.fixture(autouse=True)
     def clean_up(self):
         yield
@@ -229,19 +280,29 @@ class TestEndToEnd:
         self.cpp_end_to_end_linking_only("clang++", unused_tcp_port)
 
     @pytest.mark.schroot
-    @pytest.mark.skipif(shutil.which("g++") is None, reason="g++ is not installed")
     @pytest.mark.timeout(20)
+    @pytest.mark.skipif(shutil.which("g++") is None, reason="g++ is not installed")
     def test_end_to_end_schroot_gplusplus(self, unused_tcp_port: int, schroot_profile: str):
         self.cpp_end_to_end("g++", unused_tcp_port, profile=schroot_profile)
 
     @pytest.mark.schroot
-    @pytest.mark.skipif(shutil.which("g++") is None, reason="g++ is not installed")
     @pytest.mark.timeout(20)
+    @pytest.mark.skipif(shutil.which("g++") is None, reason="g++ is not installed")
     def test_end_to_end_schroot_gplusplus_no_linking(self, unused_tcp_port: int, schroot_profile: str):
         self.cpp_end_to_end_no_linking("g++", unused_tcp_port, profile=schroot_profile)
 
     @pytest.mark.schroot
-    @pytest.mark.skipif(shutil.which("g++") is None, reason="g++ is not installed")
     @pytest.mark.timeout(20)
+    @pytest.mark.skipif(shutil.which("g++") is None, reason="g++ is not installed")
     def test_end_to_end_schroot_gplusplus_linking_only(self, unused_tcp_port: int, schroot_profile: str):
         self.cpp_end_to_end_linking_only("g++", unused_tcp_port, profile=schroot_profile)
+
+    @pytest.mark.timeout(20)
+    @pytest.mark.skipif(shutil.which("g++") is None, reason="g++ is not installed")
+    def test_end_to_end_gplusplus_shared_host_slot(self, unused_tcp_port: int):
+        self.cpp_end_to_end_multiple_clients_shared_host("g++", unused_tcp_port)
+
+    @pytest.mark.timeout(20)
+    @pytest.mark.skipif(shutil.which("clang++") is None, reason="clang++ is not installed")
+    def test_end_to_end_clangplusplus_shared_host_slot(self, unused_tcp_port: int):
+        self.cpp_end_to_end_multiple_clients_shared_host("clang++", unused_tcp_port)

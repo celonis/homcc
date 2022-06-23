@@ -205,10 +205,11 @@ class TestArguments:
         assert not source_file_arguments.add_arg("baz.cpp").source_files  # no change as property is cached
 
     def test_single_source_file_args(self):
-        source_file_arg: List[str] = ["some/relative/path.c"]
-        args: List[str] = ["g++", "-O3"] + source_file_arg
+        single_source_file_args: List[str] = ["some/relative/path.c"]
+        args: List[str] = ["g++", "-O3"] + single_source_file_args
 
-        assert Arguments.from_args(args).source_files == source_file_arg
+        assert Arguments.from_args(single_source_file_args).source_files == single_source_file_args
+        assert Arguments.from_args(args).source_files == single_source_file_args
 
     def test_multiple_source_file_args_with_output(self):
         source_file_args: List[str] = [
