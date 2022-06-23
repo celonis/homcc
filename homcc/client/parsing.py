@@ -1,4 +1,6 @@
 """Parsing related functionality regarding the homcc client"""
+from __future__ import annotations
+
 import logging
 import os
 import re
@@ -9,7 +11,7 @@ from argparse import ArgumentParser, Action, RawTextHelpFormatter
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional, Tuple
+from typing import Any, Dict, Iterable, List, Optional, Tuple, Union
 
 from homcc.common.arguments import Arguments
 from homcc.common.compression import Compression
@@ -30,9 +32,6 @@ class ConnectionType(str, Enum):
     LOCAL = "localhost"
     TCP = "TCP"
     SSH = "SSH"
-
-    def is_local(self) -> bool:
-        return self == ConnectionType.LOCAL
 
 
 class ShowAndExitAction(ABC, Action):
@@ -93,7 +92,7 @@ class ShowConcurrencyLevel(ShowAndExitAction):
 
         concurrency_level: int = 0
         for host in hosts:
-            concurrency_level += parse_host(host).limit or 0
+            concurrency_level += Host.from_str(host).limit or 0
 
         print(concurrency_level)
         sys.exit(os.EX_OK)
@@ -104,7 +103,7 @@ class Host:
     """Class to encapsulate host information"""
 
     type: ConnectionType
-    host: str
+    name: str
     limit: int
     compression: Compression
     port: Optional[int]
@@ -114,18 +113,44 @@ class Host:
         self,
         *,
         type: ConnectionType,  # pylint: disable=redefined-builtin
-        host: str,
-        limit: Optional[str] = None,
+        name: str,
+        limit: Union[int, str] = None,
         compression: Optional[str] = None,
-        port: Optional[str] = None,
+        port: Union[int, str] = None,
         user: Optional[str] = None,
     ):
-        self.type = ConnectionType.LOCAL if host == ConnectionType.LOCAL else type
-        self.host = host
+        self.type = ConnectionType.LOCAL if name == ConnectionType.LOCAL else type
+        self.name = name
         self.limit = int(limit) if limit is not None else 2  # enable minor level of concurrency on default
         self.compression = Compression.from_name(compression)
         self.port = int(port) if port is not None else None  # TCP
         self.user = user  # SSH
+
+    def __str__(self) -> str:
+        if self.type == ConnectionType.LOCAL:
+            return f"{self.name}_{self.limit}"  # not hardcoded to localhost_limit for testing purposes
+
+        if self.type == ConnectionType.TCP:
+            return f"tcp_{self.name}_{self.port}_{self.limit}"
+
+        if self.type == ConnectionType.SSH:
+            return f"ssh_{f'{self.user}_' or '_'}{self.name}_{self.limit}"
+
+        raise ValueError(f"Erroneous connection type '{self.type}'")
+
+    def id(self) -> str:
+        return f"homcc_{str(self)}"
+
+    @classmethod
+    def from_str(cls, host_str: str) -> Host:
+        return parse_host(host_str)
+
+    @classmethod
+    def localhost_with_limit(cls, limit: int) -> Host:
+        return Host(type=ConnectionType.LOCAL, name="localhost", limit=limit)
+
+    def is_local(self) -> bool:
+        return self.type == ConnectionType.LOCAL
 
 
 @dataclass
@@ -145,7 +170,7 @@ class ClientConfig:
         compiler: Optional[str] = None,
         compression: Optional[str] = None,
         profile: Optional[str] = None,
-        timeout: Optional[str] = None,
+        timeout: Union[float, str] = None,
         log_level: Optional[str] = None,
         verbose: Optional[str] = None,
     ):
@@ -261,10 +286,10 @@ def parse_host(host: str) -> Host:
     - Compression
     - ConnectionType:
         - TCP:
-            - HOST
+            - NAME
             - [PORT]
         - SSH:
-            - HOST
+            - NAME
             - [USER]
     - Limit
     """
@@ -276,36 +301,36 @@ def parse_host(host: str) -> Host:
     host_dict: Dict[str, str] = {}
     connection_type: ConnectionType
 
-    # trim trailing comment: HOST#COMMENT
+    # trim trailing comment: HOST_FORMAT#COMMENT
     if (host_comment_match := re.match(r"^(\S+)#(\S+)$", host)) is not None:
         host, _ = host_comment_match.groups()
 
-    # use trailing compression info: HOST,COMPRESSION
+    # use trailing compression info: HOST_FORMAT,COMPRESSION
     if (host_compression_match := re.match(r"^(\S+),(\S+)$", host)) is not None:
         host, compression = host_compression_match.groups()
         host_dict["compression"] = compression
 
-    # HOST:PORT/LIMIT
+    # NAME:PORT/LIMIT
     if (host_port_limit_match := re.match(r"^(([\w./]+)|\[(\S+)]):(\d+)(/(\d+))?$", host)) is not None:
         _, name_or_ipv4, ipv6, port, _, limit = host_port_limit_match.groups()
         host = name_or_ipv4 or ipv6
         connection_type = ConnectionType.TCP
         host_dict["port"] = port
         host_dict["limit"] = limit
-        return Host(type=connection_type, host=host, **host_dict)
+        return Host(type=connection_type, name=host, **host_dict)
 
-    # USER@HOST
+    # USER@HOST_FORMAT
     elif (user_at_host_match := re.match(r"^(\w+)@([\w.:/]+)$", host)) is not None:
         user, host = user_at_host_match.groups()
         connection_type = ConnectionType.SSH
         host_dict["user"] = user
 
-    # @HOST
+    # @HOST_FORMAT
     elif (at_host_match := re.match(r"^@([\w.:/]+)$", host)) is not None:
         host = at_host_match.group(1)
         connection_type = ConnectionType.SSH
 
-    # HOST
+    # HOST_FORMAT
     elif re.match(r"^([\w.:/]+)$", host) is not None:
         connection_type = ConnectionType.TCP
 
@@ -317,7 +342,7 @@ def parse_host(host: str) -> Host:
         host, limit = host_limit_match.groups()
         host_dict["limit"] = limit
 
-    return Host(type=connection_type, host=host, **host_dict)
+    return Host(type=connection_type, name=host, **host_dict)
 
 
 def load_hosts(hosts_file_locations: Optional[List[Path]] = None) -> List[str]:

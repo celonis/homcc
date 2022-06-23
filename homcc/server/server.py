@@ -228,14 +228,12 @@ class TCPRequestHandler(socketserver.BaseRequestHandler):
     def _request_next_dependency(self) -> bool:
         """Requests a dependency with the given sha1sum from the client.
         Returns False if there was nothing to request any more."""
-        request_sent = False
-        while not request_sent and len(self.needed_dependencies) > 0:
-            next_needed_file = next(iter(self.needed_dependency_keys))
-            next_needed_hash = self.needed_dependencies[next_needed_file]
 
-            already_cached = next_needed_hash in self.server.cache
+        while len(self.needed_dependencies) > 0:
+            next_needed_file: str = next(iter(self.needed_dependency_keys))
+            next_needed_hash: str = self.needed_dependencies[next_needed_file]
 
-            if already_cached:
+            if next_needed_hash in self.server.cache:
                 self.environment.link_dependency_to_cache(next_needed_file, next_needed_hash, self.server.cache)
 
                 del self.needed_dependencies[next_needed_file]
@@ -245,9 +243,9 @@ class TCPRequestHandler(socketserver.BaseRequestHandler):
 
                 logger.debug("Sending request for dependency with hash %s", str(request_message.get_sha1sum()))
                 self.request.sendall(request_message.to_bytes())
-                request_sent = True
+                return len(self.needed_dependencies) > 0
 
-        return len(self.needed_dependencies) > 0
+        return False
 
     def check_dependencies_exist(self):
         """Checks if all dependencies exist. If yes, starts compiling. If no, requests missing dependencies."""

@@ -15,6 +15,7 @@ from homcc.client.compilation import (
     is_sendable_dependency,
     scan_includes,
 )
+from homcc.client.parsing import Host
 
 
 class TestCompilation:
@@ -86,7 +87,7 @@ class TestCompilation:
         args: List[str] = ["g++", "-Iexample/include", "example/src/main.cpp", "example/src/foo.cpp", f"-o{output}"]
 
         assert not Path(output).exists()
-        assert compile_locally(Arguments.from_args(args)) == os.EX_OK
+        assert compile_locally(Arguments.from_args(args), Host.localhost_with_limit(1)) == os.EX_OK
         assert Path(output).exists()
 
         executable_stdout: str = subprocess.check_output([f"./{output}"], encoding="utf-8")
@@ -95,4 +96,4 @@ class TestCompilation:
         Path(output).unlink(missing_ok=True)
 
         # intentionally execute an erroneous call
-        assert compile_locally(Arguments.from_args(args + ["-OError"])) != os.EX_OK
+        assert compile_locally(Arguments.from_args(args + ["-OError"]), Host.localhost_with_limit(1)) != os.EX_OK

@@ -64,8 +64,8 @@ class ServerConfig:
     def __init__(
         self,
         *,
-        limit: Optional[str] = None,
-        port: Optional[str] = None,
+        limit: Union[int, str] = None,
+        port: Union[int, str] = None,
         address: Optional[str] = None,
         log_level: Optional[str] = None,
         verbose: Optional[str] = None,
