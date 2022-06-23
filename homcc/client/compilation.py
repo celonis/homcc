@@ -12,9 +12,18 @@ from typing import Dict, Optional, List, Set, Tuple
 
 from homcc.client.client import (
     HostSelector,
+    RemoteHostSemaphore,
+    LocalHostSemaphore,
     TCPClient,
 )
-from homcc.client.errors import HostsExhaustedError, RemoteCompilationError, UnexpectedMessageTypeError
+from homcc.client.errors import (
+    CompilationTimeoutError,
+    FailedHostNameResolutionError,
+    HostsExhaustedError,
+    RemoteCompilationError,
+    UnexpectedMessageTypeError,
+    SlotsExhaustedError,
+)
 from homcc.client.parsing import ClientConfig, Host
 from homcc.common.arguments import Arguments, ArgumentsExecutionResult
 from homcc.common.hashing import hash_file_with_path
@@ -28,43 +37,53 @@ from homcc.common.messages import (
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_COMPILATION_REQUEST_TIMEOUT: float = 180
+DEFAULT_COMPILATION_REQUEST_TIMEOUT: float = 60
+DEFAULT_LOCALHOST_LIMIT: int = (
+    len(os.sched_getaffinity(0))  # number of available CPUs for this process
+    or os.cpu_count()  # total number of physical CPUs on the machine
+    or 2  # fallback value to enable minor level of concurrency
+)
+DEFAULT_LOCALHOST: Host = Host.localhost_with_limit(DEFAULT_LOCALHOST_LIMIT)
 EXCLUDED_DEPENDENCY_PREFIXES: Tuple = ("/usr/include", "/usr/lib")
 
 
-async def compile_remotely(arguments: Arguments, hosts: List[str], config: ClientConfig) -> int:
+async def compile_remotely(arguments: Arguments, hosts: List[Host], config: ClientConfig) -> int:
     """main function to control remote compilation"""
 
-    # try to connect to 3 different hosts before falling back to local compilation
+    # try to connect to 3 different remote hosts before falling back to local compilation
     for host in HostSelector(hosts, 3):
-        # execute compilation requests for localhost directly
-        if host.type.is_local():
-            logger.info("Compiling locally:\n%s", arguments)
-            return compile_locally(arguments)
-
         timeout: float = config.timeout or DEFAULT_COMPILATION_REQUEST_TIMEOUT
         profile: Optional[str] = config.profile
 
-        # overwrite host compression if none was specified
+        # overwrite host compression if none was explicitly specified but provided via config
         host.compression = host.compression or config.compression
 
         try:
-            return await asyncio.wait_for(compile_remotely_at(arguments, host, profile), timeout=timeout)
+            with RemoteHostSemaphore(host):
+                return await asyncio.wait_for(compile_remotely_at(arguments, host, profile), timeout=timeout)
 
-        except ConnectionError as error:
+        # remote semaphore could not be acquired
+        except SlotsExhaustedError as error:
+            logger.debug("%s", error)
+
+        # client could not connect
+        except (ConnectionError, FailedHostNameResolutionError) as error:
             logger.warning("%s", error)
-        except asyncio.TimeoutError:
-            logger.warning("Compilation request for host '%s' timed out.", host.host)
 
-    raise HostsExhaustedError(f"All hosts {hosts} are exhausted.")
+        # compilation request timed out
+        except asyncio.TimeoutError as error:
+            raise CompilationTimeoutError(f"Compilation request {arguments} at host '{host}' timed out.") from error
+
+    raise HostsExhaustedError(f"All hosts '{', '.join(str(host) for host in hosts)}' are exhausted.")
 
 
 async def compile_remotely_at(arguments: Arguments, host: Host, profile: Optional[str]) -> int:
     """main function for the communication between client and a remote compilation host"""
-    dependency_dict: Dict[str, str] = calculate_dependency_dict(find_dependencies(arguments))
-    remote_arguments: Arguments = arguments.copy().remove_local_args()
 
     async with TCPClient(host) as client:
+        dependency_dict: Dict[str, str] = calculate_dependency_dict(find_dependencies(arguments))
+        remote_arguments: Arguments = arguments.copy().remove_local_args()
+
         await client.send_argument_message(remote_arguments, os.getcwd(), dependency_dict, profile)
 
         # invert dependency dictionary to access dependencies via hash
@@ -123,19 +142,21 @@ async def compile_remotely_at(arguments: Arguments, host: Host, profile: Optiona
     return os.EX_OK
 
 
-def compile_locally(arguments: Arguments) -> int:
+def compile_locally(arguments: Arguments, localhost: Host) -> int:
     """execute local compilation"""
-    try:
-        # execute compile command, e.g.: "g++ foo.cpp -o foo"
-        result: ArgumentsExecutionResult = arguments.execute(check=True)
-    except subprocess.CalledProcessError as error:
-        logger.error("Compiler error:\n%s", error.stderr)
-        return error.returncode
 
-    if result.stdout:
-        logger.debug("Compiler result:\n%s", result.stdout)
+    with LocalHostSemaphore(localhost):
+        try:
+            # execute compile command, e.g.: "g++ foo.cpp -o foo"
+            result: ArgumentsExecutionResult = arguments.execute(check=True)
+        except subprocess.CalledProcessError as error:
+            logger.error("Compiler error:\n%s", error.stderr)
+            return error.returncode
 
-    return result.return_code
+        if result.stdout:
+            logger.debug("Compiler result:\n%s", result.stdout)
+
+        return result.return_code
 
 
 def scan_includes(arguments: Arguments) -> List[str]:

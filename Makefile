@@ -44,3 +44,4 @@ homccd: server
 
 clean:
 	rm -rf target/*.deb
+	rm -f homcc*.tar.gz
