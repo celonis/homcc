@@ -5,6 +5,8 @@ Configure pytest:
 """
 import pytest
 
+import shutil
+
 
 def pytest_addoption(parser):
     parser.addoption(
@@ -18,16 +20,28 @@ def schroot_profile(request) -> str:
 
 
 def pytest_configure(config):
+    config.addinivalue_line("markers", "gplusplus: mark test that execute the g++ compiler")
+    config.addinivalue_line("markers", "clangplusplus: mark test that execute the clang++ compiler")
     config.addinivalue_line("markers", "schroot: mark test that are only run with a set up chroot environment")
 
 
 def pytest_collection_modifyitems(config, items):
-    if config.getoption("--runschroot"):
-        return
+    def add_marker(keyword, marker):
+        for item in items:
+            if keyword in item.keywords:
+                item.add_marker(marker)
 
-    # register schroot marked tests to be skipped
-    run_schroot = pytest.mark.skip(reason="specify --runschroot=PROFILE to execute")
+    if shutil.which("g++") is None:
+        gplusplus_marker = pytest.mark.skip(reason="g++ is not installed")
+        add_marker("gplusplus", gplusplus_marker)
 
-    for item in items:
-        if "schroot" in item.keywords:
-            item.add_marker(run_schroot)
+    if shutil.which("clang++") is None:
+        clangplusplus_marker = pytest.mark.skip(reason="clang++ is not installed")
+        add_marker("clangplusplus", clangplusplus_marker)
+
+    if shutil.which("schroot") is None:
+        schroot_marker = pytest.mark.skip(reason="schroot is not installed")
+        add_marker("schroot", schroot_marker)
+    elif config.getoption("--runschroot") is None:
+        runschroot_profile_marker = pytest.mark.skip(reason="specify --runschroot=PROFILE to execute")
+        add_marker("schroot", runschroot_profile_marker)

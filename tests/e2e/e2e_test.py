@@ -2,7 +2,6 @@
 import pytest
 
 import os
-import shutil
 import subprocess
 import time
 
@@ -14,6 +13,8 @@ from homcc.common.compression import Compression, NoCompression, LZO, LZMA
 
 class TestEndToEnd:
     """End to end integration tests."""
+
+    TEST_TIMEOUT: int = 10  # timeout value [s] for terminating tests
 
     BUF_SIZE: int = 65_536  # increased DEFAULT_BUFFER_SIZE to delay subprocess hangs
 
@@ -134,11 +135,11 @@ class TestEndToEnd:
             "-Iexample/include",
             "-MD",
             "-MT",
-            "example/src/main.cpp.o",
+            "main.cpp.o",
             "-MF",
-            "example/src/main.cpp.o.d",
+            "main.cpp.o.d",
             "-o",
-            "example/src/main.cpp.o",
+            "main.cpp.o",
             "-c",
             "example/src/main.cpp",
         ]
@@ -148,8 +149,8 @@ class TestEndToEnd:
 
             self.check_remote_compilation_assertions(result)
 
-            assert os.path.exists("example/src/main.cpp.o")
-            assert os.path.exists("example/src/main.cpp.o.d")
+            assert os.path.exists("main.cpp.o")
+            assert os.path.exists("main.cpp.o.d")
 
             server_process.kill()
 
@@ -226,83 +227,87 @@ class TestEndToEnd:
     def clean_up(self):
         yield
         Path("main.o").unlink(missing_ok=True)
+        Path("main.cpp.o").unlink(missing_ok=True)
+        Path("main.cpp.o.d").unlink(missing_ok=True)
         Path("foo.o").unlink(missing_ok=True)
         Path(self.OUTPUT).unlink(missing_ok=True)
 
-    @pytest.mark.timeout(20)
-    @pytest.mark.skipif(shutil.which("g++") is None, reason="g++ is not installed")
+    # g++ tests
+    @pytest.mark.gplusplus
+    @pytest.mark.timeout(TEST_TIMEOUT)
     def test_end_to_end_gplusplus(self, unused_tcp_port: int):
         self.cpp_end_to_end("g++", unused_tcp_port)
 
-    @pytest.mark.timeout(20)
-    @pytest.mark.skipif(shutil.which("g++") is None, reason="g++ is not installed")
+    @pytest.mark.gplusplus
+    @pytest.mark.timeout(TEST_TIMEOUT)
     def test_end_to_end_lzo_gplusplus(self, unused_tcp_port: int):
         self.cpp_end_to_end("g++", unused_tcp_port, compression=LZO())
 
-    @pytest.mark.timeout(20)
-    @pytest.mark.skipif(shutil.which("g++") is None, reason="g++ is not installed")
+    @pytest.mark.gplusplus
+    @pytest.mark.timeout(TEST_TIMEOUT)
     def test_end_to_end_lzma_gplusplus(self, unused_tcp_port: int):
         self.cpp_end_to_end("g++", unused_tcp_port, compression=LZMA())
 
-    @pytest.mark.timeout(20)
-    @pytest.mark.skipif(shutil.which("g++") is None, reason="g++ is not installed")
+    @pytest.mark.gplusplus
+    @pytest.mark.timeout(TEST_TIMEOUT)
     def test_end_to_end_gplusplus_no_linking(self, unused_tcp_port: int):
         self.cpp_end_to_end_no_linking("g++", unused_tcp_port)
 
-    @pytest.mark.timeout(20)
-    @pytest.mark.skipif(shutil.which("g++") is None, reason="g++ is not installed")
+    @pytest.mark.gplusplus
+    @pytest.mark.timeout(TEST_TIMEOUT)
     def test_cpp_end_to_end_gplusplus_preprocessor_side_effects(self, unused_tcp_port: int):
         self.cpp_end_to_end_preprocessor_side_effects("g++", unused_tcp_port)
 
-    @pytest.mark.timeout(20)
-    @pytest.mark.skipif(shutil.which("g++") is None, reason="g++ is not installed")
+    @pytest.mark.gplusplus
+    @pytest.mark.timeout(TEST_TIMEOUT)
     def test_end_to_end_gplusplus_linking_only(self, unused_tcp_port: int):
         self.cpp_end_to_end_linking_only("g++", unused_tcp_port)
 
-    @pytest.mark.timeout(20)
-    @pytest.mark.skipif(shutil.which("clang++") is None, reason="clang++ is not installed")
-    def test_end_to_end_clangplusplus(self, unused_tcp_port: int):
-        self.cpp_end_to_end("clang++", unused_tcp_port)
-
-    @pytest.mark.timeout(20)
-    @pytest.mark.skipif(shutil.which("clang++") is None, reason="clang++ is not installed")
-    def test_end_to_end_clangplusplus_no_linking(self, unused_tcp_port: int):
-        self.cpp_end_to_end_no_linking("clang++", unused_tcp_port)
-
-    @pytest.mark.timeout(20)
-    @pytest.mark.skipif(shutil.which("clang++") is None, reason="clang++ is not installed")
-    def test_cpp_end_to_end_clangplusplus_preprocessor_side_effects(self, unused_tcp_port: int):
-        self.cpp_end_to_end_preprocessor_side_effects("clang++", unused_tcp_port)
-
-    @pytest.mark.timeout(20)
-    @pytest.mark.skipif(shutil.which("clang++") is None, reason="clang++ is not installed")
-    def test_end_to_end_clangplusplus_linking_only(self, unused_tcp_port: int):
-        self.cpp_end_to_end_linking_only("clang++", unused_tcp_port)
-
+    @pytest.mark.gplusplus
     @pytest.mark.schroot
-    @pytest.mark.timeout(20)
-    @pytest.mark.skipif(shutil.which("g++") is None, reason="g++ is not installed")
+    @pytest.mark.timeout(TEST_TIMEOUT)
     def test_end_to_end_schroot_gplusplus(self, unused_tcp_port: int, schroot_profile: str):
         self.cpp_end_to_end("g++", unused_tcp_port, profile=schroot_profile)
 
+    @pytest.mark.gplusplus
     @pytest.mark.schroot
-    @pytest.mark.timeout(20)
-    @pytest.mark.skipif(shutil.which("g++") is None, reason="g++ is not installed")
+    @pytest.mark.timeout(TEST_TIMEOUT)
     def test_end_to_end_schroot_gplusplus_no_linking(self, unused_tcp_port: int, schroot_profile: str):
         self.cpp_end_to_end_no_linking("g++", unused_tcp_port, profile=schroot_profile)
 
+    @pytest.mark.gplusplus
     @pytest.mark.schroot
-    @pytest.mark.timeout(20)
-    @pytest.mark.skipif(shutil.which("g++") is None, reason="g++ is not installed")
+    @pytest.mark.timeout(TEST_TIMEOUT)
     def test_end_to_end_schroot_gplusplus_linking_only(self, unused_tcp_port: int, schroot_profile: str):
         self.cpp_end_to_end_linking_only("g++", unused_tcp_port, profile=schroot_profile)
 
-    @pytest.mark.timeout(20)
-    @pytest.mark.skipif(shutil.which("g++") is None, reason="g++ is not installed")
+    @pytest.mark.gplusplus
+    @pytest.mark.timeout(TEST_TIMEOUT)
     def test_end_to_end_gplusplus_shared_host_slot(self, unused_tcp_port: int):
         self.cpp_end_to_end_multiple_clients_shared_host("g++", unused_tcp_port)
 
-    @pytest.mark.timeout(20)
-    @pytest.mark.skipif(shutil.which("clang++") is None, reason="clang++ is not installed")
+    # clang++ tests
+    @pytest.mark.clangplusplus
+    @pytest.mark.timeout(TEST_TIMEOUT)
+    def test_end_to_end_clangplusplus(self, unused_tcp_port: int):
+        self.cpp_end_to_end("clang++", unused_tcp_port)
+
+    @pytest.mark.clangplusplus
+    @pytest.mark.timeout(TEST_TIMEOUT)
+    def test_end_to_end_clangplusplus_no_linking(self, unused_tcp_port: int):
+        self.cpp_end_to_end_no_linking("clang++", unused_tcp_port)
+
+    @pytest.mark.clangplusplus
+    @pytest.mark.timeout(TEST_TIMEOUT)
+    def test_cpp_end_to_end_clangplusplus_preprocessor_side_effects(self, unused_tcp_port: int):
+        self.cpp_end_to_end_preprocessor_side_effects("clang++", unused_tcp_port)
+
+    @pytest.mark.clangplusplus
+    @pytest.mark.timeout(TEST_TIMEOUT)
+    def test_end_to_end_clangplusplus_linking_only(self, unused_tcp_port: int):
+        self.cpp_end_to_end_linking_only("clang++", unused_tcp_port)
+
+    @pytest.mark.clangplusplus
+    @pytest.mark.timeout(TEST_TIMEOUT)
     def test_end_to_end_clangplusplus_shared_host_slot(self, unused_tcp_port: int):
         self.cpp_end_to_end_multiple_clients_shared_host("clang++", unused_tcp_port)
