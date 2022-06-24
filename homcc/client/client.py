@@ -114,9 +114,10 @@ class HostSemaphore(ABC):
     def __enter__(self):
         pass
 
-    def __exit__(self, *_):
-        self._semaphore.release()
-        self._semaphore.close()
+    def __exit__(self, *exc):
+        if self._semaphore is not None:
+            self._semaphore.__exit__(*exc)  # releases the semaphore
+            self._semaphore = self._semaphore.close()  # closes and sets the semaphore to None
 
 
 class RemoteHostSemaphore(HostSemaphore):

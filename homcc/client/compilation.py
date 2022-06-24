@@ -168,11 +168,7 @@ def scan_includes(arguments: Arguments) -> List[str]:
 def is_sendable_dependency(dependency: str) -> bool:
     # normalize paths, e.g. convert /usr/bin/../lib/ to /usr/lib/
     dependency_path: Path = Path(dependency).resolve()
-
-    if str(dependency_path).startswith(EXCLUDED_DEPENDENCY_PREFIXES):
-        return False
-
-    return True
+    return not str(dependency_path).startswith(EXCLUDED_DEPENDENCY_PREFIXES)
 
 
 def find_dependencies(arguments: Arguments) -> Set[str]:
@@ -197,11 +193,12 @@ def find_dependencies(arguments: Arguments) -> Set[str]:
         dependency_line: str = split[1] if len(split) == 2 else split[0]  # e.g. ignore "foo.o bar.o:"
         return dependency_line.rstrip("\\").split()  # remove line break char \
 
-    # create set of unique dependencies by sanitizing and filtering the preprocessor result
+    # sanitize and extract dependencies from the preprocessor result
     dependencies: List[str] = [
         dependency for line in dependency_result.splitlines() for dependency in extract_dependencies(line)
     ]
 
+    # filter for meaningfully sendable dependencies
     return set(filter(is_sendable_dependency, dependencies))
 
 
