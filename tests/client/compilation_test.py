@@ -2,7 +2,6 @@
 import pytest
 
 import os
-import shutil
 import subprocess
 
 from pathlib import Path
@@ -40,7 +39,7 @@ class TestCompilation:
         assert not is_sendable_dependency("/usr/bin/../lib/gcc/x86_64-linux-gnu/9/../../../../include/c++/9/cstdlib")
 
     @staticmethod
-    def find_dependencies_with_compiler(compiler: str):
+    def find_dependencies(compiler: str):
         args: List[str] = [compiler, "-Iexample/include", "example/src/main.cpp"]
         dependencies: Set[str] = find_dependencies(Arguments.from_args(args))
 
@@ -48,16 +47,16 @@ class TestCompilation:
         assert "example/src/main.cpp" in dependencies
         assert "example/include/foo.h" in dependencies
 
-    @pytest.mark.skipif(shutil.which("g++") is None, reason="g++ is not installed")
+    @pytest.mark.gplusplus
     def test_find_dependencies_gplusplus(self):
-        self.find_dependencies_with_compiler("g++")
+        self.find_dependencies("g++")
 
-    @pytest.mark.skipif(shutil.which("clang++") is None, reason="clang++ is not installed")
+    @pytest.mark.clangplusplus
     def test_find_dependencies_clangplusplus(self):
-        self.find_dependencies_with_compiler("clang++")
+        self.find_dependencies("clang++")
 
     @staticmethod
-    def find_dependencies_complex_with_compiler(compiler: str):
+    def find_dependencies_with_side_effects(compiler: str, tmp_path: Path):
         args: List[str] = [
             compiler,
             "-Iexample/include",
@@ -65,9 +64,9 @@ class TestCompilation:
             "-MT",
             "example/src/main.cpp.o",
             "-MF",
-            "example/src/main.cpp.o.d",
+            f"{tmp_path}/main.cpp.o.d",
             "-o",
-            "example/src/main.cpp.o",
+            f"{tmp_path}/main.cpp.o",
             "-c",
             "example/src/main.cpp",
         ]
@@ -77,13 +76,16 @@ class TestCompilation:
         assert "example/src/main.cpp" in dependencies
         assert "example/include/foo.h" in dependencies
 
-    @pytest.mark.skipif(shutil.which("g++") is None, reason="g++ is not installed")
-    def test_find_dependencies_complex_gplusplus(self):
-        self.find_dependencies_complex_with_compiler("g++")
+        assert Path(f"{tmp_path}/main.cpp.o.d").exists()
+        assert Path(f"{tmp_path}/main.cpp.o").exists()
 
-    @pytest.mark.skipif(shutil.which("clang++") is None, reason="clang++ is not installed")
-    def test_find_dependencies__complexclangplusplus(self):
-        self.find_dependencies_complex_with_compiler("clang++")
+    @pytest.mark.gplusplus
+    def test_find_dependencies_with_side_effects_gplusplus(self, tmp_path: Path):
+        self.find_dependencies_with_side_effects("g++", tmp_path)
+
+    @pytest.mark.clangplusplus
+    def test_find_dependencies_with_side_effects_clangplusplus(self, tmp_path: Path):
+        self.find_dependencies_with_side_effects("clang++", tmp_path)
 
     @staticmethod
     def find_dependencies_class_impl_with_compiler(compiler: str):
@@ -95,11 +97,11 @@ class TestCompilation:
         assert "example/src/foo.cpp" in dependencies
         assert "example/include/foo.h" in dependencies
 
-    @pytest.mark.skipif(shutil.which("g++") is None, reason="g++ is not installed")
+    @pytest.mark.gplusplus
     def find_dependencies_with_class_impl_gplusplus(self):
         self.find_dependencies_class_impl_with_compiler("g++")
 
-    @pytest.mark.skipif(shutil.which("clang++") is None, reason="clang++ is not installed")
+    @pytest.mark.clangplusplus
     def find_dependencies_with_class_impl_clangplusplus(self):
         self.find_dependencies_class_impl_with_compiler("clang++")
 

@@ -15,24 +15,6 @@ from typing import Any, Iterator, List, Optional, Tuple
 logger = logging.getLogger(__name__)
 
 
-# TODO: remove this
-@dataclass
-class SplitArguments:
-    """
-    Result of the Arguments.split function. Each arguments field fulfills a different objective:
-    - compilation: required arguments that lead to successful remote compilation without side effects
-    - preprocessor: required arguments to find the necessary dependencies for the remote compilation server, this may
-    imply intended local side effects
-    """
-
-    # - preprocessor_user_only: optional arguments that differ from the above preprocessor arguments as they only
-    #   produce user dependencies, only necessary to produce local side effects
-
-    compilation: Arguments
-    preprocessor: Arguments
-    # preprocessor_user_only: Optional[Arguments]
-
-
 @dataclass
 class ArgumentsExecutionResult:
     """Information that the execution of an Arguments instance produces"""
@@ -162,6 +144,11 @@ class Arguments:
 
         # compiler with args, e.g. ["g++", "foo.cpp", "-c"]
         return cls(args[0], args[1:])
+
+    @classmethod
+    def from_str(cls, args_str: str) -> Arguments:
+        """construct arguments from an args string"""
+        return Arguments.from_args(args_str.split())
 
     @classmethod
     def from_cli(cls, compiler_or_argument: str, args: List[str]) -> Arguments:
@@ -323,7 +310,7 @@ class Arguments:
                 if arg == "-MF":  # dependency output argument with output target following: e.g.: -MF out
                     dependency_output = next(it)  # skip dependency output file target
                 else:  # compact dependency output argument: e.g.: -MFout
-                    dependency_output = arg[3:]
+                    dependency_output = arg[3:]  # skip "-MF" prefix
         return dependency_output
 
     @cached_property
@@ -406,38 +393,30 @@ class Arguments:
         """check whether the execution of arguments leads to calling only the linker"""
         return not self.source_files and self.is_linking()
 
-    def dependency_finding(self) -> Tuple[Optional[str], Arguments]:
-        """return a copy of arguments with which to find dependencies via the preprocessor"""
+    def dependency_finding(self) -> Tuple[Arguments, Optional[str]]:
+        """return a dependency finding arguments with which to find dependencies via the preprocessor"""
 
         # gcc and clang handle the combination of -MD -M differently, this function provides a uniform approach for
         # both compilers that also preserves side effects like the creation of dependency files
 
-        # check if arguments that imply -M exist, if yes change their output / options
-        # change -MF dependency file to stdout and write to it or read from resulting dependency file
-        # check for multiple -MT targets
-
-        # if MF not provided check output target: e.g foo.o to foo.o.d
-
-        # gcc/clang -MD only creates main.d, main.o
-
-        dependency_output_file: Optional[str] = None
-
-        if self.dependency_output is None:
-            if self.output is not None:
-                dependency_output_file = f"{self.output}.d"
-        else:
-            dependency_output_file = self.dependency_output
-
+        # TODO(s.pirsch): if -MD present, append -M -MF- and write stdout to specified file afterwards?
         if "-MD" not in self.args:
-            return None, self.copy().remove_output_args().add_arg("-M")
+            return self.copy().remove_output_args().add_arg("-M"), None
+
+        dependency_output_file: str
+
+        if self.dependency_output is not None:  # e.g. "-MF foo.d"
+            dependency_output_file = self.dependency_output
+        elif self.output is not None:  # e.g. "-o foo.o" -> "foo.d"
+            dependency_output_file = f"{Path(self.output).stem}.d"
+        else:  # e.g. "foo.cpp" -> "foo.d"
+            dependency_output_file = f"{Path(self.source_files[0]).stem}.d"
 
         # TODO(s.pirsch): disallow multiple source files in the future when linker issue was investigated
-        if dependency_output_file is None and len(self.source_files) > 1:
+        if len(self.source_files) > 1:
             logger.warning("Executing %s might not create the intended dependency files.", self)
 
-        # TODO: simply append -M -MF- and write stdout to file after?
-
-        return dependency_output_file or f"{Path(self.source_files[0]).name}.d", self.copy()
+        return self.copy(), dependency_output_file
 
     def no_linking(self) -> Arguments:
         """return a copy of arguments where all output args are removed and the no linking arg is added"""

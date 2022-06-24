@@ -166,10 +166,6 @@ def scan_includes(arguments: Arguments) -> List[str]:
 
 
 def is_sendable_dependency(dependency: str) -> bool:
-    # filter preprocessor output target specified by -MT and line breaks
-    if dependency.endswith((":", "\\")):
-        return False
-
     # normalize paths, e.g. convert /usr/bin/../lib/ to /usr/lib/
     dependency_path: Path = Path(dependency).resolve()
 
@@ -181,7 +177,8 @@ def is_sendable_dependency(dependency: str) -> bool:
 
 def find_dependencies(arguments: Arguments) -> Set[str]:
     """get unique set of dependencies by calling the preprocessor and filtering the result"""
-    filename, arguments = arguments.dependency_finding()
+
+    arguments, filename = arguments.dependency_finding()
     try:
         # execute preprocessor command, e.g.: "g++ foo.cpp -M -MT $(homcc)"
         result: ArgumentsExecutionResult = arguments.execute(check=True)
@@ -189,24 +186,23 @@ def find_dependencies(arguments: Arguments) -> Set[str]:
         logger.error("Preprocessor error:\n%s", error.stderr)
         sys.exit(error.returncode)
 
-    # prefer reading from the dependency file if it was created as a side effect
-    dependency_result: str
-
-    logger.critical(filename)
-
-    if filename is not None and filename != "-":
-        logger.critical("Reading dependencies from file '%s'", filename)
-        dependency_result = Path(filename).read_text(encoding="utf-8")
-    elif result.stdout is not None:
-        dependency_result = result.stdout
-    else:
-        logger.critical("UNREACHABLE!!!")
-        dependency_result = "UNREACHABLE!!!"
-
+    # read from the dependency file if it was created as a side effect
+    dependency_result: str = (
+        Path(filename).read_text(encoding="utf-8") if filename is not None and filename != "-" else result.stdout
+    )
     logger.debug("Preprocessor result:\n%s", dependency_result)
 
-    # create unique set of dependencies by filtering the preprocessor result for meaningfully sendable dependencies
-    return set(filter(is_sendable_dependency, dependency_result.split()))
+    def extract_dependencies(line: str) -> List[str]:
+        split: List[str] = line.split(":")  # remove preprocessor output targets specified via -MT
+        dependency_line: str = split[1] if len(split) == 2 else split[0]  # e.g. ignore "foo.o bar.o:"
+        return dependency_line.rstrip("\\").split()  # remove line break char \
+
+    # create set of unique dependencies by sanitizing and filtering the preprocessor result
+    dependencies: List[str] = [
+        dependency for line in dependency_result.splitlines() for dependency in extract_dependencies(line)
+    ]
+
+    return set(filter(is_sendable_dependency, dependencies))
 
 
 def calculate_dependency_dict(dependencies: Set[str]) -> Dict[str, str]:
