@@ -24,11 +24,12 @@ Additionally, `HOMCC` provides sandboxed compiler execution for remote compilati
 
 ## Table of Contents
 1. [Installation](#installation)
-2. [Usage and Configuration](#usage-and-configuration)
+2. [Usage](#usage)
    1. [Client: `homcc`](#client-homcc)
    2. [Server: `homccd`](#server-homccd)
-3. [Documentation](#documentation)
-4. [Development](#development)
+3. [Configuration](#configuration)
+4. [Documentation](#documentation)
+5. [Development](#development)
    1. [Setup](#setup)
    2. [Testing](#testing)
    3. [Linting](#linting)
@@ -55,7 +56,7 @@ Additionally, `HOMCC` provides sandboxed compiler execution for remote compilati
   ```
 
 
-## Usage and Configuration
+## Usage
 
 ### Client: `homcc`
 - Follow the client [Installation](#installation) guide
@@ -63,41 +64,9 @@ Additionally, `HOMCC` provides sandboxed compiler execution for remote compilati
   ```sh
   $ homcc --help
   ```
-- Overwrite defaults globally via a `client.conf` configuration file if necessary:
-  - <table>
-    <tr align="center"><th><code>client.conf</code> file locations</th></tr>
-    <tr valign="top"><td>
-    <code>$HOMCC_DIR/client.conf</code><br/>
-    <code>~/.homcc/client.conf</code><br/>
-    <code>~/.config/homcc/client.conf</code><br/>
-    <code>/etc/homcc/client.conf</code>
-    </td></tr>
-    </table>
-  - <table>
-    <tr align="center"><th>Example: <code>client.conf</code></th><th>Explanation</th></tr>
-    <tr valign="top">
-    <td><sub><pre lang="ini">
-    # homcc: client.conf
-    compiler=g++
-    timeout=60
-    compression=lzo
-    profile=jammy
-    log_level=DEBUG
-    verbose=True
-    </pre></sub></td>
-    <td><sub><pre>
-    # Comment
-    Default compiler
-    Default timeout value in seconds
-    Default compression algorithm: {lzo, lzma}
-    Profile to specify the schroot environment for remote compilations
-    Detail level for log messages: {DEBUG, INFO, WARNING, ERROR, CRITICAL}
-    Enable verbosity mode which implies detailed and colored logging
-    </pre></sub></td>
-    </tr>
-    </table>
-- Specify your remote compilation server via the `$HOMCC_HOSTS` environment variable or in a dedicated `hosts` file:
-  - <table>
+- Use `homcc` by specifying `CCACHE_PREFIX=homcc` in your `conan` profile or IDE of choice!
+- Specify your remote compilation server via the `$HOMCC_HOSTS` environment variable or in a dedicated `hosts` file:<br/>
+  <table>
     <tr align="center"><th><code>hosts</code> file locations</th></tr>
     <tr valign="top"><td>
     <code>$HOMCC_DIR/hosts</code><br/>
@@ -106,7 +75,7 @@ Additionally, `HOMCC` provides sandboxed compiler execution for remote compilati
     <code>/etc/homcc/hosts</code>
     </td></tr>
     </table>
-  - Possible `hosts` formats:
+- Possible `hosts` formats:
     - `HOST` format:
       - `HOST`: TCP connection to specified `HOST` with default port `3633`
       - `HOST:PORT`: TCP connection to specified `HOST` with specified `PORT`
@@ -119,26 +88,25 @@ Additionally, `HOMCC` provides sandboxed compiler execution for remote compilati
         - `lzo`: Lempel-Ziv-Oberhumer compression algorithm
         - `lzma`: Lempel-Ziv-Markov chain algorithm
       - No compression is used per default, specifying `lzo` is however advised
-  - <table>
+  <table>
     <tr align="center"><th>Example: <code>hosts</code></th><th>Explanation</th></tr>
     <tr valign="top">
     <td><sub><pre>
     # homcc: hosts
+    localhost
     remotehost/12
     192.168.0.1:3633/21
     [FC00::1]:3633/42,lzo
     </pre></sub></td>
     <td><sub><pre>
     # Comment
-    Named "remotehost" host with limit of 12
-    IPv4 "192.168.0.1" host at port 3633 with limit of 21
-    IPv6 "FC00::1" host at port 3633 with limit of 42 and lzo compression
+    "localhost" host with default limit of 2
+    Named "remotehost" TCP host with limit of 12 at default port 3633
+    IPv4 "192.168.0.1" TCP host at port 3633 with limit of 21
+    IPv6 "FC00::1" TCP host at port 3633 with limit of 42 and lzo compression
     </pre></sub></td>
     </tr>
-    </table>
-
-    :exclamation: **WARNING**: Currently do not include `localhost` in your `hosts` file!
-- Use `homcc` by specifying `CCACHE_PREFIX=homcc` in your `conan` profile or IDE of choice and have `CONAN_CPU_COUNT` smaller or equal to the sum of all remote host limits, e.g. `≤ 12+21+42`!
+  </table>
 
 
 ### Server: `homccd` 
@@ -147,21 +115,38 @@ Additionally, `HOMCC` provides sandboxed compiler execution for remote compilati
   ```sh
   $ homccd --help
   ```
-- Overwrite defaults globally via a `server.conf` configuration file if necessary:
-  - <table>
-    <tr align="center"><th><code>server.conf</code> file locations</th></tr>
+- \[Optional]:
+  Set up your `schroot` environments at `/etc/schroot/schroot.conf` or in the `/etc/schroot/chroot.d/` directory and mount the `/tmp/` directory to enable sandboxed compiler execution.
+  Currently, in order for these changes to apply, you have to restart `homccd`:
+  ```sh
+  $ sudo systemctl restart homccd.service
+  ```
+
+
+## Configuration
+- Overwrite defaults globally via a `homcc.conf` configuration file:
+  <table>
+    <tr align="center"><th><code>homcc.conf</code> file locations</th></tr>
     <tr valign="top"><td>
-    <code>$HOMCC_DIR/server.conf</code><br/>
-    <code>~/.homcc/server.conf</code><br/>
-    <code>~/.config/homcc/server.conf</code><br/>
-    <code>/etc/homcc/server.conf</code>
+    <code>$HOMCC_DIR/homcc.conf</code><br/>
+    <code>~/.homcc/homcc.conf</code><br/>
+    <code>~/.config/homcc/homcc.conf</code><br/>
+    <code>/etc/homcc/homcc.conf</code>
     </td></tr>
-    </table>
-  - <table>
-    <tr align="center"><th>Example: <code>server.conf</code></th><th>Explanation</th></tr>
+  </table>
+- :exclamation: Explicit configuration is currently not necessary, only do this if you know exactly what you are doing!
+  <table>
+    <tr align="center"><th>Example: <code>homcc.conf</code></th><th>Explanation</th></tr>
     <tr valign="top">
     <td><sub><pre lang="ini">
-    # homccd: server.conf
+    [homcc]
+    compiler=g++
+    timeout=60
+    compression=lzo
+    profile=jammy
+    log_level=DEBUG
+    verbose=True
+    [homccd]
     limit=64
     port=3633
     address=0.0.0.0
@@ -169,7 +154,14 @@ Additionally, `HOMCC` provides sandboxed compiler execution for remote compilati
     verbose=True
     </pre></sub></td>
     <td><sub><pre>
-    # Comment
+    # Client configuration
+    Default compiler
+    Default timeout value in seconds
+    Default compression algorithm: {lzo, lzma}
+    Profile to specify the schroot environment for remote compilations
+    Detail level for log messages: {DEBUG, INFO, WARNING, ERROR, CRITICAL}
+    Enable verbosity mode which implies detailed and colored logging
+    # Server configuration
     Maximum limit of concurrent compilations
     TCP port to listen on
     IP address to listen on
@@ -177,13 +169,7 @@ Additionally, `HOMCC` provides sandboxed compiler execution for remote compilati
     Enable verbosity mode which implies detailed and colored logging
     </pre></sub></td>
     </tr>
-    </table>
-- \[Optional]:
-  Set up your `schroot` environments at `/etc/schroot/schroot.conf` or in the `/etc/schroot/chroot.d/` directory and mount the `/tmp/` directory to enable sandboxed compiler execution.
-  Currently, in order for these changes to apply, you have to restart `homccd`:
-  ```sh
-  $ sudo systemctl restart homccd.service
-  ```
+  </table>
 
 
 ## Documentation

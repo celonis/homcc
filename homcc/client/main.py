@@ -26,7 +26,6 @@ from homcc.client.parsing import (  # pylint: disable=wrong-import-position
     ClientConfig,
     Host,
     LogLevel,
-    load_config_file,
     load_hosts,
     parse_cli_args,
     parse_config,
@@ -45,7 +44,7 @@ logger: logging.Logger = logging.getLogger(__name__)
 def main():
     # load and parse arguments and configuration information
     homcc_args_dict, compiler_arguments = parse_cli_args(sys.argv[1:])
-    homcc_config: ClientConfig = parse_config(load_config_file())
+    homcc_config: ClientConfig = parse_config()
     logging_config: LoggingConfig = LoggingConfig(
         config=FormatterConfig.COLORED,
         formatter=Formatter.CLIENT,
@@ -101,6 +100,9 @@ def main():
                 continue
 
             if host.is_local():
+                if has_local:
+                    logger.warning("Multiple localhost hosts provided!")
+
                 has_local = True
                 localhost = host
 
@@ -121,8 +123,8 @@ def main():
     if (timeout := homcc_args_dict["timeout"]) is not None:
         homcc_config.timeout = timeout
 
-    # force local compilation on specific conditions; TODO(s.pirsch): this should probably be removed!
-    if compiler_arguments.is_linking_only():
+    # force local compilation on specific conditions
+    if compiler_arguments.is_linking_only():  # TODO(s.pirsch): this should probably be removed!
         logger.debug("Linking [%s] to %s", ", ".join(compiler_arguments.object_files), compiler_arguments.output)
         sys.exit(compile_locally(compiler_arguments, localhost))
 
