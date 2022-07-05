@@ -15,7 +15,7 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 
 from homcc.common.arguments import Arguments
 from homcc.common.compression import Compression
-from configparser import ConfigParser, SectionProxy
+from configparser import SectionProxy
 from homcc.common.logging import LogLevel
 from homcc.common.parsing import HOMCC_CONFIG_FILENAME, default_locations, parse_configs
 from homcc.client.errors import HostParsingError, NoHostsFoundError
@@ -158,6 +158,7 @@ class Host:
 class ClientConfig:
     """Class to encapsulate and default client configuration information"""
 
+    files: List[str]
     compiler: str
     compression: Compression
     profile: Optional[str]
@@ -168,6 +169,7 @@ class ClientConfig:
     def __init__(
         self,
         *,
+        files: List[str],
         compiler: Optional[str] = None,
         compression: Optional[str] = None,
         profile: Optional[str] = None,
@@ -175,6 +177,7 @@ class ClientConfig:
         log_level: Optional[str] = None,
         verbose: Optional[bool] = None,
     ):
+        self.files = files
         self.compiler = compiler or Arguments.DEFAULT_COMPILER
         self.compression = Compression.from_name(compression)
         self.profile = profile
@@ -183,7 +186,7 @@ class ClientConfig:
         self.verbose = verbose is not None and verbose
 
     @classmethod
-    def from_config_section(cls, homcc_config: SectionProxy) -> ClientConfig:
+    def from_config_section(cls, files: List[str], homcc_config: SectionProxy) -> ClientConfig:
         compiler: Optional[str] = homcc_config.get("compiler")
         compression: Optional[str] = homcc_config.get("compression")
         profile: Optional[str] = homcc_config.get("profile")
@@ -192,6 +195,7 @@ class ClientConfig:
         verbose: Optional[bool] = homcc_config.getboolean("verbose")
 
         return ClientConfig(
+            files=files,
             compiler=compiler,
             compression=compression,
             profile=profile,
@@ -399,9 +403,9 @@ def load_hosts(hosts_file_locations: Optional[List[Path]] = None) -> List[str]:
 
 
 def parse_config(filenames: List[Path] = None) -> ClientConfig:
-    cfg: ConfigParser = parse_configs(filenames or default_locations(HOMCC_CONFIG_FILENAME))
+    files, cfg = parse_configs(filenames or default_locations(HOMCC_CONFIG_FILENAME))
 
     if HOMCC_CLIENT_CONFIG_SECTION not in cfg.sections():
-        return ClientConfig()
+        return ClientConfig(files=files)
 
-    return ClientConfig.from_config_section(cfg[HOMCC_CLIENT_CONFIG_SECTION])
+    return ClientConfig.from_config_section(files, cfg[HOMCC_CLIENT_CONFIG_SECTION])

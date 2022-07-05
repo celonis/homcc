@@ -72,6 +72,15 @@ def main():
 
     setup_logging(logging_config)
 
+    # provide additional DEBUG information
+    logger.debug(
+        "%s - %s\nCalled by: %s\nUsing configuration files: [%s]",
+        sys.argv[0],
+        "0.0.1",
+        sys.executable,
+        ", ".join(homcc_config.files),
+    )
+
     # COMPILER; default: "cc"
     if compiler_arguments.compiler is None:
         compiler_arguments.compiler = homcc_config.compiler

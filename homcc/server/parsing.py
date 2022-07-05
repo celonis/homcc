@@ -56,6 +56,7 @@ class ShowProfiles(Action):
 class ServerConfig:
     """Class to encapsulate and default client configuration information"""
 
+    files: List[str]
     address: Optional[str]
     port: Optional[int]
     limit: Optional[int]
@@ -65,12 +66,14 @@ class ServerConfig:
     def __init__(
         self,
         *,
+        files: List[str],
         limit: Optional[int] = None,
         port: Optional[int] = None,
         address: Optional[str] = None,
         log_level: Optional[str] = None,
         verbose: Optional[bool] = None,
     ):
+        self.files = files
         self.limit = limit
         self.port = port
         self.address = address
@@ -78,14 +81,14 @@ class ServerConfig:
         self.verbose = verbose is not None and verbose
 
     @classmethod
-    def from_config_section(cls, homccd_config: SectionProxy) -> ServerConfig:
+    def from_config_section(cls, files: List[str], homccd_config: SectionProxy) -> ServerConfig:
         limit: Optional[int] = homccd_config.getint("limit")
         port: Optional[int] = homccd_config.getint("port")
         address: Optional[str] = homccd_config.get("address")
         log_level: Optional[str] = homccd_config.get("log_level")
         verbose: Optional[bool] = homccd_config.getboolean("verbose")
 
-        return ServerConfig(limit=limit, port=port, address=address, log_level=log_level, verbose=verbose)
+        return ServerConfig(files=files, limit=limit, port=port, address=address, log_level=log_level, verbose=verbose)
 
 
 def parse_cli_args(args: List[str]) -> Dict[str, Any]:
@@ -161,12 +164,12 @@ def parse_cli_args(args: List[str]) -> Dict[str, Any]:
 
 
 def parse_config(filenames: List[Path] = None) -> ServerConfig:
-    cfg: ConfigParser = parse_configs(filenames or default_locations(HOMCC_CONFIG_FILENAME))
+    files, cfg = parse_configs(filenames or default_locations(HOMCC_CONFIG_FILENAME))
 
     if HOMCC_SERVER_CONFIG_SECTION not in cfg.sections():
-        return ServerConfig()
+        return ServerConfig(files=files)
 
-    return ServerConfig.from_config_section(cfg[HOMCC_SERVER_CONFIG_SECTION])
+    return ServerConfig.from_config_section(files, cfg[HOMCC_SERVER_CONFIG_SECTION])
 
 
 def default_schroot_locations() -> List[Path]:
