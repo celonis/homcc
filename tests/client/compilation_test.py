@@ -11,7 +11,6 @@ from homcc.common.arguments import Arguments
 from homcc.client.compilation import (
     compile_locally,
     find_dependencies,
-    is_sendable_dependency,
     scan_includes,
 )
 from homcc.client.parsing import Host
@@ -28,15 +27,7 @@ class TestCompilation:
         includes: List[str] = scan_includes(arguments)
 
         assert len(includes) == 1
-        assert "example/include/foo.h" in includes
-
-    def test_is_sendable(self):
-        assert is_sendable_dependency("./example/include/foo.h")
-        assert is_sendable_dependency("./example/src/main.cpp")
-        assert is_sendable_dependency("./example/src/foo.cpp")
-
-        assert not is_sendable_dependency("/usr/include/stdio.h")
-        assert not is_sendable_dependency("/usr/bin/../lib/gcc/x86_64-linux-gnu/9/../../../../include/c++/9/cstdlib")
+        assert str(Path("example/include/foo.h").absolute()) in includes
 
     @staticmethod
     def find_dependencies(compiler: str):
@@ -44,8 +35,8 @@ class TestCompilation:
         dependencies: Set[str] = find_dependencies(Arguments.from_args(args))
 
         assert len(dependencies) == 2
-        assert "example/src/main.cpp" in dependencies
-        assert "example/include/foo.h" in dependencies
+        assert str(Path("example/src/main.cpp").absolute()) in dependencies
+        assert str(Path("example/include/foo.h").absolute()) in dependencies
 
     @pytest.mark.gplusplus
     def test_find_dependencies_gplusplus(self):
@@ -73,8 +64,8 @@ class TestCompilation:
         dependencies: Set[str] = find_dependencies(Arguments.from_args(args))
 
         assert len(dependencies) == 2
-        assert "example/src/main.cpp" in dependencies
-        assert "example/include/foo.h" in dependencies
+        assert str(Path("example/src/main.cpp").absolute()) in dependencies
+        assert str(Path("example/include/foo.h").absolute()) in dependencies
 
         assert Path(f"{tmp_path}/main.cpp.o.d").exists()
         assert Path(f"{tmp_path}/main.cpp.o").exists()
@@ -93,9 +84,9 @@ class TestCompilation:
         dependencies: Set[str] = find_dependencies(Arguments.from_args(args))
 
         assert len(dependencies) == 3
-        assert "example/src/main.cpp" in dependencies
-        assert "example/src/foo.cpp" in dependencies
-        assert "example/include/foo.h" in dependencies
+        assert str(Path("example/src/main.cpp").absolute()) in dependencies
+        assert str(Path("example/src/foo.cpp").absolute()) in dependencies
+        assert str(Path("example/include/foo.h").absolute()) in dependencies
 
     @pytest.mark.gplusplus
     def find_dependencies_with_class_impl_gplusplus(self):

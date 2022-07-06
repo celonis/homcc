@@ -41,7 +41,7 @@ DEFAULT_COMPILATION_REQUEST_TIMEOUT: float = 60
 DEFAULT_LOCALHOST_LIMIT: int = (
     len(os.sched_getaffinity(0))  # number of available CPUs for this process
     or os.cpu_count()  # total number of physical CPUs on the machine
-    or 2  # fallback value to enable minor level of concurrency
+    or 4  # fallback value to enable minor level of concurrency
 )
 DEFAULT_LOCALHOST: Host = Host.localhost_with_limit(DEFAULT_LOCALHOST_LIMIT)
 EXCLUDED_DEPENDENCY_PREFIXES: Tuple = ("/usr/include", "/usr/lib")
@@ -162,13 +162,7 @@ def compile_locally(arguments: Arguments, localhost: Host) -> int:
 def scan_includes(arguments: Arguments) -> List[str]:
     """find all included dependencies"""
     dependencies: Set[str] = find_dependencies(arguments)
-    return [dependency for dependency in dependencies if dependency not in arguments.source_files]
-
-
-def is_sendable_dependency(dependency: str) -> bool:
-    # normalize paths, e.g. convert /usr/bin/../lib/ to /usr/lib/
-    dependency_path: Path = Path(dependency).resolve()
-    return not str(dependency_path).startswith(EXCLUDED_DEPENDENCY_PREFIXES)
+    return [dependency for dependency in dependencies if not Arguments.is_source_file_arg(dependency)]
 
 
 def find_dependencies(arguments: Arguments) -> Set[str]:
@@ -191,15 +185,18 @@ def find_dependencies(arguments: Arguments) -> Set[str]:
     def extract_dependencies(line: str) -> List[str]:
         split: List[str] = line.split(":")  # remove preprocessor output targets specified via -MT
         dependency_line: str = split[1] if len(split) == 2 else split[0]  # e.g. ignore "foo.o bar.o:"
-        return dependency_line.rstrip("\\").split()  # remove line break char \
+        return [
+            str(Path(dependency).resolve())  # normalize paths, e.g. convert /usr/bin/../lib/ to /usr/lib/
+            for dependency in dependency_line.rstrip("\\").split()  # remove line break char "\"
+        ]
 
-    # sanitize and extract dependencies from the preprocessor result
-    dependencies: List[str] = [
-        dependency for line in dependency_result.splitlines() for dependency in extract_dependencies(line)
-    ]
-
-    # filter for meaningfully sendable dependencies
-    return set(filter(is_sendable_dependency, dependencies))
+    # extract dependencies from the preprocessor result and filter for sendability
+    return {
+        dependency
+        for line in dependency_result.splitlines()
+        for dependency in extract_dependencies(line)
+        if not dependency.startswith(EXCLUDED_DEPENDENCY_PREFIXES)  # check sendability
+    }
 
 
 def calculate_dependency_dict(dependencies: Set[str]) -> Dict[str, str]:
