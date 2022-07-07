@@ -44,6 +44,8 @@ class Arguments:
     OUTPUT_ARG: str = "-o"
     SPECIFY_LANGUAGE_ARG: str = "-x"
 
+    DEPENDENCY_SIDE_EFFECT_ARG: str = "-MD"
+
     INCLUDE_ARGS: List[str] = ["-I", "-isysroot", "-isystem"]
 
     # languages
@@ -56,7 +58,7 @@ class Arguments:
         """
 
         # preprocessor args
-        PREPROCESSOR_ARGS: List[str] = ["-MD", "-MG", "-MP"]
+        PREPROCESSOR_ARGS: List[str] = ["-MG", "-MP"]
         PREPROCESSOR_OPTION_PREFIX_ARGS: List[str] = ["-MF", "-MT", "-MQ"]
 
         # linking args
@@ -72,6 +74,7 @@ class Arguments:
         # preprocessing args
         PREPROCESSOR_ONLY_ARG: str = "-E"
         PREPROCESSOR_DEPENDENCY_ARG: str = "-M"
+        PREPROCESSOR_USER_HEADER_ONLY_DEPENDENCY_ARG: str = "-MM"
 
         # args that rely on native machine
         NATIVE_ARGS: List[str] = ["-march=native", "-mtune=native"]
@@ -200,11 +203,15 @@ class Arguments:
             logger.debug("[%s] implies a preprocessor only call", arg)
             return False
 
-        if arg in Arguments.Local.PREPROCESSOR_ARGS:
+        if arg in Arguments.Local.PREPROCESSOR_ARGS + [Arguments.DEPENDENCY_SIDE_EFFECT_ARG]:
             return True
 
         if arg.startswith(tuple(Arguments.Local.PREPROCESSOR_OPTION_PREFIX_ARGS)):
             return True
+
+        if arg.startswith(Arguments.Unsendable.PREPROCESSOR_USER_HEADER_ONLY_DEPENDENCY_ARG):  # -MM prefix
+            logger.debug("[%s] implies two different preprocessor calls", arg)
+            return False
 
         # all remaining preprocessing arg types with prefix "-M" imply Unsendability
         if arg.startswith(Arguments.Unsendable.PREPROCESSOR_DEPENDENCY_ARG):
@@ -356,7 +363,7 @@ class Arguments:
 
     def is_sendable(self) -> bool:
         """check whether the remote execution of arguments would be successful"""
-        # "-o -" might be treated as either "write result to stdout" or "write result to file named '-'"
+        # "-o -" might either be treated as "write result to stdout" or "write result to file named '-'"
         if self.output == "-":
             logger.info('Cannot compile %s remotely because output "%s" is ambiguous', self, self.output)
             return False
@@ -399,9 +406,9 @@ class Arguments:
         # gcc and clang handle the combination of -MD -M differently, this function provides a uniform approach for
         # both compilers that also preserves side effects like the creation of dependency files
 
-        # TODO(s.pirsch): if -MD present, append -M -MF- and write stdout to specified file afterwards?
-        if "-MD" not in self.args:
-            return self.copy().remove_output_args().add_arg("-M"), None
+        if self.DEPENDENCY_SIDE_EFFECT_ARG not in self.args:
+            # TODO(s.pirsch): benchmark -M -MF- and writing stdout to specified file afterwards
+            return self.copy().remove_output_args().add_arg(self.Unsendable.PREPROCESSOR_DEPENDENCY_ARG), None
 
         dependency_output_file: str
 
@@ -414,7 +421,7 @@ class Arguments:
 
         # TODO(s.pirsch): disallow multiple source files in the future when linker issue was investigated
         if len(self.source_files) > 1:
-            logger.warning("Executing %s might not create the intended dependency files.", self)
+            logger.warning("Executing [%s] might not create the intended dependency files.", self)
 
         return self.copy(), dependency_output_file
 

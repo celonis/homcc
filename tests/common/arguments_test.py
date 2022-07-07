@@ -64,7 +64,7 @@ class TestArguments:
         sendable_args: List[str] = args + ["-c", "-ofoo"]
         assert Arguments.from_args(sendable_args).is_sendable()
 
-        sendable_preprocessor_args: List[str] = args + ["-MD", "-MF", "sendable"]
+        sendable_preprocessor_args: List[str] = args + ["-MD", "-MF", "foo.d"]
         assert Arguments.from_args(sendable_preprocessor_args).is_sendable()
 
         # unsendability
@@ -121,6 +121,9 @@ class TestArguments:
 
         dependency_file_args_str: str = f"{dependency_target_args_str} -MF main.cpp.o.d"
         assert Arguments.from_str(dependency_file_args_str).dependency_finding()[1] == "main.cpp.o.d"
+
+        duplicated_dependency_file_args_str: str = f"{dependency_target_args_str} -MF main.cpp.o.d -MF foo.cpp.o.d"
+        assert Arguments.from_str(duplicated_dependency_file_args_str).dependency_finding()[1] == "foo.cpp.o.d"
 
         output_dependency_file_args_str: str = f"{dependency_target_args_str} -o main.cpp.o"
         assert Arguments.from_str(output_dependency_file_args_str).dependency_finding()[1] == "main.cpp.d"

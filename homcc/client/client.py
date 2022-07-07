@@ -115,6 +115,8 @@ class HostSemaphore(ABC):
         pass
 
     def __exit__(self, *exc):
+        logger.debug("Exiting semaphore '%s' with value '%i'", self._semaphore.name, self._semaphore.value)
+
         if self._semaphore is not None:
             self._semaphore.__exit__(*exc)  # releases the semaphore
             self._semaphore = self._semaphore.close()  # closes and sets the semaphore to None
@@ -141,6 +143,8 @@ class RemoteHostSemaphore(HostSemaphore):
         super().__init__(host)
 
     def __enter__(self) -> RemoteHostSemaphore:
+        logger.debug("Entering semaphore '%s' with value '%i'", self._semaphore.name, self._semaphore.value)
+
         try:
             self._semaphore.acquire(timeout=0)  # non-blocking acquisition
         except posix_ipc.BusyError as error:
@@ -183,6 +187,8 @@ class LocalHostSemaphore(HostSemaphore):
         super().__init__(host)
 
     def __enter__(self) -> LocalHostSemaphore:
+        logger.debug("Entering semaphore '%s' with value '%i'", self._semaphore.name, self._semaphore.value)
+
         while True:
             try:
                 self._semaphore.acquire(timeout=self._compilation_time - self._timeout)  # blocking acquisition
