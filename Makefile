@@ -31,7 +31,7 @@ client:
 	echo "Building the homcc client .deb"
 
 	cp setup_client.py setup.py
-	python3 setup.py --command-packages=stdeb.command sdist_dsc --with-dh-systemd
+	python3 setup.py --command-packages=stdeb.command sdist_dsc
 
 	cd deb_dist/homcc-*
 	cp $(DEBIAN_SRC)/compat debian/compat
