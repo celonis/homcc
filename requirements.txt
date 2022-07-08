@@ -2,7 +2,7 @@ python-lzo>=1.12 # TODO(o.layer): see https://packages.ubuntu.com/focal/python3-
 
 black
 mypy>=0.931
-posix_ipc==0.9.8
+posix_ipc==0.9.8 # see https://packages.ubuntu.com/jammy/python3-posix-ipc
 pylint
 pytest
 pytest-asyncio
