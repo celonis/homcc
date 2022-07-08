@@ -2,9 +2,8 @@ name: Build Main Branch
 
 on:
   push:
-    # TODO: remove after CI test
-    #branches:
-     # - main
+    branches:
+      - main
     paths-ignore:
       - README.md
       - .gitignore
