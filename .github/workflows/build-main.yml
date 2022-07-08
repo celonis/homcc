@@ -2,15 +2,16 @@ name: Build Main Branch
 
 on:
   push:
-    branches:
-      - main
+    # TODO: remove after CI test
+    #branches:
+     # - main
     paths-ignore:
       - README.md
       - .gitignore
 
 jobs:
   linter:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
       - name: Checkout repository
         uses: actions/checkout@v2
@@ -30,7 +31,7 @@ jobs:
           pylint -v --rcfile=.pylintrc *.py homcc tests
           mypy -v --pretty *.py homcc
   format-check:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
       - name: Checkout repository
         uses: actions/checkout@v2
@@ -50,7 +51,7 @@ jobs:
         with:
           options: "--check --color --diff --verbose"
   tests:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
       - name: Checkout repository
         uses: actions/checkout@v2
@@ -73,7 +74,7 @@ jobs:
       - name: Run tests
         run: pytest -v -rfE --cov=homcc --capture=tee-sys --runschroot=focal
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
       - name: Checkout repository
         uses: actions/checkout@v2
@@ -90,7 +91,7 @@ jobs:
           python3 -m pip install -r requirements.txt 
       - name: Build
         run: |
-          make all
+          sudo make all
       - name: Upload .deb packages
         uses: actions/upload-artifact@v3
         with: 
