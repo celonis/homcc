@@ -43,8 +43,10 @@ class Arguments:
     PREPROCESSOR_TARGET: str = "$(homcc)"
 
     NO_LINKING_ARG: str = "-c"
+    DEBUG_SYMBOLS_ARG: str = "-gs"
     OUTPUT_ARG: str = "-o"
     SPECIFY_LANGUAGE_ARG: str = "-x"
+
 
     INCLUDE_ARGS: List[str] = ["-I", "-isysroot", "-isystem"]
 
@@ -379,6 +381,14 @@ class Arguments:
     def is_linking(self) -> bool:
         """check whether the linking arg is present"""
         return self.NO_LINKING_ARG not in self.args
+
+    def has_debug_symbols(self) -> bool:
+        """check whether the -g flag is present"""
+        return self.DEBUG_SYMBOLS_ARG in self.args
+
+    def map_debug_symbol_paths(self, old_path: str, new_path: str) -> Arguments:
+        """return a copy of arguments with added command for translating debug symbols in the executable"""
+        return self.copy().add_arg(f"-fdebug-prefix-map={old_path}={new_path}")
 
     def is_linking_only(self) -> bool:
         """check whether the execution of arguments leads to calling only the linker"""
