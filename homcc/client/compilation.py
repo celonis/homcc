@@ -180,7 +180,10 @@ def find_dependencies(arguments: Arguments) -> Set[str]:
     dependency_result: str = (
         Path(filename).read_text(encoding="utf-8") if filename is not None and filename != "-" else result.stdout
     )
-    logger.debug("Preprocessor result:\n%s", dependency_result)
+    if dependency_result:
+        logger.debug("Preprocessor result:\n%s", dependency_result)
+    else:
+        logger.error("Empty preprocessor result.")
 
     def extract_dependencies(line: str) -> List[str]:
         split: List[str] = line.split(":")  # remove preprocessor output targets specified via -MT
