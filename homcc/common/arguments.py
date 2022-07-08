@@ -36,6 +36,9 @@ class Arguments:
     compilation which implies arguments being able to be sent!
     """
 
+    # execution timeout
+    TIMEOUT: int = 180
+
     # if the compiler is neither specified by the callee nor defined in the config file use this as fallback
     DEFAULT_COMPILER: str = "cc"
     PREPROCESSOR_TARGET: str = "$(homcc)"
@@ -519,7 +522,7 @@ class Arguments:
         logger.debug("Executing: [%s]", " ".join(args))
 
         result: subprocess.CompletedProcess = subprocess.run(
-            args=args, check=check, encoding="utf-8", capture_output=capture_output, **kwargs
+            args=args, check=check, encoding="utf-8", capture_output=capture_output, timeout=Arguments.TIMEOUT, **kwargs
         )
         return ArgumentsExecutionResult.from_process_result(result)
 
