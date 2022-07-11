@@ -108,6 +108,7 @@ class TCPServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
         try:
             root_temp_folder = self.root_temp_folder
         except AttributeError:
+            # root_temp_folder may not have been initialized yet, then we do not have to clean it up
             return
 
         root_temp_folder.cleanup()
