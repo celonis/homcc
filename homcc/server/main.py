@@ -72,7 +72,11 @@ def main():
     profiles: List[str] = load_schroot_profiles()
 
     # start server
-    server, server_thread = start_server(address=address, port=port, limit=limit, profiles=profiles)
+    try:
+        server, server_thread = start_server(address=address, port=port, limit=limit, profiles=profiles)
+    except:
+        logger.error("Could not start homccd, terminating.")
+        exit(1)
 
     def signal_handler(*_):
         stop_server(server)
