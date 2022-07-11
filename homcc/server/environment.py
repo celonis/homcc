@@ -122,11 +122,9 @@ class Environment:
         Path(self.mapped_cwd).mkdir(parents=True, exist_ok=True)
 
         if arguments.has_debug_symbols():
-            compile_arguments = arguments.map_debug_symbol_paths(self.instance_folder, "")
-        else:
-            compile_arguments = arguments
+            arguments = arguments.map_debug_symbol_paths(self.instance_folder, "")
 
-        result = self.invoke_compiler(compile_arguments.no_linking())
+        result = self.invoke_compiler(arguments.no_linking())
 
         object_files: List[ObjectFile] = []
         if result.return_code == os.EX_OK:

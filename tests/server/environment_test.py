@@ -199,8 +199,8 @@ class TestServerCompilation:
         environment.do_compilation(debug_arguments)
 
         # ensure that we call the compiler with an instruction to remap the debug symbols
-        passed_debug_arguments: Arguments = invoke_compiler_mock.call_args_list[0].args  # type: ignore[assignment]
-        assert f"-fdebug-prefix-map={instance_path}=" in str(passed_debug_arguments)
+        passed_debug_arguments: Arguments = invoke_compiler_mock.call_args_list[0].args[0]
+        assert f"-fdebug-prefix-map={instance_path}=" in str(passed_debug_arguments.args)
 
         no_debug_arguments = Arguments.from_args(
             [
@@ -211,8 +211,8 @@ class TestServerCompilation:
         environment.do_compilation(no_debug_arguments)
 
         # ensure that the flag is not passed to the compiler when not compiling with debug symbols
-        passed_no_debug_arguments: Arguments = invoke_compiler_mock.call_args_list[1].args  # type: ignore[assignment]
-        assert "-fdebug-prefix-map" not in str(passed_no_debug_arguments)
+        passed_no_debug_arguments: Arguments = invoke_compiler_mock.call_args_list[1].args[0]
+        assert "-fdebug-prefix-map" not in str(passed_no_debug_arguments.args)
 
     @pytest.mark.skipif(shutil.which("g++") is None, reason="g++ is not installed")
     def test_compiler_exists(self):
