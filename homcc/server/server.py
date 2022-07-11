@@ -33,7 +33,7 @@ logger = logging.getLogger(__name__)
 
 
 class ServerInitializationError(Exception):
-    """Indicates that an error occur during server startup."""
+    """Indicates that an error occurred during server startup."""
 
 
 class TCPServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
@@ -79,7 +79,7 @@ class TCPServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
         try:
             request.sendall(message.to_bytes())
         except ConnectionError as err:
-            logger.error("Encountered connection error while trying to send data. Aborting connection. %s", err)
+            logger.error("Encountered connection error while trying to send data. %s", err)
 
     @staticmethod
     def close_connection_for_request(request, info: str):
