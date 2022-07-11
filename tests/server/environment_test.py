@@ -180,6 +180,40 @@ class TestServerCompilation:
         assert len(result_message.object_files) == 1
         assert result_message.object_files[0].file_name == "/home/user/cwd/this_is_a_source_file.o"
 
+    def test_debug_symbol_mappings(self, mocker: MockerFixture):
+        invoke_compiler_mock = mocker.patch(
+            "homcc.server.environment.Environment.invoke_compiler",
+        )
+
+        instance_path = "/tmp/homcc/test-id"
+        mapped_cwd = "/tmp/homcc/test-id/home/user/cwd"
+        environment = create_mock_environment(instance_path, mapped_cwd)
+
+        debug_arguments = Arguments.from_args(
+            [
+                "gcc",
+                "-g",
+                f"{mapped_cwd}/src/foo.cpp",
+            ]
+        )
+        environment.do_compilation(debug_arguments)
+
+        # ensure that we call the compiler with an instruction to remap the debug symbols
+        passed_debug_arguments: Arguments = invoke_compiler_mock.call_args_list[0].args  # type: ignore[assignment]
+        assert f"-fdebug-prefix-map={instance_path}=/" in str(passed_debug_arguments)
+
+        no_debug_arguments = Arguments.from_args(
+            [
+                "gcc",
+                f"{mapped_cwd}/src/foo.cpp",
+            ]
+        )
+        environment.do_compilation(no_debug_arguments)
+
+        # ensure that the flag is not passed to the compiler when not compiling with debug symbols
+        passed_no_debug_arguments: Arguments = invoke_compiler_mock.call_args_list[1].args  # type: ignore[assignment]
+        assert "-fdebug-prefix-map" not in str(passed_no_debug_arguments)
+
     @pytest.mark.skipif(shutil.which("g++") is None, reason="g++ is not installed")
     def test_compiler_exists(self):
         gpp_arguments = Arguments.from_args(["g++", "do_something"])

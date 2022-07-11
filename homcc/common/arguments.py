@@ -43,10 +43,9 @@ class Arguments:
     PREPROCESSOR_TARGET: str = "$(homcc)"
 
     NO_LINKING_ARG: str = "-c"
-    DEBUG_SYMBOLS_ARG: str = "-gs"
+    DEBUG_SYMBOLS_ARG: str = "-g"
     OUTPUT_ARG: str = "-o"
     SPECIFY_LANGUAGE_ARG: str = "-x"
-
 
     INCLUDE_ARGS: List[str] = ["-I", "-isysroot", "-isystem"]
 

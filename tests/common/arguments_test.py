@@ -227,3 +227,8 @@ class TestArguments:
         ] + source_file_args
 
         assert Arguments.from_args(args).source_files == source_file_args
+
+    def test_has_debug_symbols_arg(self):
+        args = ["g++", "-g", "-Ifoo/bar", "foo.cpp"]
+
+        assert Arguments.from_args(args).has_debug_symbols()
