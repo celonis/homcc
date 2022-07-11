@@ -122,7 +122,7 @@ class Environment:
         Path(self.mapped_cwd).mkdir(parents=True, exist_ok=True)
 
         if arguments.has_debug_symbols():
-            compile_arguments = arguments.map_debug_symbol_paths(self.instance_folder, "/")
+            compile_arguments = arguments.map_debug_symbol_paths(self.instance_folder, "")
         else:
             compile_arguments = arguments
 

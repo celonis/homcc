@@ -386,7 +386,7 @@ class Arguments:
         return self.DEBUG_SYMBOLS_ARG in self.args
 
     def map_debug_symbol_paths(self, old_path: str, new_path: str) -> Arguments:
-        """return a copy of arguments with added command for translating debug symbols in the executable"""
+        """return a copy of arguments with added command for translating debug symbol paths in the executable"""
         return self.copy().add_arg(f"-fdebug-prefix-map={old_path}={new_path}")
 
     def is_linking_only(self) -> bool:
