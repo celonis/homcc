@@ -18,7 +18,7 @@ from homcc.common.compression import Compression
 from configparser import ConfigParser, SectionProxy
 from homcc.common.logging import LogLevel
 from homcc.common.parsing import HOMCC_CONFIG_FILENAME, default_locations, parse_configs
-from homcc.client.errors import HostParsingError, NoHostsFoundError
+from homcc.common.errors import HostParsingError, NoHostsFoundError
 
 logger = logging.getLogger(__name__)
 

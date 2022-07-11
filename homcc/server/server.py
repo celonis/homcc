@@ -12,6 +12,7 @@ from socket import SHUT_RD
 from tempfile import TemporaryDirectory
 from threading import Lock
 from typing import Dict, List, Optional, Tuple
+from homcc.common.errors import ServerInitializationError
 
 from homcc.common.hashing import hash_file_with_bytes
 from homcc.common.messages import (
@@ -30,10 +31,6 @@ from homcc.common.arguments import Arguments
 from homcc.server.cache import Cache
 
 logger = logging.getLogger(__name__)
-
-
-class ServerInitializationError(Exception):
-    """Indicates that an error occurred during server startup."""
 
 
 class TCPServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
@@ -79,7 +76,10 @@ class TCPServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
         try:
             request.sendall(message.to_bytes())
         except ConnectionError as err:
-            logger.error("Connection error while trying to send data. %s", err)
+            logger.error("Connection error while trying to send '%s' message. %s", message.message_type, err)
+            logger.debug(
+                "The following message could not be sent due to a connection error: \n%s", message.get_json_str()
+            )
 
     @staticmethod
     def close_connection_for_request(request, info: str):

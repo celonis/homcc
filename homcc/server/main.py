@@ -80,7 +80,7 @@ def main():
         server, server_thread = start_server(address=address, port=port, limit=limit, profiles=profiles)
     except ServerInitializationError:
         logger.error("Could not start homccd, terminating.")
-        sys.exit(1)
+        sys.exit(os.EX_OSERR)
 
     def signal_handler(*_):
         stop_server(server)
