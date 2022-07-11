@@ -32,6 +32,10 @@ from homcc.server.cache import Cache
 logger = logging.getLogger(__name__)
 
 
+class ServerInitializationError(Exception):
+    """Indicates that an error occur during server startup."""
+
+
 class TCPServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
     """TCP Server instance, holding data relevant across compilations."""
 
@@ -103,7 +107,7 @@ class TCPServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
     def __del__(self):
         try:
             root_temp_folder = self.root_temp_folder
-        except:
+        except AttributeError:
             return
 
         root_temp_folder.cleanup()
@@ -361,7 +365,7 @@ def start_server(
         server: TCPServer = TCPServer(address, port, limit, profiles)
     except OSError as err:
         logger.error("Could not start TCP server: %s", err)
-        raise err
+        raise ServerInitializationError from err
 
     server_thread = threading.Thread(target=server.serve_forever, daemon=True)
     server_thread.start()
