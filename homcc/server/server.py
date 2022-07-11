@@ -79,7 +79,7 @@ class TCPServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
         try:
             request.sendall(message.to_bytes())
         except ConnectionError as err:
-            logger.error("Encountered connection error while trying to send data. %s", err)
+            logger.error("Connection error while trying to send data. %s", err)
 
     @staticmethod
     def close_connection_for_request(request, info: str):
@@ -324,7 +324,11 @@ class TCPRequestHandler(socketserver.BaseRequestHandler):
             recv_bytes: bytearray = self.recv()
 
             if len(recv_bytes) == 0:
-                logger.info("Connection '%s' closed gracefully.", self.environment.instance_folder)
+                try:
+                    logger.info("Connection '%s' closed.", self.environment.instance_folder)
+                except AttributeError:
+                    logger.info("Connection without existing environment closed.")
+
                 return
 
             bytes_needed: int = Message.MINIMUM_SIZE_BYTES
