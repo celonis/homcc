@@ -200,7 +200,7 @@ class TestServerCompilation:
 
         # ensure that we call the compiler with an instruction to remap the debug symbols
         passed_debug_arguments: Arguments = invoke_compiler_mock.call_args_list[0].args[0]
-        assert f"-fdebug-prefix-map={instance_path}=" in str(passed_debug_arguments.args)
+        assert f"-fdebug-prefix-map={instance_path}=" in passed_debug_arguments.args
 
         no_debug_arguments = Arguments.from_args(
             [
