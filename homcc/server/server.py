@@ -12,8 +12,9 @@ from socket import SHUT_RD
 from tempfile import TemporaryDirectory
 from threading import Lock
 from typing import Dict, List, Optional, Tuple
-from homcc.common.errors import ServerInitializationError
 
+from homcc.common.arguments import Arguments
+from homcc.common.errors import ServerInitializationError
 from homcc.common.hashing import hash_file_with_bytes
 from homcc.common.messages import (
     ArgumentMessage,
@@ -24,11 +25,10 @@ from homcc.common.messages import (
     CompilationResultMessage,
 )
 
-from homcc.server.environment import Environment, create_root_temp_folder
-
-from homcc.common.arguments import Arguments
-
 from homcc.server.cache import Cache
+from homcc.server.environment import Environment, create_root_temp_folder
+from homcc.server.parsing import ServerConfig
+
 
 logger = logging.getLogger(__name__)
 
@@ -363,11 +363,9 @@ class TCPRequestHandler(socketserver.BaseRequestHandler):
                 self.server.current_amount_connections -= 1
 
 
-def start_server(
-    address: Optional[str], port: Optional[int], limit: Optional[int], profiles: List[str]
-) -> Tuple[TCPServer, threading.Thread]:
+def start_server(profiles: List[str], config: ServerConfig) -> Tuple[TCPServer, threading.Thread]:
     try:
-        server: TCPServer = TCPServer(address, port, limit, profiles)
+        server: TCPServer = TCPServer(config.address, config.port, config.limit, profiles)
     except OSError as err:
         logger.error("Could not start TCP server: %s", err)
         raise ServerInitializationError from err

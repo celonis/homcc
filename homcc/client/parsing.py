@@ -8,6 +8,7 @@ import sys
 
 from abc import ABC, abstractmethod
 from argparse import ArgumentParser, Action, RawTextHelpFormatter
+from configparser import Error, SectionProxy
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
@@ -15,7 +16,6 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 
 from homcc.common.arguments import Arguments
 from homcc.common.compression import Compression
-from configparser import Error, SectionProxy
 from homcc.common.logging import LogLevel
 from homcc.common.parsing import HOMCC_CONFIG_FILENAME, default_locations, parse_configs
 from homcc.common.errors import HostParsingError, NoHostsFoundError
@@ -68,7 +68,7 @@ class ShowHosts(ShowAndExitAction):
 
     def __call__(self, *_):
         try:
-            hosts: List[str] = load_hosts()
+            _, hosts = load_hosts()
 
         except NoHostsFoundError:
             print("Failed to get hosts list")
@@ -85,7 +85,7 @@ class ShowConcurrencyLevel(ShowAndExitAction):
 
     def __call__(self, *_):
         try:
-            hosts: List[str] = load_hosts()
+            _, hosts = load_hosts()
 
         except NoHostsFoundError:
             print("Failed to get hosts list")
@@ -202,6 +202,16 @@ class ClientConfig:
             timeout=timeout,
             log_level=log_level,
             verbose=verbose,
+        )
+
+    def __str__(self):
+        return (
+            f"Compiler:\t{self.compiler}\n"
+            f"Compression:\t{self.compression}\n"
+            f"Profile:\t{self.profile}\n"
+            f"Timeout:\t{self.timeout}s\n"
+            f"Log-Level:\t{self.log_level.name}\n"
+            f"Verbosity:\t{str(self.verbose)}\n"
         )
 
 
@@ -362,7 +372,7 @@ def parse_host(host: str) -> Host:
     return Host(type=connection_type, name=host, **host_dict)
 
 
-def load_hosts(hosts_file_locations: Optional[List[Path]] = None) -> List[str]:
+def load_hosts(hosts_file_locations: Optional[List[Path]] = None) -> Tuple[str, List[str]]:
     """
     Load homcc hosts from one of the following options:
     - Environment Variable: $HOMCC_HOSTS
@@ -386,7 +396,7 @@ def load_hosts(hosts_file_locations: Optional[List[Path]] = None) -> List[str]:
     # $HOMCC_HOSTS
     homcc_hosts_env_var = os.getenv(HOMCC_HOSTS_ENV_VAR)
     if homcc_hosts_env_var:
-        return filtered_lines(homcc_hosts_env_var)
+        return HOMCC_HOSTS_ENV_VAR, filtered_lines(homcc_hosts_env_var)
 
     # HOSTS Files
     if not hosts_file_locations:
@@ -397,7 +407,7 @@ def load_hosts(hosts_file_locations: Optional[List[Path]] = None) -> List[str]:
             if hosts_file_location.stat().st_size == 0:
                 logger.warning('Skipping empty hosts file "%s"!', hosts_file_location)
                 continue
-            return filtered_lines(hosts_file_location.read_text(encoding="utf-8"))
+            return str(hosts_file_location), filtered_lines(hosts_file_location.read_text(encoding="utf-8"))
 
     raise NoHostsFoundError("No hosts information were found!")
 

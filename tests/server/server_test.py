@@ -12,6 +12,7 @@ from homcc.common.messages import (
     Message,
     ObjectFile,
 )
+from homcc.server.parsing import ServerConfig
 from homcc.server.server import start_server, stop_server, TCPRequestHandler
 
 
@@ -43,7 +44,9 @@ class TestServerReceive:
         # messages sent by the client with messages that the server deserialized
         TCPRequestHandler._handle_message = self.patched_handle_message
 
-        server, _ = start_server(address="localhost", port=unused_tcp_port, limit=1, profiles=[])
+        config: ServerConfig = ServerConfig(files=[], address="localhost", port=unused_tcp_port, limit=1)
+
+        server, _ = start_server([], config)
         with server:
             arguments = ["-a", "-b", "--help"]
             cwd = "/home/o.layer/test"

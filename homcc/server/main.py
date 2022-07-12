@@ -5,7 +5,7 @@ import os
 import signal
 import sys
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 sys.path.append(os.path.join(os.path.dirname(__file__), "../.."))
 
@@ -66,20 +66,35 @@ def main():
     setup_logging(logging_config)
 
     # LIMIT
-    limit: Optional[int] = homccd_args_dict["jobs"] or homccd_config.limit
+    if (limit := homccd_args_dict["jobs"]) is not None:
+        homccd_config.limit = limit
 
     # PORT
-    port: Optional[int] = homccd_args_dict["port"] or homccd_config.port
+    if (port := homccd_args_dict["port"]) is not None:
+        homccd_config.port = port
 
     # ADDRESS
-    address: Optional[str] = homccd_args_dict["listen"] or homccd_config.address
+    if (address := homccd_args_dict["listen"]) is not None:
+        homccd_config.address = address
 
     # PROFILES
     profiles: List[str] = load_schroot_profiles()
 
+    # provide additional DEBUG information
+    logger.debug(
+        "%s - %s\n"  # homcc location and version
+        "Called by: %s\n"  # homcc caller
+        "Using configuration (from [%s]):\n%s",  # config info
+        sys.argv[0],
+        "0.0.1",
+        sys.executable,
+        ", ".join(homccd_config.files),
+        homccd_config,
+    )
+
     # start server
     try:
-        server, server_thread = start_server(address=address, port=port, limit=limit, profiles=profiles)
+        server, server_thread = start_server(profiles, homccd_config)
     except ServerInitializationError:
         logger.error("Could not start homccd, terminating.")
         sys.exit(os.EX_OSERR)

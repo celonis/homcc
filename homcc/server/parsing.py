@@ -90,6 +90,15 @@ class ServerConfig:
 
         return ServerConfig(files=files, limit=limit, port=port, address=address, log_level=log_level, verbose=verbose)
 
+    def __str__(self):
+        return (
+            f"Limit:\t{self.limit}\n"
+            f"Port:\t{self.port}\n"
+            f"Address:\t{self.address}\n"
+            f"Log-Level:\t{self.log_level}\n"
+            f"Verbosity:\t{str(self.verbose)}\n"
+        )
+
 
 def parse_cli_args(args: List[str]) -> Dict[str, Any]:
     parser: ArgumentParser = ArgumentParser(
