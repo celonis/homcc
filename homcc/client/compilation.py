@@ -16,7 +16,7 @@ from homcc.client.client import (
     LocalHostSemaphore,
     TCPClient,
 )
-from homcc.client.errors import (
+from homcc.common.errors import (
     CompilationTimeoutError,
     FailedHostNameResolutionError,
     HostsExhaustedError,

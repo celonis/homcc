@@ -17,7 +17,7 @@ from homcc.client.compilation import (  # pylint: disable=wrong-import-position
     compile_remotely,
     scan_includes,
 )
-from homcc.client.errors import (  # pylint: disable=wrong-import-position
+from homcc.common.errors import (  # pylint: disable=wrong-import-position
     HostParsingError,
     RecoverableClientError,
     RemoteCompilationError,
