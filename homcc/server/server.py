@@ -78,7 +78,7 @@ class TCPServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
         except ConnectionError as err:
             logger.error("Connection error while trying to send '%s' message. %s", message.message_type, err)
             logger.debug(
-                "The following message could not be sent due to a connection error: \n%s", message.get_json_str()
+                "The following message could not be sent due to a connection error:\n%s", message.get_json_str()
             )
 
     @staticmethod

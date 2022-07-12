@@ -26,8 +26,10 @@ from homcc.server.parsing import (  # pylint: disable=wrong-import-position
 from homcc.server.server import (  # pylint: disable=wrong-import-position
     start_server,
     stop_server,
-    ServerInitializationError,
 )
+
+from homcc.common.errors import ServerInitializationError  # pylint: disable=wrong-import-position
+
 
 logger: logging.Logger = logging.getLogger(__name__)
 
