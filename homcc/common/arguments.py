@@ -43,7 +43,25 @@ class Arguments:
     PREPROCESSOR_TARGET: str = "$(homcc)"
 
     NO_LINKING_ARG: str = "-c"
-    DEBUG_SYMBOLS_ARG: str = "-g"
+
+    # for gcc, see https://gcc.gnu.org/onlinedocs/gcc/Debugging-Options.html#Debugging-Options
+    # for clang, see https://clang.llvm.org/docs/ClangCommandLineReference.html#debug-information-generation
+    DEBUG_SYMBOLS_ARGS: List[str] = [
+        "-g",
+        "-ggdb",
+        "-gdwarf",
+        "-gfull",
+        "--debug",
+        "-gused" "-gbtf",
+        "-gctf",
+        "-gstabs",
+        "-gstabs+",
+        "-gxcoff",
+        "-gxcoff+",
+        "-gvms",
+    ]
+    DEBUG_SYMBOLS_WITH_LEVEL: List[str] = ["-g", "-ggdb", "-gdwarf-", "-gctf", "-gstabs", "-gxcoff", "-gvms"]
+
     OUTPUT_ARG: str = "-o"
     SPECIFY_LANGUAGE_ARG: str = "-x"
 
@@ -382,8 +400,18 @@ class Arguments:
         return self.NO_LINKING_ARG not in self.args
 
     def has_debug_symbols(self) -> bool:
-        """check whether the -g flag is present"""
-        return self.DEBUG_SYMBOLS_ARG in self.args
+        """check whether any flag that indicates debug symbols is present"""
+        for arg in self.args:
+            if arg in self.DEBUG_SYMBOLS_ARGS:
+                # debug arguments without level, e.g. -g or -ggdb
+                return True
+
+            for debug_symbol_flag in self.DEBUG_SYMBOLS_WITH_LEVEL:
+                # recognize arguments like e.g. -g3 or -ggdb2
+                if arg.startswith(debug_symbol_flag) and len(arg) == len(debug_symbol_flag) + 1 and arg[-1].isdigit():
+                    return True
+
+        return False
 
     def map_debug_symbol_paths(self, old_path: str, new_path: str) -> Arguments:
         """return a copy of arguments with added command for translating debug symbol paths in the executable"""
