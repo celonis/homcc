@@ -1,7 +1,6 @@
 """Tests for the server environment."""
 from pytest_mock.plugin import MockerFixture
 import pytest
-import shutil
 from pathlib import Path
 
 from homcc.common.compression import NoCompression
@@ -214,10 +213,10 @@ class TestServerCompilation:
         passed_no_debug_arguments: Arguments = invoke_compiler_mock.call_args_list[1].args[0]
         assert "-fdebug-prefix-map" not in str(passed_no_debug_arguments.args)
 
-    @pytest.mark.skipif(shutil.which("g++") is None, reason="g++ is not installed")
+    @pytest.mark.gplusplus
     def test_compiler_exists(self):
-        gpp_arguments = Arguments.from_args(["g++", "do_something"])
-        assert Environment.compiler_exists(gpp_arguments)
+        gplusplus_args = Arguments.from_args(["g++", "foo"])
+        assert Environment.compiler_exists(gplusplus_args)
 
-        non_existing_compiler_arguments = Arguments.from_args(["non-existing-compiler", "do_something"])
-        assert not Environment.compiler_exists(non_existing_compiler_arguments)
+        failing_args = Arguments.from_args(["non-existing-compiler", "foo"])
+        assert not Environment.compiler_exists(failing_args)
