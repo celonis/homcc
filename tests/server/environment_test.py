@@ -1,7 +1,6 @@
 """Tests for the server environment."""
 from pytest_mock.plugin import MockerFixture
 import pytest
-import shutil
 from pathlib import Path
 
 from homcc.common.compression import NoCompression
@@ -180,10 +179,10 @@ class TestServerCompilation:
         assert len(result_message.object_files) == 1
         assert result_message.object_files[0].file_name == "/home/user/cwd/this_is_a_source_file.o"
 
-    @pytest.mark.skipif(shutil.which("g++") is None, reason="g++ is not installed")
+    @pytest.mark.gplusplus
     def test_compiler_exists(self):
-        gpp_arguments = Arguments.from_args(["g++", "do_something"])
-        assert Environment.compiler_exists(gpp_arguments)
+        gplusplus_args = Arguments.from_args(["g++", "foo"])
+        assert Environment.compiler_exists(gplusplus_args)
 
-        non_existing_compiler_arguments = Arguments.from_args(["non-existing-compiler", "do_something"])
-        assert not Environment.compiler_exists(non_existing_compiler_arguments)
+        failing_args = Arguments.from_args(["non-existing-compiler", "foo"])
+        assert not Environment.compiler_exists(failing_args)
