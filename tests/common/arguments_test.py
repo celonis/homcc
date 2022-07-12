@@ -1,6 +1,5 @@
 """Tests regarding the arguments module of homcc."""
 import pytest
-import shutil
 
 from typing import List, Optional
 from homcc.common.arguments import Arguments
@@ -8,9 +7,6 @@ from homcc.common.arguments import Arguments
 
 class TestArguments:
     """Tests for common/arguments.py"""
-
-    COMPILER_CANDIDATES: List[str] = ["cc", "gcc", "g++", "clang", "clang++"]
-    COMPILERS: List[str] = list(filter(lambda compiler: shutil.which(compiler) is not None, COMPILER_CANDIDATES))
 
     def test_arguments(self):
         args: List[str] = ["g++", "foo.cpp", "-O0", "-Iexample/include/"]
@@ -38,10 +34,9 @@ class TestArguments:
         for not_object_file in not_object_files:
             assert not Arguments.is_object_file_arg(not_object_file)
 
-    @pytest.mark.skipif(not COMPILERS, reason=f"No compiler of {COMPILER_CANDIDATES} installed to test")
+    @pytest.mark.gplusplus
     def test_is_compiler_arg(self):
-        for compiler in self.COMPILERS:
-            assert Arguments.is_compiler_arg(compiler)
+        assert Arguments.is_compiler_arg("g++")
 
     def test_from_args(self):
         with pytest.raises(ValueError):
@@ -69,7 +64,7 @@ class TestArguments:
         sendable_args: List[str] = args + ["-c", "-ofoo"]
         assert Arguments.from_args(sendable_args).is_sendable()
 
-        sendable_preprocessor_args: List[str] = args + ["-MD", "-MF", "sendable"]
+        sendable_preprocessor_args: List[str] = args + ["-MD", "-MF", "foo.d"]
         assert Arguments.from_args(sendable_preprocessor_args).is_sendable()
 
         # unsendability
@@ -113,6 +108,28 @@ class TestArguments:
 
         linking_only_args: List[str] = ["g++", "foo.o", "bar.o", "-ofoobar"]
         assert Arguments.from_args(linking_only_args).is_linking_only()
+
+    def test_dependency_finding_filename(self):
+        source_file_args_str: str = "g++ -Iexample/include -c example/src/main.cpp"
+        assert Arguments.from_str(source_file_args_str).dependency_finding()[1] is None
+
+        simple_dependency_args_str: str = f"{source_file_args_str} -MD"
+        assert Arguments.from_str(simple_dependency_args_str).dependency_finding()[1] == "main.d"
+
+        dependency_target_args_str: str = f"{simple_dependency_args_str} -MT main.cpp.o"
+        assert Arguments.from_str(dependency_target_args_str).dependency_finding()[1] == "main.d"
+
+        dependency_file_args_str: str = f"{dependency_target_args_str} -MF main.cpp.o.d"
+        assert Arguments.from_str(dependency_file_args_str).dependency_finding()[1] == "main.cpp.o.d"
+
+        duplicated_dependency_file_args_str: str = f"{dependency_target_args_str} -MF main.cpp.o.d -MF foo.cpp.o.d"
+        assert Arguments.from_str(duplicated_dependency_file_args_str).dependency_finding()[1] == "foo.cpp.o.d"
+
+        output_dependency_file_args_str: str = f"{dependency_target_args_str} -o main.cpp.o"
+        assert Arguments.from_str(output_dependency_file_args_str).dependency_finding()[1] == "main.cpp.d"
+
+        multiple_dependency_file_args_str: str = f"{dependency_target_args_str} -MF main.cpp.o.d -o main.cpp.o"
+        assert Arguments.from_str(multiple_dependency_file_args_str).dependency_finding()[1] == "main.cpp.o.d"
 
     def test_output_target(self):
         args: List[str] = ["g++", "foo.cpp", "-O0", "-Iexample/include/"]
