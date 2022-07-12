@@ -233,7 +233,7 @@ Additionally, `HOMCC` provides sandboxed compiler execution for remote compilati
     python3-distutils python3-setuptools python3-wheel python3-stdeb \
     liblzo2-dev
   ```
-- Run `make homcc`, `make homccd` or `make all` to build the corresponding `client` and `server` package
+- Run `sudo make homcc`, `sudo make homccd` or `sudo make all` to build the corresponding `client` and `server` package
 - The generated `.deb` files are then contained in the `./target/` directory
 
 

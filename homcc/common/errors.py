@@ -7,6 +7,10 @@ class RecoverableClientError(Exception):
     """Base class for TCPClient exceptions to indicate recoverability for the client main function"""
 
 
+class PreprocessorError(RecoverableClientError):
+    """Exception for errors during the preprocessor stage"""
+
+
 class CompilationTimeoutError(RecoverableClientError):
     """Exception for a timed out compilation request"""
 
@@ -50,3 +54,7 @@ class RemoteCompilationError(Exception):
 
     message: str
     return_code: int
+
+
+class ServerInitializationError(Exception):
+    """Indicates that an error occurred during server startup."""

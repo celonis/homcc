@@ -9,7 +9,8 @@ import subprocess
 
 from dataclasses import dataclass
 from functools import cached_property
-from typing import Any, Iterator, List, Optional
+from pathlib import Path
+from typing import Any, Iterator, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -35,13 +36,37 @@ class Arguments:
     compilation which implies arguments being able to be sent!
     """
 
+    # execution timeout
+    TIMEOUT: int = 180
+
     # if the compiler is neither specified by the callee nor defined in the config file use this as fallback
     DEFAULT_COMPILER: str = "cc"
     PREPROCESSOR_TARGET: str = "$(homcc)"
 
     NO_LINKING_ARG: str = "-c"
+
+    # for gcc, see https://gcc.gnu.org/onlinedocs/gcc/Debugging-Options.html#Debugging-Options
+    # for clang, see https://clang.llvm.org/docs/ClangCommandLineReference.html#debug-information-generation
+    DEBUG_SYMBOLS_ARGS: List[str] = [
+        "-g",
+        "-ggdb",
+        "-gdwarf",
+        "-gfull",
+        "--debug",
+        "-gused" "-gbtf",
+        "-gctf",
+        "-gstabs",
+        "-gstabs+",
+        "-gxcoff",
+        "-gxcoff+",
+        "-gvms",
+    ]
+    DEBUG_SYMBOLS_WITH_LEVEL: List[str] = ["-g", "-ggdb", "-gdwarf-", "-gctf", "-gstabs", "-gxcoff", "-gvms"]
+
     OUTPUT_ARG: str = "-o"
     SPECIFY_LANGUAGE_ARG: str = "-x"
+
+    DEPENDENCY_SIDE_EFFECT_ARG: str = "-MD"
 
     INCLUDE_ARGS: List[str] = ["-I", "-isysroot", "-isystem"]
 
@@ -55,7 +80,7 @@ class Arguments:
         """
 
         # preprocessor args
-        PREPROCESSOR_ARGS: List[str] = ["-MD", "-MMD", "-MG", "-MP"]
+        PREPROCESSOR_ARGS: List[str] = ["-MG", "-MP"]
         PREPROCESSOR_OPTION_PREFIX_ARGS: List[str] = ["-MF", "-MT", "-MQ"]
 
         # linking args
@@ -71,6 +96,7 @@ class Arguments:
         # preprocessing args
         PREPROCESSOR_ONLY_ARG: str = "-E"
         PREPROCESSOR_DEPENDENCY_ARG: str = "-M"
+        PREPROCESSOR_USER_HEADER_ONLY_DEPENDENCY_ARG: str = "-MM"
 
         # args that rely on native machine
         NATIVE_ARGS: List[str] = ["-march=native", "-mtune=native"]
@@ -145,6 +171,11 @@ class Arguments:
         return cls(args[0], args[1:])
 
     @classmethod
+    def from_str(cls, args_str: str) -> Arguments:
+        """construct arguments from an args string"""
+        return Arguments.from_args(args_str.split())
+
+    @classmethod
     def from_cli(cls, compiler_or_argument: str, args: List[str]) -> Arguments:
         """construct Arguments from args given via the CLI"""
         # explicit compiler argument, e.g.: "homcc [OPTIONAL ARGUMENTS] g++ -c foo.cpp"
@@ -194,11 +225,15 @@ class Arguments:
             logger.debug("[%s] implies a preprocessor only call", arg)
             return False
 
-        if arg in Arguments.Local.PREPROCESSOR_ARGS:
+        if arg in Arguments.Local.PREPROCESSOR_ARGS + [Arguments.DEPENDENCY_SIDE_EFFECT_ARG]:
             return True
 
         if arg.startswith(tuple(Arguments.Local.PREPROCESSOR_OPTION_PREFIX_ARGS)):
             return True
+
+        if arg.startswith(Arguments.Unsendable.PREPROCESSOR_USER_HEADER_ONLY_DEPENDENCY_ARG):  # -MM prefix
+            logger.debug("[%s] implies two different preprocessor calls", arg)
+            return False
 
         # all remaining preprocessing arg types with prefix "-M" imply Unsendability
         if arg.startswith(Arguments.Unsendable.PREPROCESSOR_DEPENDENCY_ARG):
@@ -270,14 +305,6 @@ class Arguments:
         self._args.append(arg)
         return self
 
-    def remove_arg(self, arg: str) -> Arguments:
-        """
-        if present, remove the specified arg, this may remove multiple occurrences of this arg and break cached
-        properties when used inconsiderately
-        """
-        self._args = list(filter(lambda _arg: _arg != arg, self.args))
-        return self
-
     @property
     def compiler(self) -> Optional[str]:
         """if present, return the specified compiler"""
@@ -300,6 +327,20 @@ class Arguments:
                 else:  # compact output argument: e.g.: -oout
                     output = arg[2:]
         return output
+
+    @cached_property
+    def dependency_output(self) -> Optional[str]:
+        """if present, return the last explicitly specified dependency output target"""
+        dependency_output: Optional[str] = None
+
+        it: Iterator[str] = iter(self.args)
+        for arg in it:
+            if arg.startswith("-MF"):
+                if arg == "-MF":  # dependency output argument with output target following: e.g.: -MF out
+                    dependency_output = next(it)  # skip dependency output file target
+                else:  # compact dependency output argument: e.g.: -MFout
+                    dependency_output = arg[3:]  # skip "-MF" prefix
+        return dependency_output
 
     @cached_property
     def source_files(self) -> List[str]:
@@ -344,7 +385,7 @@ class Arguments:
 
     def is_sendable(self) -> bool:
         """check whether the remote execution of arguments would be successful"""
-        # "-o -" might be treated as "write result to stdout" by some compilers
+        # "-o -" might either be treated as "write result to stdout" or "write result to file named '-'"
         if self.output == "-":
             logger.info('Cannot compile %s remotely because output "%s" is ambiguous', self, self.output)
             return False
@@ -377,20 +418,52 @@ class Arguments:
         """check whether the linking arg is present"""
         return self.NO_LINKING_ARG not in self.args
 
+    def has_debug_symbols(self) -> bool:
+        """check whether any flag that indicates debug symbols is present"""
+        for arg in self.args:
+            if arg in self.DEBUG_SYMBOLS_ARGS:
+                # debug arguments without level, e.g. -g or -ggdb
+                return True
+
+            for debug_symbol_flag in self.DEBUG_SYMBOLS_WITH_LEVEL:
+                # recognize arguments like e.g. -g3 or -ggdb2
+                if arg.startswith(debug_symbol_flag) and len(arg) == len(debug_symbol_flag) + 1 and arg[-1].isdigit():
+                    return True
+
+        return False
+
+    def map_debug_symbol_paths(self, old_path: str, new_path: str) -> Arguments:
+        """return a copy of arguments with added command for translating debug symbol paths in the executable"""
+        return self.copy().add_arg(f"-fdebug-prefix-map={old_path}={new_path}")
+
     def is_linking_only(self) -> bool:
         """check whether the execution of arguments leads to calling only the linker"""
         return not self.source_files and self.is_linking()
 
-    def dependency_finding(self) -> Arguments:
-        """return a copy of arguments with which to find dependencies via the preprocessor"""
-        return (
-            self.copy()
-            .remove_arg(self.NO_LINKING_ARG)
-            .remove_output_args()
-            .add_arg("-M")  # output dependencies
-            .add_arg("-MT")  # change target of the dependency generation
-            .add_arg(self.PREPROCESSOR_TARGET)
-        )
+    def dependency_finding(self) -> Tuple[Arguments, Optional[str]]:
+        """return a dependency finding arguments with which to find dependencies via the preprocessor"""
+
+        # gcc and clang handle the combination of -MD -M differently, this function provides a uniform approach for
+        # both compilers that also preserves side effects like the creation of dependency files
+
+        if self.DEPENDENCY_SIDE_EFFECT_ARG not in self.args:
+            # TODO(s.pirsch): benchmark -M -MF- and writing stdout to specified file afterwards
+            return self.copy().remove_output_args().add_arg(self.Unsendable.PREPROCESSOR_DEPENDENCY_ARG), None
+
+        dependency_output_file: str
+
+        if self.dependency_output is not None:  # e.g. "-MF foo.d"
+            dependency_output_file = self.dependency_output
+        elif self.output is not None:  # e.g. "-o foo.o" -> "foo.d"
+            dependency_output_file = f"{Path(self.output).stem}.d"
+        else:  # e.g. "foo.cpp" -> "foo.d"
+            dependency_output_file = f"{Path(self.source_files[0]).stem}.d"
+
+        # TODO(s.pirsch): disallow multiple source files in the future when linker issue was investigated
+        if len(self.source_files) > 1:
+            logger.warning("Executing [%s] might not create the intended dependency files.", self)
+
+        return self.copy(), dependency_output_file
 
     def no_linking(self) -> Arguments:
         """return a copy of arguments where all output args are removed and the no linking arg is added"""
@@ -486,7 +559,7 @@ class Arguments:
         logger.debug("Executing: [%s]", " ".join(args))
 
         result: subprocess.CompletedProcess = subprocess.run(
-            args=args, check=check, encoding="utf-8", capture_output=capture_output, **kwargs
+            args=args, check=check, encoding="utf-8", capture_output=capture_output, timeout=Arguments.TIMEOUT, **kwargs
         )
         return ArgumentsExecutionResult.from_process_result(result)
 

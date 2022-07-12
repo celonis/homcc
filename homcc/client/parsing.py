@@ -15,10 +15,10 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 
 from homcc.common.arguments import Arguments
 from homcc.common.compression import Compression
-from configparser import SectionProxy
+from configparser import Error, SectionProxy
 from homcc.common.logging import LogLevel
 from homcc.common.parsing import HOMCC_CONFIG_FILENAME, default_locations, parse_configs
-from homcc.client.errors import HostParsingError, NoHostsFoundError
+from homcc.common.errors import HostParsingError, NoHostsFoundError
 
 logger = logging.getLogger(__name__)
 
@@ -403,7 +403,11 @@ def load_hosts(hosts_file_locations: Optional[List[Path]] = None) -> List[str]:
 
 
 def parse_config(filenames: List[Path] = None) -> ClientConfig:
-    files, cfg = parse_configs(filenames or default_locations(HOMCC_CONFIG_FILENAME))
+    try:
+        files, cfg = parse_configs(filenames or default_locations(HOMCC_CONFIG_FILENAME))
+    except Error as err:
+        print(f"{err}; using default configuration instead")
+        return ClientConfig(files=[])
 
     if HOMCC_CLIENT_CONFIG_SECTION not in cfg.sections():
         return ClientConfig(files=files)
