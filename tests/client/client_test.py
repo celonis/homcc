@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Iterator, List
 
 from homcc.client.client import HostSelector, LocalHostSemaphore, RemoteHostSemaphore, StateFile
-from homcc.client.errors import HostsExhaustedError, SlotsExhaustedError
+from homcc.common.errors import HostsExhaustedError, SlotsExhaustedError
 from homcc.client.parsing import ConnectionType, Host
 
 

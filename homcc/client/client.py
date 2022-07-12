@@ -20,7 +20,7 @@ from enum import Enum, auto
 from pathlib import Path
 from typing import Dict, Iterator, List, Optional
 
-from homcc.client.errors import (
+from homcc.common.errors import (
     ClientParsingError,
     FailedHostNameResolutionError,
     HostsExhaustedError,

@@ -54,3 +54,7 @@ class RemoteCompilationError(Exception):
 
     message: str
     return_code: int
+
+
+class ServerInitializationError(Exception):
+    """Indicates that an error occurred during server startup."""
