@@ -160,7 +160,8 @@ class ClientConfig:
 
     compiler: str
     compression: Compression
-    profile: Optional[str]
+    schroot_profile: Optional[str]
+    docker_container: Optional[str]
     timeout: Optional[float]
     log_level: Optional[LogLevel]
     verbose: bool
@@ -170,14 +171,16 @@ class ClientConfig:
         *,
         compiler: Optional[str] = None,
         compression: Optional[str] = None,
-        profile: Optional[str] = None,
+        schroot_profile: Optional[str] = None,
+        docker_container: Optional[str] = None,
         timeout: Optional[float] = None,
         log_level: Optional[str] = None,
         verbose: Optional[bool] = None,
     ):
         self.compiler = compiler or Arguments.DEFAULT_COMPILER
         self.compression = Compression.from_name(compression)
-        self.profile = profile
+        self.schroot_profile = schroot_profile
+        self.docker_container = docker_container
         self.timeout = timeout
         self.log_level = LogLevel[log_level] if log_level else None
         self.verbose = verbose is not None and verbose
@@ -186,7 +189,8 @@ class ClientConfig:
     def from_config_section(cls, homcc_config: SectionProxy) -> ClientConfig:
         compiler: Optional[str] = homcc_config.get("compiler")
         compression: Optional[str] = homcc_config.get("compression")
-        profile: Optional[str] = homcc_config.get("profile")
+        schroot_profile: Optional[str] = homcc_config.get("schroot_profile")
+        docker_container: Optional[str] = homcc_config.get("docker-container")
         timeout: Optional[float] = homcc_config.getfloat("timeout")
         log_level: Optional[str] = homcc_config.get("log_level")
         verbose: Optional[bool] = homcc_config.getboolean("verbose")
@@ -194,7 +198,8 @@ class ClientConfig:
         return ClientConfig(
             compiler=compiler,
             compression=compression,
-            profile=profile,
+            schroot_profile=schroot_profile,
+            docker_container=docker_container,
             timeout=timeout,
             log_level=log_level,
             verbose=verbose,
@@ -252,17 +257,30 @@ def parse_cli_args(args: List[str]) -> Tuple[Dict[str, Any], Arguments]:
         f"{indented_newline.join(Compression.descriptions())}",
     )
 
-    profile = parser.add_mutually_exclusive_group()
-    profile.add_argument(
-        "--profile",
+    schroot_profile = parser.add_mutually_exclusive_group()
+    schroot_profile.add_argument(
+        "--schroot-profile",
         type=str,
-        help="PROFILE which will be mapped to predefined chroot environments on the selected remote compilation server,"
-        " no profile is being used on default",
+        help="SCHROOT_PROFILE which will be mapped to predefined chroot environments on the selected remote compilation server,"
+        " no schroot profile is being used on default",
     )
-    profile.add_argument(
-        "--no-profile",
+    schroot_profile.add_argument(
+        "--no-schroot-profile",
         action="store_true",
-        help="enforce that no PROFILE is used even if one is specified in the configuration file",
+        help="enforce that no SCHROOT_PROFILE is used even if one is specified in the configuration file",
+    )
+
+    docker_container = parser.add_mutually_exclusive_group()
+    docker_container.add_argument(
+        "--docker-container",
+        type=str,
+        help="DOCKER_CONTAINER name which will be used to compile in on the selected remote compilation server,"
+        " no docker container is being used on default",
+    )
+    docker_container.add_argument(
+        "--no-docker-container",
+        action="store_true",
+        help="enforce that no DOCKER_CONTAINER is used even if one is specified in the configuration file",
     )
 
     parser.add_argument(

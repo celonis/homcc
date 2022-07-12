@@ -53,14 +53,17 @@ async def compile_remotely(arguments: Arguments, hosts: List[Host], config: Clie
     # try to connect to 3 different remote hosts before falling back to local compilation
     for host in HostSelector(hosts, 3):
         timeout: float = config.timeout or DEFAULT_COMPILATION_REQUEST_TIMEOUT
-        profile: Optional[str] = config.profile
+        schroot_profile: Optional[str] = config.schroot_profile
+        docker_container: Optional[str] = config.docker_container
 
         # overwrite host compression if none was explicitly specified but provided via config
         host.compression = host.compression or config.compression
 
         try:
             with RemoteHostSemaphore(host):
-                return await asyncio.wait_for(compile_remotely_at(arguments, host, profile), timeout=timeout)
+                return await asyncio.wait_for(
+                    compile_remotely_at(arguments, host, schroot_profile, docker_container), timeout=timeout
+                )
 
         # remote semaphore could not be acquired
         except SlotsExhaustedError as error:
@@ -77,14 +80,22 @@ async def compile_remotely(arguments: Arguments, hosts: List[Host], config: Clie
     raise HostsExhaustedError(f"All hosts '{', '.join(str(host) for host in hosts)}' are exhausted.")
 
 
-async def compile_remotely_at(arguments: Arguments, host: Host, profile: Optional[str]) -> int:
+async def compile_remotely_at(
+    arguments: Arguments, host: Host, schroot_profile: Optional[str], docker_container: Optional[str]
+) -> int:
     """main function for the communication between client and a remote compilation host"""
 
     async with TCPClient(host) as client:
         dependency_dict: Dict[str, str] = calculate_dependency_dict(find_dependencies(arguments))
         remote_arguments: Arguments = arguments.copy().remove_local_args()
 
-        await client.send_argument_message(remote_arguments, os.getcwd(), dependency_dict, profile)
+        await client.send_argument_message(
+            arguments=remote_arguments,
+            cwd=os.getcwd(),
+            dependency_dict=dependency_dict,
+            schroot_profile=schroot_profile,
+            docker_container=docker_container,
+        )
 
         # invert dependency dictionary to access dependencies via hash
         dependency_dict = {file_hash: dependency for dependency, file_hash in dependency_dict.items()}

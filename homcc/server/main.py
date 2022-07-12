@@ -68,11 +68,11 @@ def main():
     # ADDRESS
     address: Optional[str] = homccd_args_dict["listen"] or homccd_config.address
 
-    # PROFILES
-    profiles: List[str] = load_schroot_profiles()
+    # schroot profiles
+    schroot_profiles: List[str] = load_schroot_profiles()
 
     # start server
-    server, server_thread = start_server(address=address, port=port, limit=limit, profiles=profiles)
+    server, server_thread = start_server(address=address, port=port, limit=limit, schroot_profiles=schroot_profiles)
 
     def signal_handler(*_):
         stop_server(server)

@@ -13,11 +13,11 @@ from homcc.common.arguments import Arguments
 def create_mock_environment(instance_folder: str, mapped_cwd: str) -> Environment:
     Environment.__init__ = lambda *_: None  # type: ignore
     Environment.__del__ = lambda *_: None  # type: ignore
-    environment = Environment(Path(), "", None, NoCompression())
+    environment = Environment(Path(), "", None, None, NoCompression())
 
     environment.instance_folder = instance_folder
     environment.mapped_cwd = mapped_cwd
-    environment.profile = None
+    environment.schroot_profile = None
     environment.compression = NoCompression()
 
     return environment

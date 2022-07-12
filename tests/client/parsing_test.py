@@ -269,7 +269,7 @@ class TestParsingConfig:
         tmp_config_file.write_text("\n".join(self.config))
 
         assert parse_config([tmp_config_file]) == ClientConfig(
-            compiler="g++", compression="lzo", timeout=180, profile="foobar", log_level="INFO", verbose=True
+            compiler="g++", compression="lzo", timeout=180, docker_container="foobar", log_level="INFO", verbose=True
         )
 
     def test_parse_multiple_config_files(self, tmp_path: Path):
@@ -280,5 +280,10 @@ class TestParsingConfig:
         tmp_config_file_overwrite.write_text("\n".join(self.config_overwrite))
 
         assert parse_config([tmp_config_file_overwrite, tmp_config_file]) == ClientConfig(
-            compiler="clang++", compression="lzo", timeout=180, profile="foobar", log_level="INFO", verbose=False
+            compiler="clang++",
+            compression="lzo",
+            timeout=180,
+            schroot_profile="foobar",
+            log_level="INFO",
+            verbose=False,
         )

@@ -115,12 +115,19 @@ Additionally, `HOMCC` provides sandboxed compiler execution for remote compilati
   ```sh
   $ homccd --help
   ```
-- \[Optional]:
-  Set up your `schroot` environments at `/etc/schroot/schroot.conf` or in the `/etc/schroot/chroot.d/` directory and mount the `/tmp/` directory to enable sandboxed compiler execution.
+- \[Optional] Sandboxed execution:
+  - `schroot`: Set up your `schroot` environments at `/etc/schroot/schroot.conf` or in the `/etc/schroot/chroot.d/` directory and mount the `/tmp/` directory to enable sandboxed compiler execution.
   Currently, in order for these changes to apply, you have to restart `homccd`:
-  ```sh
-  $ sudo systemctl restart homccd.service
-  ```
+    ```sh
+    $ sudo systemctl restart homccd.service
+    ```
+  - `docker`:
+    - Make sure that the docker containers that you want to compile in have mounted the host's `\tmp` directory to `\tmp` (this is necessary to access cached dependencies):
+      ```sh
+      $ sudo docker run --name example_container -v /tmp:/tmp  -it ubuntu:22.04
+      ```
+    - Make sure the docker containers you want to compile in are running and have the appropriate compilers installed
+    
 
 
 ## Configuration
@@ -144,6 +151,7 @@ Additionally, `HOMCC` provides sandboxed compiler execution for remote compilati
     timeout=60
     compression=lzo
     profile=jammy
+    docker_container=example_container
     log_level=DEBUG
     verbose=True
     [homccd]
@@ -159,6 +167,7 @@ Additionally, `HOMCC` provides sandboxed compiler execution for remote compilati
     Default timeout value in seconds
     Default compression algorithm: {lzo, lzma}
     Profile to specify the schroot environment for remote compilations
+    Docker container that should be used on the server for remote compilations
     Detail level for log messages: {DEBUG, INFO, WARNING, ERROR, CRITICAL}
     Enable verbosity mode which implies detailed and colored logging
     # Server configuration
