@@ -131,6 +131,9 @@ class Environment:
         # create the mapped current working directory if it doesn't exist yet
         Path(self.mapped_cwd).mkdir(parents=True, exist_ok=True)
 
+        if arguments.has_debug_symbols():
+            arguments = arguments.map_debug_symbol_paths(self.instance_folder, "")
+
         result = self.invoke_compiler(arguments.no_linking())
 
         object_files: List[ObjectFile] = []

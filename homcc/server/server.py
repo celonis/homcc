@@ -12,6 +12,7 @@ from socket import SHUT_RD
 from tempfile import TemporaryDirectory
 from threading import Lock
 from typing import Dict, List, Optional, Tuple
+from homcc.common.errors import ServerInitializationError
 
 from homcc.common.hashing import hash_file_with_bytes
 from homcc.common.messages import (
@@ -72,9 +73,22 @@ class TCPServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
         self.cache = Cache(Path(self.root_temp_folder.name))
 
     @staticmethod
+    def send_message(request, message: Message):
+        """Sends a response to the request."""
+        try:
+            request.sendall(message.to_bytes())
+        except ConnectionError as err:
+            logger.error("Connection error while trying to send '%s' message. %s", message.message_type, err)
+            logger.debug(
+                "The following message could not be sent due to a connection error:\n%s", message.get_json_str()
+            )
+
+    @staticmethod
     def close_connection_for_request(request, info: str):
         """Close a connection for a certain request."""
-        request.sendall(ConnectionRefusedMessage(info).to_bytes())
+        conn_refused_message = ConnectionRefusedMessage(info)
+        TCPServer.send_message(request, conn_refused_message)
+
         request.shutdown(SHUT_RD)
         request.close()
 
@@ -93,7 +107,13 @@ class TCPServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
         return accept_connection
 
     def __del__(self):
-        self.root_temp_folder.cleanup()
+        try:
+            root_temp_folder = self.root_temp_folder
+        except AttributeError:
+            # root_temp_folder may not have been initialized yet, then we do not have to clean it up
+            return
+
+        root_temp_folder.cleanup()
 
 
 class TCPRequestHandler(socketserver.BaseRequestHandler):
@@ -235,7 +255,7 @@ class TCPRequestHandler(socketserver.BaseRequestHandler):
                 request_message = DependencyRequestMessage(next_needed_hash)
 
                 logger.debug("Sending request for dependency with hash %s", str(request_message.get_sha1sum()))
-                self.request.sendall(request_message.to_bytes())
+                self.send_message(request_message)
                 return len(self.needed_dependencies) > 0
 
         return False
@@ -257,7 +277,7 @@ class TCPRequestHandler(socketserver.BaseRequestHandler):
                     compression=self.environment.compression,
                 )
 
-            self.request.sendall(result_message.to_bytes())
+            self.send_message(result_message)
 
     def _try_parse_message(self, message_bytes: bytearray) -> int:
         bytes_needed, parsed_message = Message.from_bytes(message_bytes)
@@ -323,6 +343,10 @@ class TCPRequestHandler(socketserver.BaseRequestHandler):
         logger.info("Compiling inside docker container '%s'.", docker_container)
         return True
 
+    def send_message(self, message: Message):
+        """Sends a message using the associated TCP socket."""
+        self.server.send_message(self.request, message)
+
     def close_connection(self, info: str):
         """Closes the connection for this particular request."""
         self.server.close_connection_for_request(self.request, info)
@@ -344,7 +368,11 @@ class TCPRequestHandler(socketserver.BaseRequestHandler):
             recv_bytes: bytearray = self.recv()
 
             if len(recv_bytes) == 0:
-                logger.info("Connection '%s' closed gracefully.", self.environment.instance_folder)
+                try:
+                    logger.info("Connection '%s' closed.", self.environment.instance_folder)
+                except AttributeError:
+                    logger.info("Connection without existing environment closed.")
+
                 return
 
             bytes_needed: int = Message.MINIMUM_SIZE_BYTES
@@ -381,7 +409,11 @@ class TCPRequestHandler(socketserver.BaseRequestHandler):
 def start_server(
     address: Optional[str], port: Optional[int], limit: Optional[int], schroot_profiles: List[str]
 ) -> Tuple[TCPServer, threading.Thread]:
-    server: TCPServer = TCPServer(address, port, limit, schroot_profiles)
+    try:
+        server: TCPServer = TCPServer(address, port, limit, schroot_profiles)
+    except OSError as err:
+        logger.error("Could not start TCP server: %s", err)
+        raise ServerInitializationError from err
 
     server_thread = threading.Thread(target=server.serve_forever, daemon=True)
     server_thread.start()

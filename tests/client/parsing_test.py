@@ -9,7 +9,7 @@ from pytest import CaptureFixture
 from pytest_mock.plugin import MockerFixture
 from typing import List
 
-from homcc.client.errors import HostParsingError
+from homcc.common.errors import HostParsingError
 from homcc.client.parsing import (
     HOMCC_HOSTS_ENV_VAR,
     HOMCC_HOSTS_FILENAME,

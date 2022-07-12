@@ -23,7 +23,13 @@ from homcc.server.parsing import (  # pylint: disable=wrong-import-position
     parse_config,
     load_schroot_profiles,
 )
-from homcc.server.server import start_server, stop_server  # pylint: disable=wrong-import-position
+from homcc.server.server import (  # pylint: disable=wrong-import-position
+    start_server,
+    stop_server,
+)
+
+from homcc.common.errors import ServerInitializationError  # pylint: disable=wrong-import-position
+
 
 logger: logging.Logger = logging.getLogger(__name__)
 
@@ -71,8 +77,12 @@ def main():
     # schroot profiles
     schroot_profiles: List[str] = load_schroot_profiles()
 
-    # start server
-    server, server_thread = start_server(address=address, port=port, limit=limit, schroot_profiles=schroot_profiles)
+    try:
+        # start server
+        server, server_thread = start_server(address=address, port=port, limit=limit, schroot_profiles=schroot_profiles)
+    except ServerInitializationError:
+        logger.error("Could not start homccd, terminating.")
+        sys.exit(os.EX_OSERR)
 
     def signal_handler(*_):
         stop_server(server)

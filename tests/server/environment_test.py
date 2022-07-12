@@ -1,7 +1,6 @@
 """Tests for the server environment."""
 from pytest_mock.plugin import MockerFixture
 import pytest
-import shutil
 from pathlib import Path
 
 from homcc.common.compression import NoCompression
@@ -180,10 +179,44 @@ class TestServerCompilation:
         assert len(result_message.object_files) == 1
         assert result_message.object_files[0].file_name == "/home/user/cwd/this_is_a_source_file.o"
 
-    @pytest.mark.skipif(shutil.which("g++") is None, reason="g++ is not installed")
-    def test_compiler_exists(self):
-        gpp_arguments = Arguments.from_args(["g++", "do_something"])
-        assert Environment.compiler_exists(gpp_arguments)
+    def test_debug_symbol_mappings(self, mocker: MockerFixture):
+        invoke_compiler_mock = mocker.patch(
+            "homcc.server.environment.Environment.invoke_compiler",
+        )
 
-        non_existing_compiler_arguments = Arguments.from_args(["non-existing-compiler", "do_something"])
-        assert not Environment.compiler_exists(non_existing_compiler_arguments)
+        instance_path = "/tmp/homcc/test-id"
+        mapped_cwd = "/tmp/homcc/test-id/home/user/cwd"
+        environment = create_mock_environment(instance_path, mapped_cwd)
+
+        debug_arguments = Arguments.from_args(
+            [
+                "gcc",
+                "-g",
+                f"{mapped_cwd}/src/foo.cpp",
+            ]
+        )
+        environment.do_compilation(debug_arguments)
+
+        # ensure that we call the compiler with an instruction to remap the debug symbols
+        passed_debug_arguments: Arguments = invoke_compiler_mock.call_args_list[0].args[0]
+        assert f"-fdebug-prefix-map={instance_path}=" in passed_debug_arguments.args
+
+        no_debug_arguments = Arguments.from_args(
+            [
+                "gcc",
+                f"{mapped_cwd}/src/foo.cpp",
+            ]
+        )
+        environment.do_compilation(no_debug_arguments)
+
+        # ensure that the flag is not passed to the compiler when not compiling with debug symbols
+        passed_no_debug_arguments: Arguments = invoke_compiler_mock.call_args_list[1].args[0]
+        assert "-fdebug-prefix-map" not in str(passed_no_debug_arguments.args)
+
+    @pytest.mark.gplusplus
+    def test_compiler_exists(self):
+        gplusplus_args = Arguments.from_args(["g++", "foo"])
+        assert Environment.compiler_exists(gplusplus_args)
+
+        failing_args = Arguments.from_args(["non-existing-compiler", "foo"])
+        assert not Environment.compiler_exists(failing_args)
