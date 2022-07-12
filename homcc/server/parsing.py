@@ -6,7 +6,7 @@ import os
 import sys
 
 from argparse import Action, ArgumentParser, ArgumentTypeError, RawTextHelpFormatter
-from configparser import ConfigParser, SectionProxy
+from configparser import ConfigParser, Error, SectionProxy
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
@@ -164,7 +164,11 @@ def parse_cli_args(args: List[str]) -> Dict[str, Any]:
 
 
 def parse_config(filenames: List[Path] = None) -> ServerConfig:
-    files, cfg = parse_configs(filenames or default_locations(HOMCC_CONFIG_FILENAME))
+    try:
+        files, cfg = parse_configs(filenames or default_locations(HOMCC_CONFIG_FILENAME))
+    except Error as err:
+        print(f"{err}; using default configuration instead")
+        return ServerConfig(files=[])
 
     if HOMCC_SERVER_CONFIG_SECTION not in cfg.sections():
         return ServerConfig(files=files)
