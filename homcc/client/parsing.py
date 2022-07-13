@@ -206,12 +206,13 @@ class ClientConfig:
 
     def __str__(self):
         return (
-            f"Compiler:\t{self.compiler}\n"
-            f"Compression:\t{self.compression}\n"
-            f"Profile:\t{self.profile}\n"
-            f"Timeout:\t{self.timeout}s\n"
-            f"Log-Level:\t{self.log_level.name}\n"
-            f"Verbosity:\t{str(self.verbose)}\n"
+            f'Configuration (from [{", ".join(self.files)}]):\n'
+            f"\tCompiler:\t{self.compiler}\n"
+            f"\tCompression:\t{self.compression}\n"
+            f"\tProfile:\t{self.profile}\n"
+            f"\tTimeout:\t{self.timeout}s\n"
+            f"\tLog-Level:\t{self.log_level.name}\n"
+            f"\tVerbosity:\t{str(self.verbose)}\n"
         )
 
 

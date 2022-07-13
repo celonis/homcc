@@ -99,11 +99,12 @@ class ServerConfig:
 
     def __str__(self):
         return (
-            f"Limit:\t{self.limit}\n"
-            f"Port:\t{self.port}\n"
-            f"Address:\t{self.address}\n"
-            f"Log-Level:\t{self.log_level}\n"
-            f"Verbosity:\t{str(self.verbose)}\n"
+            f'Configuration (from [{", ".join(self.files)}]):\n'
+            f"\tLimit:\t{self.limit}\n"
+            f"\tPort:\t{self.port}\n"
+            f"\tAddress:\t{self.address}\n"
+            f"\tLog-Level:\t{self.log_level}\n"
+            f"\tVerbosity:\t{str(self.verbose)}\n"
         )
 
 
