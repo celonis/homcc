@@ -120,7 +120,7 @@ def main():
             hosts.append(localhost)
 
     # PROFILE; if --no-profile is specified do not use any specified profiles from cli or config file
-    if homcc_args_dict["no_profile"] is not None:
+    if homcc_args_dict["no_profile"]:
         homcc_config.profile = None
     elif (profile := homcc_args_dict["profile"]) is not None:
         homcc_config.profile = profile
