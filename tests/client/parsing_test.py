@@ -32,7 +32,7 @@ class TestCLI:
     def setup_mock(self, mocker: MockerFixture):
         mocker.patch(
             "homcc.client.parsing.load_hosts",
-            return_value=(None, self.MOCKED_HOSTS),
+            return_value=("", self.MOCKED_HOSTS),
         )
 
     def test_version(self, capfd: CaptureFixture):

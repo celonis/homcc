@@ -44,7 +44,7 @@ class TestServerReceive:
         # messages sent by the client with messages that the server deserialized
         TCPRequestHandler._handle_message = self.patched_handle_message
 
-        config: ServerConfig = ServerConfig(files=[], address="localhost", port=unused_tcp_port, limit=1)
+        config: ServerConfig = ServerConfig(files=[], address="0.0.0.0", port=unused_tcp_port, limit=1)
 
         server, _ = start_server([], config)
         with server:
