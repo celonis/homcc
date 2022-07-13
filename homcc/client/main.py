@@ -132,16 +132,16 @@ def main():
     # provide additional DEBUG information
     logger.debug(
         "%s - %s\n"  # homcc location and version
-        "Called by: %s\n"  # homcc caller
-        "Using configuration (from [%s]):\n%s"  # config info
-        "Using hosts (from [%s]:\n%s",  # hosts info
+        "Caller:\t\t%s\n"  # homcc caller
+        "Configuration (from [%s]):\n%s"  # config info
+        "Hosts (from [%s]):\n%s",  # hosts info
         sys.argv[0],
         "0.0.1",
         sys.executable,
         ", ".join(homcc_config.files),
         homcc_config,
         hosts_file or f"--host={host_str}",
-        ", ".join(str(host) for host in hosts),
+        "\n".join(str(host) for host in hosts),
     )
 
     # force local compilation on specific conditions

@@ -82,9 +82,9 @@ def main():
 
     # provide additional DEBUG information
     logger.debug(
-        "%s - %s\n"  # homcc location and version
-        "Called by: %s\n"  # homcc caller
-        "Using configuration (from [%s]):\n%s",  # config info
+        "%s - %s\n"  # homccd location and version
+        "Caller: %s\n"  # homccd caller
+        "Configuration (from [%s]):\n%s",  # config info
         sys.argv[0],
         "0.0.1",
         sys.executable,

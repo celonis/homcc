@@ -13,7 +13,6 @@ from typing import Any, Dict, List, Optional, Union
 
 from homcc.common.logging import LogLevel
 from homcc.common.parsing import HOMCC_CONFIG_FILENAME, default_locations, parse_configs
-from homcc.server.server import TCPServer
 
 logger = logging.getLogger(__name__)
 
@@ -21,6 +20,14 @@ HOMCC_SERVER_CONFIG_SECTION: str = "homccd"
 ETC_SCHROOT_DIR: str = "/etc/schroot/"
 SCHROOT_CONF_FILENAME: str = "schroot.conf"
 CHROOT_D_SUB_DIR: str = "chroot.d/"
+
+DEFAULT_ADDRESS: str = "0.0.0.0"
+DEFAULT_PORT: int = 3633
+DEFAULT_LIMIT: int = (
+    len(os.sched_getaffinity(0))  # number of available CPUs for this process
+    or os.cpu_count()  # total number of physical CPUs on the machine
+    or -1  # fallback error value
+)
 
 
 class ShowVersion(Action):
@@ -133,7 +140,7 @@ def parse_cli_args(args: List[str]) -> Dict[str, Any]:
         required=False,
         metavar="LIMIT",
         type=min_job_limit,
-        help=f"maximum LIMIT of concurrent compilation jobs, might default to {TCPServer.DEFAULT_LIMIT + 2} as "
+        help=f"maximum LIMIT of concurrent compilation jobs, might default to {DEFAULT_LIMIT + 2} as "
         "determined via the CPU count",
     )
 
@@ -142,7 +149,7 @@ def parse_cli_args(args: List[str]) -> Dict[str, Any]:
         "--port",
         required=False,
         type=int,
-        help=f"TCP PORT to listen on, defaults to {TCPServer.DEFAULT_PORT}",
+        help=f"TCP PORT to listen on, defaults to {DEFAULT_PORT}",
     )
 
     networking_group.add_argument(
@@ -150,7 +157,7 @@ def parse_cli_args(args: List[str]) -> Dict[str, Any]:
         required=False,
         metavar="ADDRESS",
         type=str,
-        help=f"IP ADDRESS to listen on, defaults to {TCPServer.DEFAULT_ADDRESS}",
+        help=f"IP ADDRESS to listen on, defaults to {DEFAULT_ADDRESS}",
     )
 
     # debug
