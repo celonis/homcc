@@ -70,8 +70,9 @@ jobs:
           sudo debootstrap focal /var/chroot/focal http://archive.ubuntu.com/ubuntu
           sudo ./.github/setup_chroot_env.sh focal $(id -nG | sed 's/ /,/g')
           sudo schroot -c focal -- apt-get -y install g++
-      - name: Setup docker environment
+      - name: Install docker
         uses: docker-practice/actions-setup-docker@master
+      - name: Setup docker container
         run: |
           docker run --name ubuntu22 -v /tmp:/tmp -it ubuntu:22.04
           docker exec -d ubuntu22 apt update && apt-get install g++
