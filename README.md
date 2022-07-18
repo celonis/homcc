@@ -186,12 +186,13 @@ Additionally, `HOMCC` provides sandboxed compiler execution for remote compilati
 
 ### Compatibility policy
 Currently, `HOMCC` has to be able to break backwards compatibility between versions to quickly add new features, such that differing `homcc` and `homccd` versions might not work together.
-The following compatibility matrix provides an overview of our compatibility policy, with [x] marking guaranteed compatibility:
+The following compatibility matrix provides an overview of our compatibility policy, with :white_check_mark: marking guaranteed compatibility:
 
-| Version | `0.0.X` | `X.Y.*` |
-|:-------:|:-------:|:-------:|
-| `0.0.X` |   [x]   |   [ ]   |
-| `X.Y.*` |   [ ]   |   [x]   |
+| Version |      `0.0.X`       |      `X.Y.*`       |
+|:-------:|:------------------:|:------------------:|
+| `0.0.X` | :white_check_mark: |        :x:         |
+| `X.Y.*` |        :x:         | :white_check_mark: |
+
 Meaning that we frequently break backwards compatibility during early `0.0.*` versions but will maintain compatibility in every minor versions after `0.1.0`.
 
 ## Development
