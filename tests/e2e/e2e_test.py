@@ -326,3 +326,9 @@ class TestEndToEnd:
     @pytest.mark.timeout(TIMEOUT)
     def test_end_to_end_clangplusplus_shared_host_slot(self, unused_tcp_port: int):
         self.cpp_end_to_end_multiple_clients_shared_host(self.BasicClientArguments("clang++", unused_tcp_port))
+
+    @pytest.mark.gplusplus
+    @pytest.mark.docker
+    @pytest.mark.timeout(TIMEOUT)
+    def test_end_to_end_docker_gplusplus(self, unused_tcp_port: int, docker_container: str):
+        self.cpp_end_to_end(self.BasicClientArguments("g++", unused_tcp_port, docker_container=docker_container))

@@ -29,6 +29,7 @@ def is_valid_docker_container(docker_container: str) -> bool:
             logger.warning("Container '%s' is not running, can not compile using this container.", docker_container)
         else:
             logger.error("Could not check if container is running: %s", err)
-            return False
+
+        return False
 
     return "true" in result.stdout
