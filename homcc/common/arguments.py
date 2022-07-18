@@ -36,9 +36,6 @@ class Arguments:
     compilation which implies arguments being able to be sent!
     """
 
-    # execution timeout
-    TIMEOUT: int = 180
-
     # if the compiler is neither specified by the callee nor defined in the config file use this as fallback
     DEFAULT_COMPILER: str = "cc"
     PREPROCESSOR_TARGET: str = "$(homcc)"
@@ -72,6 +69,9 @@ class Arguments:
 
     # languages
     ALLOWED_LANGUAGE_PREFIXES: List[str] = ["c", "c++", "objective-c", "objective-c++", "go"]
+
+    # allow list for subprocess calls options
+    ALLOWED_SUBPROCESS_KWARGS: List[str] = ["check", "timeout", "cwd"]
 
     class Local:
         """
@@ -547,19 +547,16 @@ class Arguments:
 
     @staticmethod
     def _execute_args(args: List[str], **kwargs) -> ArgumentsExecutionResult:
-        check: bool = kwargs.pop("check", False)
-        capture_output: bool = kwargs.pop("capture_output", True)
+        # sanity check if different execution options required by client and server compilations are explicitly enabled
+        for kwarg in kwargs:
+            if kwarg not in Arguments.ALLOWED_SUBPROCESS_KWARGS:
+                raise NotImplementedError(f'Unsupported subprocess option "{kwarg}"')
 
-        if "stdout" in kwargs or "stderr" in kwargs:
-            capture_output = False
-
-        if "shell" in kwargs:
-            logger.error("Arguments currently does not support shell execution!")
+        check: bool = kwargs.pop("check", False)  # explicitly set check to satisfy pylint-W1510
 
         logger.debug("Executing: [%s]", " ".join(args))
-
         result: subprocess.CompletedProcess = subprocess.run(
-            args=args, check=check, encoding="utf-8", capture_output=capture_output, timeout=Arguments.TIMEOUT, **kwargs
+            args=args, check=check, encoding="utf-8", capture_output=True, **kwargs
         )
         return ArgumentsExecutionResult.from_process_result(result)
 
