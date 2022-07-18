@@ -59,7 +59,9 @@ class ShowVersion(ShowAndExitAction):
     """show version and exit"""
 
     def __call__(self, *_):
-        print("homcc 0.0.1")
+        from homcc import client  # pylint: disable=import-outside-toplevel
+
+        print(f"homcc {client.__version__}")
         sys.exit(os.EX_OK)
 
 

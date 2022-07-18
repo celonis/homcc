@@ -30,7 +30,9 @@ class ShowVersion(Action):
         super().__init__(nargs=0, help=self.__doc__, **kwargs)
 
     def __call__(self, *_):
-        print("homccd 0.0.1")
+        from homcc import server  # pylint: disable=import-outside-toplevel
+
+        print(f"homccd {server.__version__}")
         sys.exit(os.EX_OK)
 
 

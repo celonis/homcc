@@ -36,6 +36,8 @@ class TestCLI:
         )
 
     def test_version(self, capfd: CaptureFixture):
+        from homcc import client  # pylint: disable=import-outside-toplevel
+
         with pytest.raises(SystemExit) as sys_exit:
             parse_cli_args(["--version"])
 
@@ -43,7 +45,7 @@ class TestCLI:
 
         assert sys_exit.value.code == os.EX_OK
         assert not cap.err
-        assert "homcc 0.0.1" in cap.out
+        assert f"homcc {client.__version__}" in cap.out
 
     def test_show_hosts(self, capfd: CaptureFixture):
         with pytest.raises(SystemExit) as sys_exit:

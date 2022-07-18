@@ -1,11 +1,17 @@
 """ Tests for client/compilation.py"""
+import pytest
+
+import os
+
 from pathlib import Path
 from typing import List
+from pytest import CaptureFixture
 
 from homcc.common.parsing import HOMCC_CONFIG_FILENAME
 from homcc.server.parsing import (
     SCHROOT_CONF_FILENAME,
     ServerConfig,
+    parse_cli_args,
     parse_config,
     load_schroot_profiles,
 )
@@ -35,6 +41,18 @@ class TestParsingConfig:
         "LOG_LEVEL=INFO",
         "verbose=FALSE",
     ]
+
+    def test_version(self, capfd: CaptureFixture):
+        from homcc import server  # pylint: disable=import-outside-toplevel
+
+        with pytest.raises(SystemExit) as sys_exit:
+            parse_cli_args(["--version"])
+
+        cap = capfd.readouterr()
+
+        assert sys_exit.value.code == os.EX_OK
+        assert not cap.err
+        assert f"homccd {server.__version__}" in cap.out
 
     def test_parse_config_file(self, tmp_path: Path):
         tmp_config_file: Path = tmp_path / HOMCC_CONFIG_FILENAME
