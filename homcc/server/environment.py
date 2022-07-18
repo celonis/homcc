@@ -14,6 +14,8 @@ from homcc.server.cache import Cache
 
 logger = logging.getLogger(__name__)
 
+COMPILATION_TIMEOUT: float = 180
+
 
 class Environment:
     """Represents a server environment."""
@@ -167,11 +169,15 @@ class Environment:
         result: ArgumentsExecutionResult
 
         if self.schroot_profile is not None:
-            result = arguments.schroot_execute(profile=self.schroot_profile, cwd=self.mapped_cwd)
+            result = arguments.schroot_execute(
+                profile=self.schroot_profile, cwd=self.mapped_cwd, timeout=COMPILATION_TIMEOUT
+            )
         elif self.docker_container is not None:
-            result = arguments.docker_execute(container=self.docker_container, cwd=self.mapped_cwd)
+            result = arguments.docker_execute(
+                container=self.docker_container, cwd=self.mapped_cwd, timeout=COMPILATION_TIMEOUT
+            )
         else:
-            result = arguments.execute(cwd=self.mapped_cwd)
+            result = arguments.execute(cwd=self.mapped_cwd, timeout=COMPILATION_TIMEOUT)
 
         if result.stdout:
             logger.debug("Compiler gave output:\n'%s'", result.stdout)

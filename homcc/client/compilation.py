@@ -17,10 +17,10 @@ from homcc.client.client import (
     TCPClient,
 )
 from homcc.common.errors import (
-    CompilationTimeoutError,
     FailedHostNameResolutionError,
     HostsExhaustedError,
     RemoteCompilationError,
+    RemoteCompilationTimeoutError,
     PreprocessorError,
     UnexpectedMessageTypeError,
     SlotsExhaustedError,
@@ -76,7 +76,9 @@ async def compile_remotely(arguments: Arguments, hosts: List[Host], config: Clie
 
         # compilation request timed out
         except asyncio.TimeoutError as error:
-            raise CompilationTimeoutError(f"Compilation request {arguments} at host '{host}' timed out.") from error
+            raise RemoteCompilationTimeoutError(
+                f"Compilation request {arguments} at host '{host}' timed out."
+            ) from error
 
     raise HostsExhaustedError(f"All hosts '{', '.join(str(host) for host in hosts)}' are exhausted.")
 
