@@ -7,8 +7,8 @@ Configure pytest:
   - docker: enable tests that require docker to be installed
 - add option --runschroot=PROFILE to enable "schroot" marked test to run with the specified PROFILE as fixture parameter
   named schroot_profile and otherwise skip them on default
-- add option --rundocker=CONTAINER_NAME to enable "docker" marked test to run with the specified CONTAINER_NAME as fixture parameter
-  named docker_container and otherwise skip them on default
+- add option --rundocker=CONTAINER_NAME to enable "docker" marked test to run with the specified CONTAINER_NAME
+  as fixture parameter named docker_container and otherwise skip them on default
 """
 import pytest
 import shutil
