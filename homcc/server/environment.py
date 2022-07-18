@@ -14,6 +14,8 @@ from homcc.server.cache import Cache
 
 logger = logging.getLogger(__name__)
 
+COMPILATION_TIMEOUT: float = 180
+
 
 class Environment:
     """Represents a server environment."""
@@ -155,9 +157,9 @@ class Environment:
     def invoke_compiler(self, arguments: Arguments) -> ArgumentsExecutionResult:
         """Actually invokes the compiler process."""
         result: ArgumentsExecutionResult = (
-            arguments.execute(cwd=self.mapped_cwd)
+            arguments.execute(cwd=self.mapped_cwd, timeout=COMPILATION_TIMEOUT)
             if self.profile is None
-            else arguments.schroot_execute(profile=self.profile, cwd=self.mapped_cwd)
+            else arguments.schroot_execute(profile=self.profile, cwd=self.mapped_cwd, timeout=COMPILATION_TIMEOUT)
         )
 
         if result.stdout:

@@ -11,7 +11,7 @@ class PreprocessorError(RecoverableClientError):
     """Exception for errors during the preprocessor stage"""
 
 
-class CompilationTimeoutError(RecoverableClientError):
+class RemoteCompilationTimeoutError(RecoverableClientError):
     """Exception for a timed out compilation request"""
 
 
