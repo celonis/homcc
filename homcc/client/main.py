@@ -113,13 +113,15 @@ def main():
         if not has_local:
             hosts.append(localhost)
 
-    # SCHROOT_PROFILE; if --no-schroot-profile is specified do not use any specified schroot profiles from cli or config file
+    # SCHROOT_PROFILE; if --no-schroot-profile is specified do not use
+    # any specified schroot profiles from cli or config file
     if homcc_args_dict["no_schroot_profile"]:
         homcc_config.schroot_profile = None
     elif (profile := homcc_args_dict["schroot_profile"]) is not None:
         homcc_config.schroot_profile = profile
 
-    # DOCKER_CONTAINER; if --no-docker-container is specified do not use any specified docker containers from cli or config file
+    # DOCKER_CONTAINER; if --no-docker-container is specified do not use
+    # any specified docker containers from cli or config file
     if homcc_args_dict["no_docker_container"]:
         homcc_config.docker_container = None
     elif (docker_container := homcc_args_dict["docker_container"]) is not None:

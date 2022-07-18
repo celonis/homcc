@@ -323,7 +323,8 @@ class TCPRequestHandler(socketserver.BaseRequestHandler):
 
         if not is_docker_available():
             logger.warning(
-                "Refusing client because docker is not installed on the server but dockerized compilation was requested."
+                "Refusing client because docker is not installed on the server "
+                "but dockerized compilation was requested."
             )
             self.close_connection(
                 f"Docker container '{docker_container}' could not be used as the server hasn't installed docker"
@@ -336,7 +337,8 @@ class TCPRequestHandler(socketserver.BaseRequestHandler):
                 docker_container,
             )
             self.close_connection(
-                f"Docker container '{docker_container}' could not be used as it is not a valid or running container on the server"
+                f"Docker container '{docker_container}' could not be used as it is not a valid or "
+                "running container on the server"
             )
             return False
 

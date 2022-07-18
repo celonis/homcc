@@ -190,7 +190,7 @@ class ClientConfig:
         compiler: Optional[str] = homcc_config.get("compiler")
         compression: Optional[str] = homcc_config.get("compression")
         schroot_profile: Optional[str] = homcc_config.get("schroot_profile")
-        docker_container: Optional[str] = homcc_config.get("docker-container")
+        docker_container: Optional[str] = homcc_config.get("docker_container")
         timeout: Optional[float] = homcc_config.getfloat("timeout")
         log_level: Optional[str] = homcc_config.get("log_level")
         verbose: Optional[bool] = homcc_config.getboolean("verbose")
@@ -261,8 +261,8 @@ def parse_cli_args(args: List[str]) -> Tuple[Dict[str, Any], Arguments]:
     schroot_profile.add_argument(
         "--schroot-profile",
         type=str,
-        help="SCHROOT_PROFILE which will be mapped to predefined chroot environments on the selected remote compilation server,"
-        " no schroot profile is being used on default",
+        help="SCHROOT_PROFILE which will be mapped to predefined chroot environments on "
+        "the selected remote compilation server, no schroot profile is being used on default",
     )
     schroot_profile.add_argument(
         "--no-schroot-profile",

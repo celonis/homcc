@@ -43,12 +43,12 @@ class TestServerReceive:
         # messages sent by the client with messages that the server deserialized
         TCPRequestHandler._handle_message = self.patched_handle_message
 
-        server, _ = start_server(address="localhost", port=unused_tcp_port, limit=1, profiles=[])
+        server, _ = start_server(address="localhost", port=unused_tcp_port, limit=1, schroot_profiles=[])
         with server:
             arguments = ["-a", "-b", "--help"]
             cwd = "/home/o.layer/test"
             dependencies = {"server.c": "1239012890312903", "server.h": "testsha1"}
-            self.messages.append(ArgumentMessage(arguments, cwd, dependencies, None, NoCompression()))
+            self.messages.append(ArgumentMessage(arguments, cwd, dependencies, None, None, NoCompression()))
 
             self.messages.append(DependencyRequestMessage("asd123"))
 
