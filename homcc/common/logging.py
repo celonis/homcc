@@ -143,11 +143,20 @@ class _ServerFormatter(_Formatter):
 
 @dataclass
 class LoggingConfig:
+    """Class to centralize all possible configurations regarding logging"""
+
     formatter: Formatter
     config: FormatterConfig
     destination: FormatterDestination
     level: int = logging.INFO  # use logging.INFO as default instead of the usual logging.WARNING
     filename: Optional[str] = None
+
+    def set_verbose(self):
+        self.config |= FormatterConfig.DETAILED
+        self.level = logging.DEBUG
+
+    def set_debug(self):
+        self.set_verbose()
 
 
 def setup_logging(logging_config: LoggingConfig):

@@ -56,14 +56,11 @@ def main():
 
     # verbosity implies debug mode
     if homcc_args_dict["verbose"] or homcc_config.verbose:
-        logging_config.config |= FormatterConfig.DETAILED
-        logging_config.level = logging.DEBUG
-        homcc_config.log_level = LogLevel.DEBUG
-        homcc_config.verbose = True
+        logging_config.set_verbose()
+        homcc_config.set_verbose()
     elif log_level == "DEBUG" or homcc_config.log_level == LogLevel.DEBUG:
-        logging_config.config |= FormatterConfig.DETAILED
-        logging_config.level = logging.DEBUG
-        homcc_config.log_level = LogLevel.DEBUG
+        logging_config.set_debug()
+        homcc_config.set_debug()
 
     # overwrite verbose debug logging level
     if log_level is not None:

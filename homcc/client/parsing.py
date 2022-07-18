@@ -215,6 +215,13 @@ class ClientConfig:
             f"\tVerbosity:\t{str(self.verbose)}\n"
         )
 
+    def set_verbose(self):
+        self.log_level = LogLevel.DEBUG
+        self.verbose = True
+
+    def set_debug(self):
+        self.log_level = LogLevel.DEBUG
+
 
 def parse_cli_args(args: List[str]) -> Tuple[Dict[str, Any], Arguments]:
     parser: ArgumentParser = ArgumentParser(
@@ -375,7 +382,7 @@ def parse_host(host: str) -> Host:
 
 def load_hosts(hosts_file_locations: Optional[List[Path]] = None) -> Tuple[str, List[str]]:
     """
-    Load homcc hosts from one of the following options:
+    Get homcc hosts by returning the source and unparsed strings from one of the following options:
     - Environment Variable: $HOMCC_HOSTS
     - Hosts files defined via parameter hosts_file_locations
     - Hosts files defined at default hosts file locations
