@@ -74,10 +74,9 @@ jobs:
         uses: docker-practice/actions-setup-docker@master
       - name: Setup docker container
         run: |
-          docker run -dit --name ubuntu22 -v /tmp:/tmp ubuntu:22.04
-          docker exec -d ubuntu22 apt-get update && apt-get install g++
+          docker run -dit --name gcc -v /tmp:/tmp gcc:bullseye
       - name: Run tests
-        run: pytest -v -rfE --cov=homcc --capture=tee-sys --runschroot=focal --rundocker=ubuntu22
+        run: pytest -v -rfE --cov=homcc --capture=tee-sys --runschroot=focal --rundocker=gcc
   build:
     runs-on: ubuntu-22.04
     steps:
