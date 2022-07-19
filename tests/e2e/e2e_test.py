@@ -105,7 +105,7 @@ class TestEndToEnd:
     def run_client(basic_arguments: BasicClientArguments, args: List[str]) -> subprocess.CompletedProcess:
         time.sleep(0.5)  # wait in order to reduce the chance of trying to connect to an unavailable server
         return subprocess.run(
-            basic_arguments.to_list() + args,
+            basic_arguments.to_list() + ["--verbose"] + args,
             check=True,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
