@@ -104,13 +104,17 @@ class TestEndToEnd:
     @staticmethod
     def run_client(basic_arguments: BasicClientArguments, args: List[str]) -> subprocess.CompletedProcess:
         time.sleep(0.5)  # wait in order to reduce the chance of trying to connect to an unavailable server
-        return subprocess.run(
-            basic_arguments.to_list() + args,
-            check=True,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            encoding="utf-8",
-        )
+        try:
+            return subprocess.run(
+                basic_arguments.to_list() + args,
+                check=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                encoding="utf-8",
+            )
+        except subprocess.CalledProcessError as err:
+            print(err.stdout)  # print stdout in case of an error
+            raise err
 
     @pytest.fixture(autouse=True)
     def delay_between_tests(self):
@@ -137,12 +141,7 @@ class TestEndToEnd:
             args = args + additional_args
 
         with self.ServerProcess(basic_arguments.tcp_port):
-            try:
-                result = self.run_client(basic_arguments, args)
-            except subprocess.CalledProcessError as err:
-                print(err.stdout)  # print stdout in case of an error
-                raise err
-
+            result = self.run_client(basic_arguments, args)
             self.check_remote_compilation_assertions(result)
             executable_stdout: str = subprocess.check_output([f"./{self.OUTPUT}"], encoding="utf-8")
             assert executable_stdout == "homcc\n"
@@ -188,12 +187,16 @@ class TestEndToEnd:
             assert os.path.exists("main.cpp.o.d")
 
     def cpp_end_to_end_linking_only(
-        self,
-        basic_arguments: BasicClientArguments,
+        self, basic_arguments: BasicClientArguments, additional_args: Optional[List[str]] = None
     ):
         main_args: List[str] = ["-Iexample/include", "example/src/main.cpp", "-c"]
         foo_args: List[str] = ["-Iexample/include", "example/src/foo.cpp", "-c"]
         linking_args: List[str] = ["main.o", "foo.o", f"-o{self.OUTPUT}"]
+
+        if additional_args is not None:
+            main_args = main_args + additional_args
+            foo_args = foo_args + additional_args
+            linking_args = linking_args + additional_args
 
         with self.ServerProcess(basic_arguments.tcp_port):
             main_result = self.run_client(basic_arguments, main_args)
@@ -337,9 +340,26 @@ class TestEndToEnd:
     @pytest.mark.timeout(TIMEOUT)
     def test_end_to_end_docker_gplusplus(self, unused_tcp_port: int, docker_container: str):
         # -fPIC is needed because the docker-gcc image that we use in the CI runners
-        # is not compatible with the Ubuntu 22 GitHub Action runners as linking else fails without this option
+        # is not compatible with the Ubuntu 22 GitHub Action runners as linking fails without this option
         # see https://stackoverflow.com/q/19364969
         self.cpp_end_to_end(
+            self.BasicClientArguments("g++", unused_tcp_port, docker_container=docker_container),
+            additional_args=["-fPIC"],
+        )
+
+    @pytest.mark.gplusplus
+    @pytest.mark.docker
+    @pytest.mark.timeout(TIMEOUT)
+    def test_end_to_end_docker_gplusplus_no_linking(self, unused_tcp_port: int, docker_container: str):
+        self.cpp_end_to_end_no_linking(
+            self.BasicClientArguments("g++", unused_tcp_port, docker_container=docker_container)
+        )
+
+    @pytest.mark.gplusplus
+    @pytest.mark.docker
+    @pytest.mark.timeout(TIMEOUT)
+    def test_end_to_end_docker_gplusplus_linking_only(self, unused_tcp_port: int, docker_container: str):
+        self.cpp_end_to_end_linking_only(
             self.BasicClientArguments("g++", unused_tcp_port, docker_container=docker_container),
             additional_args=["-fPIC"],
         )

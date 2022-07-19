@@ -36,6 +36,7 @@ Additionally, `HOMCC` provides sandboxed compiler execution for remote compilati
    4. [Formatting](#formatting)
    5. [Build Debian packages](#build-debian-packages)
    6. [`schroot` testing setup for Debian systems](#schroot-testing-setup-for-debian-systems)
+   7. [`docker` testing setup](#docker-testing-setup)
 
 ---
 
@@ -277,4 +278,14 @@ Additionally, `HOMCC` provides sandboxed compiler execution for remote compilati
 - Execute all tests in `./tests/` and perform test coverage:
   ```sh
   $ pytest -v -rfEs --cov=homcc --runschroot=jammy
+  ```
+
+### `docker` testing setup
+- Create a docker container with a working `gcc` compiler, the easiest image to get is probably the official `gcc` docker image:
+  ```sh
+  docker run -dit --name gcc -v /tmp:/tmp gcc:bullseye
+  ```
+- Execute all tests (including the docker tests) and perform test coverage:
+  ```sh
+  $ pytest -v -rfEs --cov=homcc --rundocker=gcc
   ```
