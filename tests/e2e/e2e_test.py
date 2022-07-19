@@ -61,7 +61,7 @@ class TestEndToEnd:
             ]
 
     class ClientProcess:
-        """Client subprocess wrapper class for specified compiler args and TCP port"""
+        """Client subprocess wrapper class for specified arguments."""
 
         def __init__(self, basic_arguments: TestEndToEnd.BasicClientArguments, args: List[str]):
             self.process: subprocess.Popen = subprocess.Popen(  # pylint: disable=consider-using-with
@@ -105,7 +105,7 @@ class TestEndToEnd:
     def run_client(basic_arguments: BasicClientArguments, args: List[str]) -> subprocess.CompletedProcess:
         time.sleep(0.5)  # wait in order to reduce the chance of trying to connect to an unavailable server
         return subprocess.run(
-            basic_arguments.to_list() + ["--verbose"] + args,
+            basic_arguments.to_list() + args,
             check=True,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
@@ -125,10 +125,7 @@ class TestEndToEnd:
         assert '"return_code": 0' in result.stdout
         assert "Compiling locally instead" not in result.stdout
 
-    def cpp_end_to_end(
-        self,
-        basic_arguments: BasicClientArguments,
-    ):
+    def cpp_end_to_end(self, basic_arguments: BasicClientArguments, additional_args: Optional[List[str]] = None):
         args: List[str] = [
             "-Iexample/include",
             "example/src/foo.cpp",
@@ -136,8 +133,16 @@ class TestEndToEnd:
             f"-o{self.OUTPUT}",
         ]
 
+        if additional_args is not None:
+            args = args + additional_args
+
         with self.ServerProcess(basic_arguments.tcp_port):
-            result = self.run_client(basic_arguments, args)
+            try:
+                result = self.run_client(basic_arguments, args)
+            except subprocess.CalledProcessError as err:
+                print(err.stdout)  # print stdout in case of an error
+                raise err
+
             self.check_remote_compilation_assertions(result)
             executable_stdout: str = subprocess.check_output([f"./{self.OUTPUT}"], encoding="utf-8")
             assert executable_stdout == "homcc\n"
@@ -331,4 +336,10 @@ class TestEndToEnd:
     @pytest.mark.docker
     @pytest.mark.timeout(TIMEOUT)
     def test_end_to_end_docker_gplusplus(self, unused_tcp_port: int, docker_container: str):
-        self.cpp_end_to_end(self.BasicClientArguments("g++", unused_tcp_port, docker_container=docker_container))
+        # -fPIC is needed because the docker-gcc image that we use in the CI runners
+        # is not compatible with the Ubuntu 22 GitHub Action runners as linking else fails without this option
+        # see https://stackoverflow.com/questions/19364969/compilation-fails-with-relocation-r-x86-64-32-against-rodata-str1-8-can-not)
+        self.cpp_end_to_end(
+            self.BasicClientArguments("g++", unused_tcp_port, docker_container=docker_container),
+            additional_args=["-fPIC"],
+        )
