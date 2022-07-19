@@ -273,7 +273,7 @@ Additionally, `HOMCC` provides sandboxed compiler execution for remote compilati
   ```sh
   $ sudo schroot -c jammy -- apt -y install build-essential
   ```
-- Execute *schrooted* compilations by specifying `--profile=jammy` via the CLI or in the `client.conf` file
+- Execute *schrooted* compilations by specifying `--schroot-profile=jammy` via the CLI or in the `client.conf` file
 - Execute all tests in `./tests/` and perform test coverage:
   ```sh
   $ pytest -v -rfEs --cov=homcc --runschroot=jammy

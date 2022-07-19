@@ -52,7 +52,7 @@ class TestEndToEnd:
                 "--log-level=DEBUG",
                 "--verbose",
                 f"--host={TestEndToEnd.ADDRESS}:{self.tcp_port}/1{compression_arg}",
-                "--no-schroot-profile" if self.schroot_profile is None else f"--profile={self.schroot_profile}",
+                "--no-schroot-profile" if self.schroot_profile is None else f"--schroot-profile={self.schroot_profile}",
                 "--no-docker-container"
                 if self.docker_container is None
                 else f"--docker-container={self.docker_container}",
@@ -338,7 +338,7 @@ class TestEndToEnd:
     def test_end_to_end_docker_gplusplus(self, unused_tcp_port: int, docker_container: str):
         # -fPIC is needed because the docker-gcc image that we use in the CI runners
         # is not compatible with the Ubuntu 22 GitHub Action runners as linking else fails without this option
-        # see https://stackoverflow.com/questions/19364969/compilation-fails-with-relocation-r-x86-64-32-against-rodata-str1-8-can-not)
+        # see https://stackoverflow.com/q/19364969
         self.cpp_end_to_end(
             self.BasicClientArguments("g++", unused_tcp_port, docker_container=docker_container),
             additional_args=["-fPIC"],
