@@ -125,7 +125,7 @@ Additionally, `HOMCC` provides sandboxed compiler execution for remote compilati
   - `docker`:
     - Make sure that the docker containers that you want to compile in have mounted the host's `/tmp` directory to `/tmp` (this is necessary to access cached dependencies):
       ```sh
-      $ sudo docker run --name example_container -v /tmp:/tmp  -it ubuntu:22.04
+      $ sudo docker run --name example_container -v /tmp:/tmp -dit ubuntu:22.04
       ```
     - Make sure the docker containers you want to compile in are running and have the appropriate compilers installed
     
@@ -285,7 +285,7 @@ Additionally, `HOMCC` provides sandboxed compiler execution for remote compilati
   ```sh
   docker run -dit --name gcc -v /tmp:/tmp gcc:bullseye
   ```
-- Execute all tests (including the docker tests) and perform test coverage:
+- Execute all tests (including the docker tests by specifying `--rundocker=gcc`) and perform test coverage:
   ```sh
   $ pytest -v -rfEs --cov=homcc --rundocker=gcc
   ```
