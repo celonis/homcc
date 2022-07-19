@@ -32,7 +32,7 @@ class TestEndToEnd:
 
     @dataclass
     class BasicClientArguments:
-        """Wrapper holding basic arguments supplied for E2E testing the client."""
+        """Wrapper holding basic arguments supplied to the client for E2E testing."""
 
         compiler: str
         tcp_port: int

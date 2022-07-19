@@ -122,7 +122,7 @@ Additionally, `HOMCC` provides sandboxed compiler execution for remote compilati
     $ sudo systemctl restart homccd.service
     ```
   - `docker`:
-    - Make sure that the docker containers that you want to compile in have mounted the host's `\tmp` directory to `\tmp` (this is necessary to access cached dependencies):
+    - Make sure that the docker containers that you want to compile in have mounted the host's `/tmp` directory to `/tmp` (this is necessary to access cached dependencies):
       ```sh
       $ sudo docker run --name example_container -v /tmp:/tmp  -it ubuntu:22.04
       ```
