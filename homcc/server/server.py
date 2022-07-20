@@ -12,7 +12,7 @@ from socket import SHUT_RD
 from tempfile import TemporaryDirectory
 from threading import Lock
 from typing import Dict, List, Optional, Tuple
-from homcc.common.errors import ServerInitializationError
+from homcc.common.errors import ServerInitializationError, TargetsRetrievalError
 
 from homcc.common.hashing import hash_file_with_bytes
 from homcc.common.messages import (
@@ -148,11 +148,13 @@ class TCPRequestHandler(socketserver.BaseRequestHandler):
     def _handle_argument_message(self, message: ArgumentMessage):
         logger.info("Handling ArgumentMessage...")
 
+        self.compiler_arguments = Arguments.from_args(message.get_args())
+
+        target = message.target
         schroot_profile = message.schroot_profile
         docker_container = message.docker_container
-
-        if not self.check_schroot_profile_argument(schroot_profile) or not self.check_docker_container_argument(
-            docker_container
+        if not self.check_client_request_satisfiability(
+            self.compiler_arguments, target, schroot_profile, docker_container
         ):
             return
 
@@ -167,21 +169,10 @@ class TCPRequestHandler(socketserver.BaseRequestHandler):
             compression=compression,
         )
 
-        self.compiler_arguments = self.environment.map_args(message.get_args())
-        logger.debug("Mapped compiler args: %s", str(self.compiler_arguments))
+        # TODO: add target specific handling
 
-        if not self.environment.compiler_exists(self.compiler_arguments):
-            logger.warning(
-                "Compilation with compiler '%s' requested, but this compiler is not installed on the system.",
-                self.compiler_arguments.compiler,
-            )
-            self.close_connection(
-                (
-                    f"Compiler '{self.compiler_arguments.compiler}' is not available on the server, "
-                    "can not compile remotely"
-                ),
-            )
-            return
+        self.compiler_arguments = self.environment.map_args(self.compiler_arguments)
+        logger.debug("Mapped compiler args: %s", str(self.compiler_arguments))
 
         self.mapped_dependencies = self.environment.map_dependency_paths(message.get_dependencies())
         logger.debug("Mapped dependencies: %s", self.mapped_dependencies)
@@ -292,6 +283,60 @@ class TCPRequestHandler(socketserver.BaseRequestHandler):
             self._handle_message(parsed_message)
 
         return bytes_needed
+
+    def check_client_request_satisfiability(
+        self,
+        arguments: Arguments,
+        target: Optional[str],
+        schroot_profile: Optional[str],
+        docker_container: Optional[str],
+    ) -> bool:
+        """Checks whether a request from a client can be satisfied."""
+        compiler_satisfiable = self.check_compiler_arguments(arguments)
+        target_satisfiable = self.check_target_argument(arguments, target)
+        schroot_satisfiable = self.check_schroot_profile_argument(schroot_profile)
+        docker_satisfiable = self.check_docker_container_argument(docker_container)
+
+        return compiler_satisfiable and target_satisfiable and schroot_satisfiable and docker_satisfiable
+
+    def check_target_argument(self, arguments: Arguments, target: Optional[str]) -> bool:
+        """Checks whether the local compiler supports the specified target."""
+        if target is None:
+            return True
+
+        try:
+            supports_target = Environment.compiler_supports_target(arguments, target)
+
+            if not supports_target:
+                logger.warning(
+                    "Compiler '%s' does not support requested target '%s', declining compilation.",
+                    arguments.compiler,
+                    target,
+                )
+                self.close_connection(f"Compiler '{arguments.compiler}' does not support target '{target}'.")
+
+            return supports_target
+        except TargetsRetrievalError:
+            logger.error(
+                "Could not retrieve information about targets for the compiler '%s', "
+                "continuing but omitting target request.",
+                arguments.compiler,
+            )
+            return True
+
+    def check_compiler_arguments(self, arguments: Arguments) -> bool:
+        """Checks whether the specified compiler is available on the system."""
+        if not Environment.compiler_exists(arguments):
+            logger.warning(
+                "Compilation with compiler '%s' requested, but this compiler is not installed on the system.",
+                arguments.compiler,
+            )
+            self.close_connection(
+                f"Compiler '{arguments.compiler}' is not available on the server, can not compile remotely"
+            )
+            return False
+
+        return True
 
     def check_schroot_profile_argument(self, schroot_profile: Optional[str]) -> bool:
         """Checks whether the specified schroot profile requested by the client can be used.

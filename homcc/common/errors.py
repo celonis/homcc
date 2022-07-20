@@ -62,3 +62,7 @@ class RemoteCompilationError(Exception):
 
 class ServerInitializationError(Exception):
     """Indicates that an error occurred during server startup."""
+
+
+class TargetsRetrievalError(Exception):
+    """Indicates that available targets could not be retrieved from the compiler."""

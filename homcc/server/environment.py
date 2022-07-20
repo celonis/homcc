@@ -4,11 +4,13 @@ import uuid
 import os
 import shutil
 import logging
+import subprocess
 from pathlib import Path
 from typing import Dict, List, Optional
 
 from homcc.common.arguments import Arguments, ArgumentsExecutionResult
 from homcc.common.compression import Compression
+from homcc.common.errors import TargetsRetrievalError
 from homcc.common.messages import CompilationResultMessage, ObjectFile
 from homcc.server.cache import Cache
 
@@ -81,10 +83,10 @@ class Environment:
 
         return needed_dependencies
 
-    def map_args(self, args: List[str]) -> Arguments:
+    def map_args(self, arguments: Arguments) -> Arguments:
         """Maps arguments that should be translated (e.g. -I{dir}, .cpp files,
         or the -o argument) to paths valid on the server."""
-        return Arguments.from_args(args).map(self.instance_folder, self.mapped_cwd)
+        return arguments.map(self.instance_folder, self.mapped_cwd)
 
     @staticmethod
     def create_instance_folder(root_folder: Path) -> str:
@@ -125,6 +127,36 @@ class Environment:
         """Returns true if the compiler specified in the arguments exists on the system, else false."""
         compiler = arguments.compiler
         return compiler is not None and shutil.which(compiler) is not None
+
+    @staticmethod
+    def compiler_supports_target(arguments: Arguments, target: str) -> bool:
+        """Returns true if the compiler supports cross-compiling for the given target."""
+
+        if arguments.is_gcc_compiler():
+            return shutil.which(f"{target}-{arguments.compiler}") is not None
+        elif arguments.is_clang_compiler():
+            clang_arguments = Arguments(arguments.compiler, ["-print-targets"])
+
+            try:
+                result = clang_arguments.execute(check=True)
+            except subprocess.CalledProcessError as err:
+                logger.error("Could not get supported clang targets.")
+                raise TargetsRetrievalError from err
+
+            # for clang, we can only figure out if the first part (architecture) of the target triple
+            # is supported through 'clang -print-targets'
+            if "-" in target:
+                # e.g "x86_64-pc-linux-gnu"
+                arch = target.split("-")[0]
+            else:
+                # e.g. "x86_64"
+                arch = target
+
+            return arch in result.stdout
+        else:
+            raise TargetsRetrievalError(
+                f"Retrieving available targets from compiler '{arguments.compiler}' is not implemented."
+            )
 
     def do_compilation(self, arguments: Arguments) -> CompilationResultMessage:
         """Does the compilation and returns the filled result message."""
