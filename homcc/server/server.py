@@ -296,27 +296,28 @@ class TCPRequestHandler(socketserver.BaseRequestHandler):
     def check_schroot_profile_argument(self, schroot_profile: Optional[str]) -> bool:
         """Checks whether the specified schroot profile requested by the client can be used.
         It can not be used if the schroot profile with the given name is not set up on the server."""
-        if schroot_profile is not None:
-            if not self.server.schroot_profiles_enabled:
-                logger.info("Refusing client because 'schroot' compilation could not be executed.")
-                self.close_connection(
-                    f"Profile {schroot_profile} could not be used as 'schroot' is not installed on the server",
-                )
-                return False
+        if schroot_profile is None:
+            return True
 
-            if schroot_profile not in self.server.schroot_profiles:
-                logger.info("Refusing client because 'schroot' environment '%s' is not provided.", schroot_profile)
-                self.close_connection(
-                    f"Profile {schroot_profile} could not be used as it is not a provided profile "
-                    f"[{', '.join(self.server.schroot_profiles)}].",
-                )
-                return False
+        if not self.server.schroot_profiles_enabled:
+            logger.info("Refusing client because 'schroot' compilation could not be executed.")
+            self.close_connection(
+                f"Profile {schroot_profile} could not be used as 'schroot' is not installed on the server",
+            )
+            return False
 
-            logger.info("Using %s profile.", schroot_profile)
+        if schroot_profile not in self.server.schroot_profiles:
+            logger.info("Refusing client because 'schroot' environment '%s' is not provided.", schroot_profile)
+            self.close_connection(
+                f"Profile {schroot_profile} could not be used as it is not a provided profile "
+                f"[{', '.join(self.server.schroot_profiles)}].",
+            )
+            return False
 
+        logger.info("Using %s profile.", schroot_profile)
         return True
 
-    def check_docker_container_argument(self, docker_container: Optional[str]):
+    def check_docker_container_argument(self, docker_container: Optional[str]) -> bool:
         """Checks whether the docker container request given by the client can be served."""
         if docker_container is None:
             return True

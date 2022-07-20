@@ -151,7 +151,7 @@ Additionally, `HOMCC` provides sandboxed compiler execution for remote compilati
     compiler=g++
     timeout=60
     compression=lzo
-    profile=jammy
+    schroot_profile=jammy
     docker_container=example_container
     log_level=DEBUG
     verbose=True
@@ -274,7 +274,7 @@ Additionally, `HOMCC` provides sandboxed compiler execution for remote compilati
   ```sh
   $ sudo schroot -c jammy -- apt -y install build-essential
   ```
-- Execute *schrooted* compilations by specifying `--schroot-profile=jammy` via the CLI or in the `client.conf` file
+- Execute *schrooted* compilations by specifying `--schroot-profile=jammy` via the CLI or in the `homcc.conf` file
 - Execute all tests in `./tests/` and perform test coverage:
   ```sh
   $ pytest -v -rfEs --cov=homcc --runschroot=jammy

@@ -9,9 +9,6 @@ from homcc.server.docker import is_valid_docker_container
 class TestDockerInteraction:
     """Unit tests for the interaction with docker."""
 
-    class TestIsValidContainer:
-        """Tests the method that checks if a docker container is a valid (existing and running) container."""
-
     def test_no_such_container(self, mocker: MockerFixture):
         thrown_err = subprocess.CalledProcessError(1, "cmd", output="No such container")
         mocker.patch("subprocess.run", side_effect=thrown_err)

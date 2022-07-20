@@ -47,15 +47,23 @@ class TestEndToEnd:
                 else f",{self.compression}"
             )
 
+            schroot_arg = (
+                "--no-schroot-profile" if self.schroot_profile is None else f"--schroot-profile={self.schroot_profile}"
+            )
+
+            docker_arg = (
+                "--no-docker-container"
+                if self.docker_container is None
+                else f"--docker-container={self.docker_container}"
+            )
+
             return [  # specify all relevant args explicitly so that config files may not disturb e2e tests
                 "./homcc/client/main.py",
                 "--log-level=DEBUG",
                 "--verbose",
                 f"--host={TestEndToEnd.ADDRESS}:{self.tcp_port}/1{compression_arg}",
-                "--no-schroot-profile" if self.schroot_profile is None else f"--schroot-profile={self.schroot_profile}",
-                "--no-docker-container"
-                if self.docker_container is None
-                else f"--docker-container={self.docker_container}",
+                schroot_arg,
+                docker_arg,
                 "--timeout=20",
                 self.compiler,
             ]
@@ -146,10 +154,7 @@ class TestEndToEnd:
             executable_stdout: str = subprocess.check_output([f"./{self.OUTPUT}"], encoding="utf-8")
             assert executable_stdout == "homcc\n"
 
-    def cpp_end_to_end_no_linking(
-        self,
-        basic_arguments: BasicClientArguments,
-    ):
+    def cpp_end_to_end_no_linking(self, basic_arguments: BasicClientArguments):
         args: List[str] = [
             "-c",
             "-Iexample/include",
@@ -163,10 +168,7 @@ class TestEndToEnd:
             self.check_remote_compilation_assertions(result)
             assert os.path.exists(self.OUTPUT)
 
-    def cpp_end_to_end_preprocessor_side_effects(
-        self,
-        basic_arguments: BasicClientArguments,
-    ):
+    def cpp_end_to_end_preprocessor_side_effects(self, basic_arguments: BasicClientArguments):
         args: List[str] = [
             "-Iexample/include",
             "-MD",
