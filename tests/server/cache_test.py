@@ -1,4 +1,4 @@
-"""Test moudle for the server cache."""
+"""Test module for the server cache."""
 
 from tempfile import TemporaryDirectory
 from pathlib import Path

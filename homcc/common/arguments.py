@@ -576,3 +576,11 @@ class Arguments:
         """
         schroot_args: List[str] = ["schroot", "-c", profile, "--"]
         return self._execute_args(schroot_args + list(self), **kwargs)
+
+    def docker_execute(self, container: str, cwd: str, **kwargs) -> ArgumentsExecutionResult:
+        """
+        Execute arguments in a docker container.
+        If possible, all parameters to this method will also be forwarded directly to the subprocess function call.
+        """
+        docker_args: List[str] = ["docker", "exec", "--workdir", cwd, container]
+        return self._execute_args(docker_args + list(self), **kwargs)
