@@ -70,8 +70,13 @@ jobs:
           sudo debootstrap focal /var/chroot/focal http://archive.ubuntu.com/ubuntu
           sudo ./.github/setup_chroot_env.sh focal $(id -nG | sed 's/ /,/g')
           sudo schroot -c focal -- apt-get -y install g++
+      - name: Install docker
+        uses: docker-practice/actions-setup-docker@master
+      - name: Setup docker container
+        run: |
+          docker run -dit --name gcc -v /tmp:/tmp gcc:bullseye
       - name: Run tests
-        run: pytest -v -rfE --cov=homcc --capture=tee-sys --runschroot=focal
+        run: pytest -v -rfE --cov=homcc --capture=tee-sys --runschroot=focal --rundocker=gcc
   build:
     runs-on: ubuntu-22.04
     steps:

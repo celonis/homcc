@@ -416,10 +416,21 @@ class TCPClient:
         cwd: str,
         dependency_dict: Dict[str, str],
         target: Optional[str],
-        profile: Optional[str],
+        schroot_profile: Optional[str],
+        docker_container: Optional[str],
     ):
         """send an argument message to homcc server"""
-        await self._send(ArgumentMessage(list(arguments), cwd, dependency_dict, target, profile, self.compression))
+        await self._send(
+            ArgumentMessage(
+                args=list(arguments),
+                cwd=cwd,
+                dependencies=dependency_dict,
+                target=target,
+                schroot_profile=schroot_profile,
+                docker_container=docker_container,
+                compression=self.compression,
+            )
+        )
 
     async def send_dependency_reply_message(self, dependency: str):
         """send dependency reply message to homcc server"""

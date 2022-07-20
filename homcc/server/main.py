@@ -74,12 +74,12 @@ def main():
     # ADDRESS
     address: Optional[str] = homccd_args_dict["listen"] or homccd_config.address
 
-    # PROFILES
-    profiles: List[str] = load_schroot_profiles()
+    # schroot profiles
+    schroot_profiles: List[str] = load_schroot_profiles()
 
-    # start server
     try:
-        server, server_thread = start_server(address=address, port=port, limit=limit, profiles=profiles)
+        # start server
+        server, server_thread = start_server(address=address, port=port, limit=limit, schroot_profiles=schroot_profiles)
     except ServerInitializationError:
         logger.error("Could not start homccd, terminating.")
         sys.exit(os.EX_OSERR)

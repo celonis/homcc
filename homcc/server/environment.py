@@ -24,15 +24,25 @@ class Environment:
     """Path to the current compilation inside /tmp/."""
     mapped_cwd: str
     """Mapped cwd, valid on server side."""
-    profile: Optional[str]
+    schroot_profile: Optional[str]
     """schroot profile for the compilation."""
+    docker_container: Optional[str]
+    """docker container for the compilation."""
     compression: Compression
     """Compression used for data transfer."""
 
-    def __init__(self, root_folder: Path, cwd: str, profile: Optional[str], compression: Compression):
+    def __init__(
+        self,
+        root_folder: Path,
+        cwd: str,
+        schroot_profile: Optional[str],
+        docker_container: Optional[str],
+        compression: Compression,
+    ):
         self.instance_folder: str = self.create_instance_folder(root_folder)
         self.mapped_cwd: str = self.map_cwd(cwd, self.instance_folder)
-        self.profile: Optional[str] = profile
+        self.schroot_profile: Optional[str] = schroot_profile
+        self.docker_container: Optional[str] = docker_container
         self.compression: Compression = compression
 
     def __del__(self):
@@ -156,11 +166,18 @@ class Environment:
 
     def invoke_compiler(self, arguments: Arguments) -> ArgumentsExecutionResult:
         """Actually invokes the compiler process."""
-        result: ArgumentsExecutionResult = (
-            arguments.execute(cwd=self.mapped_cwd, timeout=COMPILATION_TIMEOUT)
-            if self.profile is None
-            else arguments.schroot_execute(profile=self.profile, cwd=self.mapped_cwd, timeout=COMPILATION_TIMEOUT)
-        )
+        result: ArgumentsExecutionResult
+
+        if self.schroot_profile is not None:
+            result = arguments.schroot_execute(
+                profile=self.schroot_profile, cwd=self.mapped_cwd, timeout=COMPILATION_TIMEOUT
+            )
+        elif self.docker_container is not None:
+            result = arguments.docker_execute(
+                container=self.docker_container, cwd=self.mapped_cwd, timeout=COMPILATION_TIMEOUT
+            )
+        else:
+            result = arguments.execute(cwd=self.mapped_cwd, timeout=COMPILATION_TIMEOUT)
 
         if result.stdout:
             logger.debug("Compiler gave output:\n'%s'", result.stdout)
