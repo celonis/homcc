@@ -9,6 +9,7 @@ from pytest import CaptureFixture
 from pytest_mock.plugin import MockerFixture
 from typing import List
 
+from homcc import client
 from homcc.common.errors import HostParsingError
 from homcc.client.parsing import (
     HOMCC_HOSTS_ENV_VAR,
@@ -36,8 +37,6 @@ class TestCLI:
         )
 
     def test_version(self, capfd: CaptureFixture):
-        from homcc import client  # pylint: disable=import-outside-toplevel
-
         with pytest.raises(SystemExit) as sys_exit:
             parse_cli_args(["--version"])
 

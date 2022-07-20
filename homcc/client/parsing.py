@@ -13,6 +13,7 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union
 
+from homcc import client
 from homcc.common.arguments import Arguments
 from homcc.common.compression import Compression
 from configparser import ConfigParser, Error, SectionProxy
@@ -59,8 +60,6 @@ class ShowVersion(ShowAndExitAction):
     """show version and exit"""
 
     def __call__(self, *_):
-        from homcc import client  # pylint: disable=import-outside-toplevel
-
         print(f"homcc {client.__version__}")
         sys.exit(os.EX_OK)
 

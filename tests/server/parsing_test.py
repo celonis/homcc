@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import List
 from pytest import CaptureFixture
 
+from homcc import server
 from homcc.common.parsing import HOMCC_CONFIG_FILENAME
 from homcc.server.parsing import (
     SCHROOT_CONF_FILENAME,
@@ -43,8 +44,6 @@ class TestParsingConfig:
     ]
 
     def test_version(self, capfd: CaptureFixture):
-        from homcc import server  # pylint: disable=import-outside-toplevel
-
         with pytest.raises(SystemExit) as sys_exit:
             parse_cli_args(["--version"])
 

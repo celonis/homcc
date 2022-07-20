@@ -29,8 +29,6 @@ Additionally, `HOMCC` provides sandboxed compiler execution for remote compilati
    2. [Server: `homccd`](#server-homccd)
 3. [Configuration](#configuration)
 4. [Documentation](#documentation)
-   1. [General information](#general-information)
-   2. [Compatibility policy](#compatibility-policy)
 5. [Development](#development)
    1. [Setup](#setup)
    2. [Testing](#testing)
@@ -175,8 +173,6 @@ Additionally, `HOMCC` provides sandboxed compiler execution for remote compilati
 
 
 ## Documentation
-
-### General Information
 - Terms: `HOMCC` generally refers to the whole project while the terms `homcc` and `client` as well as `homccd` and `server` can be used interchangeably.
   However, for user facing context `homcc[d]` is preferred whereas `client` & `server` should be used internally.
 - TODO:
@@ -184,16 +180,6 @@ Additionally, `HOMCC` provides sandboxed compiler execution for remote compilati
   - Communication: `HOMCC` Message Protocol
   - Server: Caching, Profile Parsing
 
-### Compatibility policy
-Currently, `HOMCC` has to be able to break backwards compatibility between versions to quickly add new features, such that differing `homcc` and `homccd` versions might not work together.
-The following compatibility matrix provides an overview of our compatibility policy, with :white_check_mark: marking guaranteed compatibility:
-
-| Version |      `0.0.X`       |      `X.Y.*`       |
-|:-------:|:------------------:|:------------------:|
-| `0.0.X` | :white_check_mark: |        :x:         |
-| `X.Y.*` |        :x:         | :white_check_mark: |
-
-Meaning that we frequently break backwards compatibility during early `0.0.*` versions but will maintain compatibility in every minor versions after `0.1.0`.
 
 ## Development
 
