@@ -24,7 +24,9 @@ class TestArgumentMessage:
             "server.c": "1239012890312903",
             "server.h": "testsha1",
         }
-        message = ArgumentMessage(arguments, cwd, dependencies, profile="foobar", compression=LZMA())
+        message = ArgumentMessage(
+            arguments, cwd, dependencies, schroot_profile="foobar", docker_container=None, compression=LZMA()
+        )
 
         message_bytes: bytearray = message.to_bytes()
 
