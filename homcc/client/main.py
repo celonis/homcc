@@ -40,8 +40,22 @@ from homcc.common.logging import (  # pylint: disable=wrong-import-position
 
 logger: logging.Logger = logging.getLogger(__name__)
 
+HOMCC_SAFEGUARD: str = "_HOMCC_SAFEGUARD"
+
+
+def is_recursively_called() -> bool:
+    """Check whether homcc was called recursively by checking the existence of a safeguard environment variable"""
+
+    was_already_called: bool = HOMCC_SAFEGUARD in os.environ
+    os.environ[HOMCC_SAFEGUARD] = "1"
+    return was_already_called
+
 
 def main():
+    # cancel execution if recursion was detected
+    if is_recursively_called():
+        raise SystemExit(f"{sys.argv[0]} seems to have invoked itself recursively!")
+
     # load and parse arguments and configuration information
     homcc_args_dict, compiler_arguments = parse_cli_args(sys.argv[1:])
     homcc_config: ClientConfig = parse_config()
