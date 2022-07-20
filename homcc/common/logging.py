@@ -124,7 +124,8 @@ class _ServerFormatter(_Formatter):
     def _level_format(self, level_format: str) -> str:
         # colored logging messages with debug information
         if self._config.is_colored() and self._config.is_detailed():
-            return f"[{level_format}%(levelname)s{self.RESET}] %(asctime)s - %(threadName)s - %(pathname)s:%(lineno)d:\n%(message)s"
+            return f"""[{level_format}%(levelname)s{self.RESET}] %(asctime)s - %(threadName)s
+             - %(pathname)s:%(lineno)d:\n%(message)s"""
 
         # uncolored logging messages with debug information
         if self._config.is_detailed():
