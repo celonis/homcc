@@ -6,6 +6,7 @@ import logging
 import os
 import subprocess
 import sys
+import re
 
 from pathlib import Path
 from typing import Dict, Optional, List, Set, Tuple
@@ -22,6 +23,7 @@ from homcc.common.errors import (
     RemoteCompilationError,
     RemoteCompilationTimeoutError,
     PreprocessorError,
+    TargetInferationError,
     UnexpectedMessageTypeError,
     SlotsExhaustedError,
 )
@@ -87,7 +89,16 @@ async def compile_remotely_at(arguments: Arguments, host: Host, profile: Optiona
         dependency_dict: Dict[str, str] = calculate_dependency_dict(find_dependencies(arguments))
         remote_arguments: Arguments = arguments.copy().remove_local_args()
 
-        await client.send_argument_message(remote_arguments, os.getcwd(), dependency_dict, profile)
+        try:
+            target = get_target_triple(arguments)
+        except TargetInferationError:
+            target = None
+            logger.warning(
+                "Omiting passing explicit target to remote compilation host. "
+                "This may lead to unexpected results if the remote compilation host has a different architecture."
+            )
+
+        await client.send_argument_message(remote_arguments, os.getcwd(), dependency_dict, target, profile)
 
         # invert dependency dictionary to access dependencies via hash
         dependency_dict = {file_hash: dependency for dependency, file_hash in dependency_dict.items()}
@@ -236,3 +247,48 @@ def link_object_files(arguments: Arguments, object_files: List[ObjectFile]) -> i
         logger.debug("Linker result:\n%s", result.stdout)
 
     return result.return_code
+
+
+def _get_target_triple_gcc(arguments: Arguments) -> str:
+    """Gets the target triple for gcc."""
+    gcc_arguments = Arguments(arguments.compiler, ["-dumpmachine"])
+
+    try:
+        result = gcc_arguments.execute(check=True)
+    except subprocess.CalledProcessError as err:
+        logger.error(
+            "Could not get target triple for compiler '%s', executed '%s'. %s", arguments.compiler, gcc_arguments, err
+        )
+        raise TargetInferationError from err
+
+    return result.stdout.strip()
+
+
+def _get_target_triple_clang(arguments: Arguments) -> str:
+    """Gets the target triple for clang."""
+    clang_arguments = Arguments(arguments.compiler, ["--version"])
+
+    try:
+        result = clang_arguments.execute(check=True)
+    except subprocess.CalledProcessError as err:
+        logger.error(
+            "Could not get target triple for compiler '%s', executed '%s'. %s", arguments.compiler, clang_arguments, err
+        )
+        raise TargetInferationError from err
+
+    matches: List[str] = re.findall("(?<=Target:).*?(?=\n)", result.stdout, re.IGNORECASE)
+
+    if len(matches) == 0:
+        raise TargetInferationError("Could not infer target triple for clang. Nothing matches the regex.")
+
+    return matches[0].strip()
+
+
+def get_target_triple(arguments: Arguments) -> str:
+    """Gets the target triple that the specified compiler produces."""
+    if arguments.is_gcc_compiler():
+        return _get_target_triple_gcc(arguments)
+    elif arguments.is_clang_compiler():
+        return _get_target_triple_clang(arguments)
+    else:
+        raise TargetInferationError(f"Could not infer target triple for compiler '{arguments.compiler}'.")

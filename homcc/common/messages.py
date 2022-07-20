@@ -152,8 +152,13 @@ class Message(ABC):
 class ArgumentMessage(Message):
     """
     Initial message in the homcc protocol.
-    Client sends args, working directory, dependencies (key: file paths, value: SHA1 hash), the chroot env profile and
-    the to be used compression algorithm.
+    Client sends:
+        - args (compiler arguments),
+        - working directory path,
+        - dependencies (keys: file paths, values: SHA1 hash),
+        - compilation target triple (e.g. x86_64-pc-linux-gnu),
+        - schroot environment profile name,
+        - compression algorithm
     """
 
     def __init__(
@@ -161,12 +166,14 @@ class ArgumentMessage(Message):
         args: List[str],
         cwd: str,
         dependencies: Dict[str, str],
+        target: Optional[str],
         profile: Optional[str],
         compression: Compression,
     ):
         self.args: List[str] = args
         self.cwd: str = cwd
         self.dependencies: Dict[str, str] = dependencies
+        self.target: Optional[str] = target
         self.profile: Optional[str] = profile
         self.compression: Compression = compression
 
@@ -180,6 +187,9 @@ class ArgumentMessage(Message):
         json_dict["cwd"] = self.cwd
         json_dict["dependencies"] = self.dependencies
 
+        if self.target:
+            json_dict["target"] = self.target
+
         if self.profile:
             json_dict["profile"] = self.profile
 
@@ -191,6 +201,10 @@ class ArgumentMessage(Message):
     def get_args(self) -> List[str]:
         """Returns the args as a list of strings."""
         return self.args
+
+    def get_target(self) -> Optional[str]:
+        """Returns the compilation target if provided."""
+        return self.target
 
     def get_cwd(self) -> str:
         """Returns the current working directory."""
@@ -214,6 +228,7 @@ class ArgumentMessage(Message):
                 self.get_args() == other.get_args()
                 and self.get_cwd() == other.get_cwd()
                 and self.get_dependencies() == other.get_dependencies()
+                and self.get_target() == other.get_target()
                 and self.get_profile() == other.get_profile()
                 and self.get_compression() == other.get_compression()
             )
@@ -225,6 +240,7 @@ class ArgumentMessage(Message):
             json_dict["args"],
             json_dict["cwd"],
             json_dict["dependencies"],
+            json_dict.get("target"),
             json_dict.get("profile"),
             Compression.from_name(json_dict.get("compression")),
         )

@@ -11,6 +11,10 @@ class PreprocessorError(RecoverableClientError):
     """Exception for errors during the preprocessor stage"""
 
 
+class TargetInferationError(RecoverableClientError):
+    """Exception for errors during infering the compilation target triple."""
+
+
 class RemoteCompilationTimeoutError(RecoverableClientError):
     """Exception for a timed out compilation request"""
 

@@ -545,6 +545,20 @@ class Arguments:
         self._args = [arg for arg in self.args if not self.is_source_file_arg(arg)]
         return self
 
+    def is_gcc_compiler(self) -> bool:
+        """returns true if the compiler is gcc/g++."""
+        if self.compiler is None:
+            return False
+
+        return self.compiler.startswith("gcc") or self.compiler.startswith("g++")
+
+    def is_clang_compiler(self) -> bool:
+        """returns true if the compiler is clang."""
+        if self.compiler is None:
+            return False
+
+        return self.compiler.startswith("clang")
+
     @staticmethod
     def _execute_args(args: List[str], **kwargs) -> ArgumentsExecutionResult:
         # sanity check if different execution options required by client and server compilations are explicitly enabled
