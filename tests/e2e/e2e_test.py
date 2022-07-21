@@ -253,6 +253,19 @@ class TestEndToEnd:
         Path("foo.o").unlink(missing_ok=True)
         Path(self.OUTPUT).unlink(missing_ok=True)
 
+    @pytest.mark.timeout(TIMEOUT)
+    def test_end_to_end_recursive_client(self, unused_tcp_port: int):
+        try:
+            subprocess.run(  # client receiving itself as compiler arg
+                self.BasicClientArguments("./homcc/client/main.py", unused_tcp_port).to_list(),
+                check=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                encoding="utf-8",
+            )
+        except subprocess.CalledProcessError as err:
+            assert "seems to have been invoked recursively!" in err.stdout
+
     # g++ tests
     @pytest.mark.gplusplus
     @pytest.mark.timeout(TIMEOUT)
