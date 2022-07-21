@@ -124,19 +124,20 @@ class _ServerFormatter(_Formatter):
     def _level_format(self, level_format: str) -> str:
         # colored logging messages with debug information
         if self._config.is_colored() and self._config.is_detailed():
-            return f"[{level_format}%(levelname)s{self.RESET}] %(asctime)s - %(pathname)s:%(lineno)d:\n%(message)s"
+            return f"""[{level_format}%(levelname)s{self.RESET}] %(asctime)s - %(threadName)s
+             - %(pathname)s:%(lineno)d:\n%(message)s"""
 
         # uncolored logging messages with debug information
         if self._config.is_detailed():
-            return "[%(levelname)s] %(asctime)s - %(pathname)s:%(lineno)d:\n%(message)s"
+            return "[%(levelname)s] %(asctime)s - %(threadName)s - %(pathname)s:%(lineno)d:\n%(message)s"
 
         # user-friendly, colored logging messages
         if self._config.is_colored():
-            return f"[{level_format}%(levelname)s{self.RESET}] %(asctime)s - %(message)s"
+            return f"[{level_format}%(levelname)s{self.RESET}] %(asctime)s - %(threadName)s - %(message)s"
 
         # user-friendly, uncolored logging messages
         if self._config.is_none():
-            return "[%(levelname)s] %(asctime)s - %(message)s"
+            return "[%(levelname)s] %(asctime)s - %(threadName)s - %(message)s"
 
         raise ValueError(f"Unrecognized formatter configuration {self._config}")
 

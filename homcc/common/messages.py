@@ -161,13 +161,15 @@ class ArgumentMessage(Message):
         args: List[str],
         cwd: str,
         dependencies: Dict[str, str],
-        profile: Optional[str],
+        schroot_profile: Optional[str],
+        docker_container: Optional[str],
         compression: Compression,
     ):
         self.args: List[str] = args
         self.cwd: str = cwd
         self.dependencies: Dict[str, str] = dependencies
-        self.profile: Optional[str] = profile
+        self.schroot_profile: Optional[str] = schroot_profile
+        self.docker_container: Optional[str] = docker_container
         self.compression: Compression = compression
 
         super().__init__(MessageType.ArgumentMessage)
@@ -180,8 +182,11 @@ class ArgumentMessage(Message):
         json_dict["cwd"] = self.cwd
         json_dict["dependencies"] = self.dependencies
 
-        if self.profile:
-            json_dict["profile"] = self.profile
+        if self.schroot_profile:
+            json_dict["schroot_profile"] = self.schroot_profile
+
+        if self.docker_container:
+            json_dict["docker_container"] = self.docker_container
 
         if self.compression:
             json_dict["compression"] = str(self.compression)
@@ -200,9 +205,13 @@ class ArgumentMessage(Message):
         """Returns a dictionary with dependencies."""
         return self.dependencies
 
-    def get_profile(self) -> Optional[str]:
-        """Returns the specified profile if provided."""
-        return self.profile
+    def get_schroot_profile(self) -> Optional[str]:
+        """Returns the specified schroot_profile if provided."""
+        return self.schroot_profile
+
+    def get_docker_container(self) -> Optional[str]:
+        """Returns the specified docker container to use if provided."""
+        return self.docker_container
 
     def get_compression(self) -> Compression:
         """Returns the to be used compression algorithm."""
@@ -214,7 +223,8 @@ class ArgumentMessage(Message):
                 self.get_args() == other.get_args()
                 and self.get_cwd() == other.get_cwd()
                 and self.get_dependencies() == other.get_dependencies()
-                and self.get_profile() == other.get_profile()
+                and self.get_schroot_profile() == other.get_schroot_profile()
+                and self.get_docker_container() == other.get_docker_container()
                 and self.get_compression() == other.get_compression()
             )
         return False
@@ -222,11 +232,12 @@ class ArgumentMessage(Message):
     @staticmethod
     def from_dict(json_dict: dict) -> ArgumentMessage:
         return ArgumentMessage(
-            json_dict["args"],
-            json_dict["cwd"],
-            json_dict["dependencies"],
-            json_dict.get("profile"),
-            Compression.from_name(json_dict.get("compression")),
+            args=json_dict["args"],
+            cwd=json_dict["cwd"],
+            dependencies=json_dict["dependencies"],
+            schroot_profile=json_dict.get("schroot_profile"),
+            docker_container=json_dict.get("docker_container"),
+            compression=Compression.from_name(json_dict.get("compression")),
         )
 
 

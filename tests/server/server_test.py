@@ -46,12 +46,12 @@ class TestServerReceive:
 
         config: ServerConfig = ServerConfig(files=[], address="0.0.0.0", port=unused_tcp_port, limit=1)
 
-        server, _ = start_server([], config)
+        server, _ = start_server(config, schroot_profiles=[])
         with server:
             arguments = ["-a", "-b", "--help"]
             cwd = "/home/o.layer/test"
             dependencies = {"server.c": "1239012890312903", "server.h": "testsha1"}
-            self.messages.append(ArgumentMessage(arguments, cwd, dependencies, None, NoCompression()))
+            self.messages.append(ArgumentMessage(arguments, cwd, dependencies, None, None, NoCompression()))
 
             self.messages.append(DependencyRequestMessage("asd123"))
 

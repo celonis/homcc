@@ -249,7 +249,8 @@ class TestParsingConfig:
         "COMPILER=g++",
         "CoMpReSsIoN=lzo",
         "TIMEOUT=180",
-        "profile=foobar",
+        "schroot_profile=foobar",
+        "docker_container=some_container",
         "log_level=INFO",
         "verbose=TRUE",
         # the following configs should be ignored
@@ -273,9 +274,10 @@ class TestParsingConfig:
             compiler="g++",
             compression="lzo",
             timeout=180,
-            profile="foobar",
             log_level="INFO",
             verbose=True,
+            schroot_profile="foobar",
+            docker_container="some_container",
         )
 
     def test_parse_multiple_config_files(self, tmp_path: Path):
@@ -290,7 +292,8 @@ class TestParsingConfig:
             compiler="clang++",
             compression="lzo",
             timeout=180,
-            profile="foobar",
+            schroot_profile="foobar",
+            docker_container="some_container",
             log_level="INFO",
             verbose=False,
         )
