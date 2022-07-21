@@ -32,7 +32,7 @@ class TestCLI:
     def setup_mock(self, mocker: MockerFixture):
         mocker.patch(
             "homcc.client.parsing.load_hosts",
-            return_value=self.MOCKED_HOSTS,
+            return_value=("", self.MOCKED_HOSTS),
         )
 
     def test_version(self, capfd: CaptureFixture):
@@ -228,14 +228,14 @@ class TestParsingHosts:
 
         # $HOMCC_HOSTS
         monkeypatch.setenv(HOMCC_HOSTS_ENV_VAR, "\n".join(hosts))
-        assert load_hosts() == hosts_no_whitespace
+        assert load_hosts() == (HOMCC_HOSTS_ENV_VAR, hosts_no_whitespace)
         monkeypatch.delenv(HOMCC_HOSTS_ENV_VAR)
 
         # HOSTS file
         tmp_hosts_file: Path = tmp_path / HOMCC_HOSTS_FILENAME
         tmp_hosts_file.write_text("\n".join(hosts))
 
-        assert load_hosts([tmp_hosts_file]) == hosts_no_whitespace
+        assert load_hosts([tmp_hosts_file]) == (str(tmp_hosts_file), hosts_no_whitespace)
 
 
 class TestParsingConfig:
@@ -270,6 +270,7 @@ class TestParsingConfig:
         tmp_config_file.write_text("\n".join(self.config))
 
         assert parse_config([tmp_config_file]) == ClientConfig(
+            files=[str(tmp_config_file.absolute())],
             compiler="g++",
             compression="lzo",
             timeout=180,
@@ -287,6 +288,7 @@ class TestParsingConfig:
         tmp_config_file_overwrite.write_text("\n".join(self.config_overwrite))
 
         assert parse_config([tmp_config_file_overwrite, tmp_config_file]) == ClientConfig(
+            files=[str(file.absolute()) for file in [tmp_config_file, tmp_config_file_overwrite]],
             compiler="clang++",
             compression="lzo",
             timeout=180,
