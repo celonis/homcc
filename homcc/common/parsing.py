@@ -4,7 +4,7 @@ import os
 
 from configparser import ConfigParser
 from pathlib import Path
-from typing import List
+from typing import List, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -49,8 +49,8 @@ def default_locations(filename: str) -> List[Path]:
     return hosts_file_locations
 
 
-def parse_configs(filepaths: List[Path]) -> ConfigParser:
+def parse_configs(filepaths: List[Path]) -> Tuple[List[str], ConfigParser]:
     """Parse all available configs from filepaths in descending priority."""
     cfg: ConfigParser = ConfigParser()
-    cfg.read(filepaths[::-1])  # invert list to preserve priority
-    return cfg
+    parsed_files: List[str] = cfg.read(filepaths[::-1])  # invert list to preserve priority
+    return parsed_files, cfg
