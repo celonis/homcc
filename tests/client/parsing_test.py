@@ -9,6 +9,7 @@ from pytest import CaptureFixture
 from pytest_mock.plugin import MockerFixture
 from typing import List
 
+from homcc import client
 from homcc.common.errors import HostParsingError
 from homcc.client.parsing import (
     HOMCC_HOSTS_ENV_VAR,
@@ -43,7 +44,7 @@ class TestCLI:
 
         assert sys_exit.value.code == os.EX_OK
         assert not cap.err
-        assert "homcc 0.0.1" in cap.out
+        assert f"homcc {client.__version__}" in cap.out
 
     def test_show_hosts(self, capfd: CaptureFixture):
         with pytest.raises(SystemExit) as sys_exit:

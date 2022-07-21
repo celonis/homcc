@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 
+from homcc import server
 from homcc.common.logging import LogLevel
 from homcc.common.parsing import HOMCC_CONFIG_FILENAME, default_locations, parse_configs
 
@@ -37,7 +38,7 @@ class ShowVersion(Action):
         super().__init__(nargs=0, help=self.__doc__, **kwargs)
 
     def __call__(self, *_):
-        print("homccd 0.0.1")
+        print(f"homccd {server.__version__}")
         sys.exit(os.EX_OK)
 
 
