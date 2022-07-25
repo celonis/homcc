@@ -131,7 +131,7 @@ class TCPRequestHandler(socketserver.BaseRequestHandler):
     """List of compiler arguments."""
     instance_path: str = ""
     """Path to the current compilation inside /tmp/."""
-    mapped_cwd: str = ""
+    mapped_cwd: str
     """Absolute path to the working directory."""
     server: TCPServer
     """The TCP server belonging to this handler. (redefine for typing)"""
@@ -169,7 +169,8 @@ class TCPRequestHandler(socketserver.BaseRequestHandler):
             compression=compression,
         )
 
-        # TODO: add target specific handling
+        if target is not None:
+            self.compiler_arguments.add_target(target)
 
         self.compiler_arguments = self.environment.map_args(self.compiler_arguments)
         logger.debug("Mapped compiler args: %s", str(self.compiler_arguments))
@@ -306,7 +307,6 @@ class TCPRequestHandler(socketserver.BaseRequestHandler):
 
         try:
             supports_target = Environment.compiler_supports_target(arguments, target)
-
             if not supports_target:
                 logger.warning(
                     "Compiler '%s' does not support requested target '%s', declining compilation.",
@@ -319,7 +319,7 @@ class TCPRequestHandler(socketserver.BaseRequestHandler):
         except TargetsRetrievalError:
             logger.error(
                 "Could not retrieve information about targets for the compiler '%s', "
-                "continuing but omitting target request.",
+                "will still try use the given target.",
                 arguments.compiler,
             )
             return True

@@ -66,3 +66,7 @@ class ServerInitializationError(Exception):
 
 class TargetsRetrievalError(Exception):
     """Indicates that available targets could not be retrieved from the compiler."""
+
+
+class UnsupportedCompilerError(Exception):
+    """The attempted action is currently not supported with the given compiler."""

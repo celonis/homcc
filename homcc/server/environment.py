@@ -10,7 +10,7 @@ from typing import Dict, List, Optional
 
 from homcc.common.arguments import Arguments, ArgumentsExecutionResult
 from homcc.common.compression import Compression
-from homcc.common.errors import TargetsRetrievalError
+from homcc.common.errors import TargetsRetrievalError, UnsupportedCompilerError
 from homcc.common.messages import CompilationResultMessage, ObjectFile
 from homcc.server.cache import Cache
 
@@ -131,7 +131,6 @@ class Environment:
     @staticmethod
     def compiler_supports_target(arguments: Arguments, target: str) -> bool:
         """Returns true if the compiler supports cross-compiling for the given target."""
-
         if arguments.is_gcc_compiler():
             return shutil.which(f"{target}-{arguments.compiler}") is not None
         elif arguments.is_clang_compiler():
@@ -153,10 +152,10 @@ class Environment:
                 arch = target
 
             return arch in result.stdout
-        else:
-            raise TargetsRetrievalError(
-                f"Retrieving available targets from compiler '{arguments.compiler}' is not implemented."
-            )
+
+        raise UnsupportedCompilerError(
+            f"Retrieving available targets from compiler '{arguments.compiler}' is not implemented."
+        )
 
     def do_compilation(self, arguments: Arguments) -> CompilationResultMessage:
         """Does the compilation and returns the filled result message."""

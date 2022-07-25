@@ -12,6 +12,8 @@ from functools import cached_property
 from pathlib import Path
 from typing import Any, Iterator, List, Optional, Tuple
 
+from homcc.common.errors import UnsupportedCompilerError
+
 logger = logging.getLogger(__name__)
 
 
@@ -468,6 +470,19 @@ class Arguments:
     def no_linking(self) -> Arguments:
         """return a copy of arguments where all output args are removed and the no linking arg is added"""
         return self.copy().remove_output_args().add_arg(self.NO_LINKING_ARG)
+
+    def add_target(self, target: str) -> Arguments:
+        """returns a copy of arguments where the specified target is added (for cross compilation)"""
+        if self.is_gcc_compiler():
+            copied_arguments = self.copy()
+            copied_arguments.compiler = f"{target}-{self.compiler}"
+            return copied_arguments
+        elif self.is_clang_compiler():
+            return self.copy().add_arg("-target").add_arg(target)
+
+        raise UnsupportedCompilerError(
+            f"The compiler '{self.compiler}' is not supported together with a compilation target."
+        )
 
     def map(self, instance_path: str, mapped_cwd: str) -> Arguments:
         """modify and return arguments by mapping relevant paths"""
