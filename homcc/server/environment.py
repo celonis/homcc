@@ -8,8 +8,8 @@ from pathlib import Path
 from typing import Dict, List, Optional
 
 from homcc.common.arguments import Arguments, ArgumentsExecutionResult
+from homcc.common.compilers import Compiler
 from homcc.common.compression import Compression
-from homcc.common.errors import TargetsRetrievalError
 from homcc.common.messages import CompilationResultMessage, ObjectFile
 from homcc.server.cache import Cache
 
@@ -130,18 +130,12 @@ class Environment:
     @staticmethod
     def compiler_supports_target(arguments: Arguments, target: str) -> bool:
         """Returns true if the compiler supports cross-compiling for the given target."""
-        if arguments.is_gcc_compiler():
-            return shutil.which(f"{target}-{arguments.compiler}") is not None
-        elif arguments.is_clang_compiler():
-            # For clang, we can not really check if it supports the target prior to compiling:
-            # '$ clang print-targets' does not output the same triple format as we get from
-            # '$ clang --version', so we can not properly check if a target is supported.
-            # Therefore, we just try to compile and assume clang can handle the target.
-            return True
+        compiler: Optional[Compiler] = arguments.compiler_object()
 
-        raise TargetsRetrievalError(
-            f"Retrieving available targets from compiler '{arguments.compiler}' is not implemented."
-        )
+        if compiler is None:
+            return False
+
+        return compiler.supports_target(target)
 
     def do_compilation(self, arguments: Arguments) -> CompilationResultMessage:
         """Does the compilation and returns the filled result message."""

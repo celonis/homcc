@@ -6,7 +6,6 @@ import logging
 import os
 import subprocess
 import sys
-import re
 
 from pathlib import Path
 from typing import Dict, Optional, List, Set, Tuple
@@ -95,7 +94,7 @@ async def compile_remotely_at(
         remote_arguments: Arguments = arguments.copy().remove_local_args()
 
         try:
-            target = get_target_triple(arguments)
+            target = arguments.get_compiler_target_triple()
         except TargetInferationError:
             target = None
             logger.warning(
@@ -259,48 +258,3 @@ def link_object_files(arguments: Arguments, object_files: List[ObjectFile]) -> i
         logger.debug("Linker result:\n%s", result.stdout)
 
     return result.return_code
-
-
-def _get_target_triple_gcc(arguments: Arguments) -> str:
-    """Gets the target triple for gcc."""
-    gcc_arguments = Arguments(arguments.compiler, ["-dumpmachine"])
-
-    try:
-        result = gcc_arguments.execute(check=True)
-    except subprocess.CalledProcessError as err:
-        logger.error(
-            "Could not get target triple for compiler '%s', executed '%s'. %s", arguments.compiler, gcc_arguments, err
-        )
-        raise TargetInferationError from err
-
-    return result.stdout.strip()
-
-
-def _get_target_triple_clang(arguments: Arguments) -> str:
-    """Gets the target triple for clang."""
-    clang_arguments = Arguments(arguments.compiler, ["--version"])
-
-    try:
-        result = clang_arguments.execute(check=True)
-    except subprocess.CalledProcessError as err:
-        logger.error(
-            "Could not get target triple for compiler '%s', executed '%s'. %s", arguments.compiler, clang_arguments, err
-        )
-        raise TargetInferationError from err
-
-    matches: List[str] = re.findall("(?<=Target:).*?(?=\n)", result.stdout, re.IGNORECASE)
-
-    if len(matches) == 0:
-        raise TargetInferationError("Could not infer target triple for clang. Nothing matches the regex.")
-
-    return matches[0].strip()
-
-
-def get_target_triple(arguments: Arguments) -> str:
-    """Gets the target triple that the specified compiler produces."""
-    if arguments.is_gcc_compiler():
-        return _get_target_triple_gcc(arguments)
-    elif arguments.is_clang_compiler():
-        return _get_target_triple_clang(arguments)
-    else:
-        raise TargetInferationError(f"Could not infer target triple for compiler '{arguments.compiler}'.")

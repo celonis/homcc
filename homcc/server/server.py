@@ -13,7 +13,7 @@ from tempfile import TemporaryDirectory
 from threading import Lock
 from typing import Dict, List, Optional, Tuple
 
-from homcc.common.errors import ServerInitializationError, TargetsRetrievalError
+from homcc.common.errors import ServerInitializationError, UnsupportedCompilerError
 from homcc.common.arguments import Arguments
 from homcc.common.hashing import hash_file_with_bytes
 from homcc.common.messages import (
@@ -308,7 +308,7 @@ class TCPRequestHandler(socketserver.BaseRequestHandler):
                 self.close_connection(f"Compiler '{arguments.compiler}' does not support target '{target}'.")
 
             return supports_target
-        except TargetsRetrievalError:
+        except UnsupportedCompilerError:
             logger.error(
                 "Could not retrieve information about targets for the compiler '%s', "
                 "will still try use the given target.",

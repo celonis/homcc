@@ -12,7 +12,7 @@ from functools import cached_property
 from pathlib import Path
 from typing import Any, Iterator, List, Optional, Tuple
 
-from homcc.common.errors import UnsupportedCompilerError
+from homcc.common.errors import TargetInferationError, UnsupportedCompilerError
 
 logger = logging.getLogger(__name__)
 
@@ -316,6 +316,16 @@ class Arguments:
     def compiler(self, compiler: str):
         self._compiler = compiler
 
+    def compiler_object(self):
+        """if present, return a new specified compiler object"""
+        # avoid circular import
+        from homcc.common.compilers import Compiler  # pylint: disable=import-outside-toplevel
+
+        if self.compiler is None:
+            return None
+
+        return Compiler.from_str(self.compiler)
+
     @cached_property
     def output(self) -> Optional[str]:
         """if present, return the last specified output target"""
@@ -473,16 +483,12 @@ class Arguments:
 
     def add_target(self, target: str) -> Arguments:
         """returns a copy of arguments where the specified target is added (for cross compilation)"""
-        if self.is_gcc_compiler():
-            copied_arguments = self.copy()
-            copied_arguments.compiler = f"{target}-{self.compiler}"
-            return copied_arguments
-        elif self.is_clang_compiler():
-            return self.copy().add_arg(f"--target={target}")
+        compiler = self.compiler_object()
 
-        raise UnsupportedCompilerError(
-            f"The compiler '{self.compiler}' is not supported together with a compilation target."
-        )
+        if compiler is None:
+            raise UnsupportedCompilerError("Could not add target to compilation call as no compiler was given.")
+
+        return compiler.add_target_to_arguments(self, target)
 
     def map(self, instance_path: str, mapped_cwd: str) -> Arguments:
         """modify and return arguments by mapping relevant paths"""
@@ -560,19 +566,14 @@ class Arguments:
         self._args = [arg for arg in self.args if not self.is_source_file_arg(arg)]
         return self
 
-    def is_gcc_compiler(self) -> bool:
-        """returns true if the compiler is gcc/g++."""
-        if self.compiler is None:
-            return False
+    def get_compiler_target_triple(self) -> str:
+        """returns the target triple for the given compiler"""
+        compiler = self.compiler_object()
 
-        return self.compiler.startswith("gcc") or self.compiler.startswith("g++")
+        if compiler is None:
+            raise TargetInferationError("No compiler to ask for targets")
 
-    def is_clang_compiler(self) -> bool:
-        """returns true if the compiler is clang."""
-        if self.compiler is None:
-            return False
-
-        return self.compiler.startswith("clang")
+        return compiler.get_target_triple()
 
     @staticmethod
     def _execute_args(args: List[str], **kwargs) -> ArgumentsExecutionResult:
