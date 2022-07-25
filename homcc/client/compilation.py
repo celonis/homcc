@@ -95,11 +95,12 @@ async def compile_remotely_at(
 
         try:
             target = arguments.get_compiler_target_triple()
-        except TargetInferationError:
+        except TargetInferationError as err:
             target = None
             logger.warning(
-                "Omiting passing explicit target to remote compilation host. "
-                "This may lead to unexpected results if the remote compilation host has a different architecture."
+                "Could not get target architecture. Omiting passing explicit target to remote compilation host. "
+                "This may lead to unexpected results if the remote compilation host has a different architecture. %s",
+                err,
             )
 
         await client.send_argument_message(

@@ -122,5 +122,6 @@ class Gcc(Compiler):
 
     def add_target_to_arguments(self, arguments: Arguments, target: str) -> Arguments:
         copied_arguments = arguments.copy()
+        # e.g. g++ -> x86_64-linux-gnu-g++
         copied_arguments.compiler = f"{target}-{self.compiler_str}"
         return copied_arguments
