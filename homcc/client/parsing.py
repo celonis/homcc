@@ -215,7 +215,8 @@ class ClientConfig:
             f'Configuration (from [{", ".join(self.files)}]):\n'
             f"\tCompiler:\t{self.compiler}\n"
             f"\tCompression:\t{self.compression}\n"
-            f"\tProfile:\t{self.profile}\n"
+            f"\tschroot_profile:\t{self.schroot_profile}\n"
+            f"\tdocker_container:\t{self.docker_container}\n"
             f"\tTimeout:\t{self.timeout}s\n"
             f"\tLog-Level:\t{self.log_level.name}\n"
             f"\tVerbosity:\t{str(self.verbose)}\n"
