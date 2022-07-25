@@ -478,7 +478,7 @@ class Arguments:
             copied_arguments.compiler = f"{target}-{self.compiler}"
             return copied_arguments
         elif self.is_clang_compiler():
-            return self.copy().add_arg("-target").add_arg(target)
+            return self.copy().add_arg(f"--target={target}")
 
         raise UnsupportedCompilerError(
             f"The compiler '{self.compiler}' is not supported together with a compilation target."

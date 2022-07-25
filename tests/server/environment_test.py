@@ -40,7 +40,7 @@ class TestServerEnvironment:
             "/opt/src/absolute.cpp",
         ]
         environment = create_mock_environment("/client1", "/client1/test/xyz")
-        mapped_args = list(environment.map_args(args))
+        mapped_args = list(environment.map_args(Arguments.from_args(args)))
 
         assert mapped_args.pop(0) == "gcc"
         assert mapped_args.pop(0) == f"-I{environment.mapped_cwd}/relative_path/relative.h"
@@ -72,7 +72,7 @@ class TestServerEnvironment:
         ]
 
         environment = create_mock_environment("/client1", "/client1/test/xyz")
-        mapped_args = list(environment.map_args(args))
+        mapped_args = list(environment.map_args(Arguments.from_args(args)))
 
         assert mapped_args.pop(0) == "gcc"
         assert mapped_args.pop(0) == "-BsomeOtherArgument"

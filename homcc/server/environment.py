@@ -4,13 +4,12 @@ import uuid
 import os
 import shutil
 import logging
-import subprocess
 from pathlib import Path
 from typing import Dict, List, Optional
 
 from homcc.common.arguments import Arguments, ArgumentsExecutionResult
 from homcc.common.compression import Compression
-from homcc.common.errors import TargetsRetrievalError, UnsupportedCompilerError
+from homcc.common.errors import TargetsRetrievalError
 from homcc.common.messages import CompilationResultMessage, ObjectFile
 from homcc.server.cache import Cache
 
@@ -134,26 +133,13 @@ class Environment:
         if arguments.is_gcc_compiler():
             return shutil.which(f"{target}-{arguments.compiler}") is not None
         elif arguments.is_clang_compiler():
-            clang_arguments = Arguments(arguments.compiler, ["-print-targets"])
+            # For clang, we can not really check if it supports the target prior to compiling:
+            # '$ clang print-targets' does not output the same triple format as we get from
+            # '$ clang --version', so we can not properly check if a target is supported.
+            # Therefore, we just try to compile and assume clang can handle the target.
+            return True
 
-            try:
-                result = clang_arguments.execute(check=True)
-            except subprocess.CalledProcessError as err:
-                logger.error("Could not get supported clang targets.")
-                raise TargetsRetrievalError from err
-
-            # for clang, we can only figure out if the first part (architecture) of the target triple
-            # is supported through 'clang -print-targets'
-            if "-" in target:
-                # e.g "x86_64-pc-linux-gnu"
-                arch = target.split("-")[0]
-            else:
-                # e.g. "x86_64"
-                arch = target
-
-            return arch in result.stdout
-
-        raise UnsupportedCompilerError(
+        raise TargetsRetrievalError(
             f"Retrieving available targets from compiler '{arguments.compiler}' is not implemented."
         )
 

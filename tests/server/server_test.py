@@ -48,7 +48,7 @@ class TestServerReceive:
             arguments = ["-a", "-b", "--help"]
             cwd = "/home/o.layer/test"
             dependencies = {"server.c": "1239012890312903", "server.h": "testsha1"}
-            self.messages.append(ArgumentMessage(arguments, cwd, dependencies, None, None, NoCompression()))
+            self.messages.append(ArgumentMessage(arguments, cwd, dependencies, None, None, None, NoCompression()))
 
             self.messages.append(DependencyRequestMessage("asd123"))
 
