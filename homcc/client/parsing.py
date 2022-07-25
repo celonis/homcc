@@ -8,14 +8,15 @@ import sys
 
 from abc import ABC, abstractmethod
 from argparse import ArgumentParser, Action, RawTextHelpFormatter
+from configparser import Error, SectionProxy
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union
 
+from homcc import client
 from homcc.common.arguments import Arguments
 from homcc.common.compression import Compression
-from configparser import ConfigParser, Error, SectionProxy
 from homcc.common.logging import LogLevel
 from homcc.common.parsing import HOMCC_CONFIG_FILENAME, default_locations, parse_configs
 from homcc.common.errors import HostParsingError, NoHostsFoundError
@@ -59,7 +60,7 @@ class ShowVersion(ShowAndExitAction):
     """show version and exit"""
 
     def __call__(self, *_):
-        print("homcc 0.0.1")
+        print(f"homcc {client.__version__}")
         sys.exit(os.EX_OK)
 
 
@@ -68,7 +69,7 @@ class ShowHosts(ShowAndExitAction):
 
     def __call__(self, *_):
         try:
-            hosts: List[str] = load_hosts()
+            _, hosts = load_hosts()
 
         except NoHostsFoundError:
             print("Failed to get hosts list")
@@ -85,7 +86,7 @@ class ShowConcurrencyLevel(ShowAndExitAction):
 
     def __call__(self, *_):
         try:
-            hosts: List[str] = load_hosts()
+            _, hosts = load_hosts()
 
         except NoHostsFoundError:
             print("Failed to get hosts list")
@@ -158,6 +159,7 @@ class Host:
 class ClientConfig:
     """Class to encapsulate and default client configuration information"""
 
+    files: List[str]
     compiler: str
     compression: Compression
     schroot_profile: Optional[str]
@@ -169,6 +171,7 @@ class ClientConfig:
     def __init__(
         self,
         *,
+        files: List[str],
         compiler: Optional[str] = None,
         compression: Optional[str] = None,
         schroot_profile: Optional[str] = None,
@@ -177,6 +180,7 @@ class ClientConfig:
         log_level: Optional[str] = None,
         verbose: Optional[bool] = None,
     ):
+        self.files = files
         self.compiler = compiler or Arguments.DEFAULT_COMPILER
         self.compression = Compression.from_name(compression)
         self.schroot_profile = schroot_profile
@@ -186,7 +190,7 @@ class ClientConfig:
         self.verbose = verbose is not None and verbose
 
     @classmethod
-    def from_config_section(cls, homcc_config: SectionProxy) -> ClientConfig:
+    def from_config_section(cls, files: List[str], homcc_config: SectionProxy) -> ClientConfig:
         compiler: Optional[str] = homcc_config.get("compiler")
         compression: Optional[str] = homcc_config.get("compression")
         schroot_profile: Optional[str] = homcc_config.get("schroot_profile")
@@ -196,6 +200,7 @@ class ClientConfig:
         verbose: Optional[bool] = homcc_config.getboolean("verbose")
 
         return ClientConfig(
+            files=files,
             compiler=compiler,
             compression=compression,
             schroot_profile=schroot_profile,
@@ -204,6 +209,24 @@ class ClientConfig:
             log_level=log_level,
             verbose=verbose,
         )
+
+    def __str__(self):
+        return (
+            f'Configuration (from [{", ".join(self.files)}]):\n'
+            f"\tCompiler:\t{self.compiler}\n"
+            f"\tCompression:\t{self.compression}\n"
+            f"\tProfile:\t{self.profile}\n"
+            f"\tTimeout:\t{self.timeout}s\n"
+            f"\tLog-Level:\t{self.log_level.name}\n"
+            f"\tVerbosity:\t{str(self.verbose)}\n"
+        )
+
+    def set_verbose(self):
+        self.log_level = LogLevel.DEBUG
+        self.verbose = True
+
+    def set_debug(self):
+        self.log_level = LogLevel.DEBUG
 
 
 def parse_cli_args(args: List[str]) -> Tuple[Dict[str, Any], Arguments]:
@@ -376,9 +399,9 @@ def parse_host(host: str) -> Host:
     return Host(type=connection_type, name=host, **host_dict)
 
 
-def load_hosts(hosts_file_locations: Optional[List[Path]] = None) -> List[str]:
+def load_hosts(hosts_file_locations: Optional[List[Path]] = None) -> Tuple[str, List[str]]:
     """
-    Load homcc hosts from one of the following options:
+    Get homcc hosts by returning the source and unparsed strings from one of the following options:
     - Environment Variable: $HOMCC_HOSTS
     - Hosts files defined via parameter hosts_file_locations
     - Hosts files defined at default hosts file locations
@@ -400,7 +423,7 @@ def load_hosts(hosts_file_locations: Optional[List[Path]] = None) -> List[str]:
     # $HOMCC_HOSTS
     homcc_hosts_env_var = os.getenv(HOMCC_HOSTS_ENV_VAR)
     if homcc_hosts_env_var:
-        return filtered_lines(homcc_hosts_env_var)
+        return HOMCC_HOSTS_ENV_VAR, filtered_lines(homcc_hosts_env_var)
 
     # HOSTS Files
     if not hosts_file_locations:
@@ -411,19 +434,19 @@ def load_hosts(hosts_file_locations: Optional[List[Path]] = None) -> List[str]:
             if hosts_file_location.stat().st_size == 0:
                 logger.warning('Skipping empty hosts file "%s"!', hosts_file_location)
                 continue
-            return filtered_lines(hosts_file_location.read_text(encoding="utf-8"))
+            return str(hosts_file_location), filtered_lines(hosts_file_location.read_text(encoding="utf-8"))
 
     raise NoHostsFoundError("No hosts information were found!")
 
 
 def parse_config(filenames: List[Path] = None) -> ClientConfig:
     try:
-        cfg: ConfigParser = parse_configs(filenames or default_locations(HOMCC_CONFIG_FILENAME))
+        files, cfg = parse_configs(filenames or default_locations(HOMCC_CONFIG_FILENAME))
     except Error as err:
         print(f"{err}; using default configuration instead")
-        return ClientConfig()
+        return ClientConfig(files=[])
 
     if HOMCC_CLIENT_CONFIG_SECTION not in cfg.sections():
-        return ClientConfig()
+        return ClientConfig(files=files)
 
-    return ClientConfig.from_config_section(cfg[HOMCC_CLIENT_CONFIG_SECTION])
+    return ClientConfig.from_config_section(files, cfg[HOMCC_CLIENT_CONFIG_SECTION])

@@ -6,14 +6,14 @@ import os
 import sys
 
 from argparse import Action, ArgumentParser, ArgumentTypeError, RawTextHelpFormatter
-from configparser import ConfigParser, SectionProxy
+from configparser import ConfigParser, Error, SectionProxy
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 
+from homcc import server
 from homcc.common.logging import LogLevel
 from homcc.common.parsing import HOMCC_CONFIG_FILENAME, default_locations, parse_configs
-from homcc.server.server import TCPServer
 
 logger = logging.getLogger(__name__)
 
@@ -21,6 +21,14 @@ HOMCC_SERVER_CONFIG_SECTION: str = "homccd"
 ETC_SCHROOT_DIR: str = "/etc/schroot/"
 SCHROOT_CONF_FILENAME: str = "schroot.conf"
 CHROOT_D_SUB_DIR: str = "chroot.d/"
+
+DEFAULT_ADDRESS: str = "0.0.0.0"
+DEFAULT_PORT: int = 3633
+DEFAULT_LIMIT: int = (
+    len(os.sched_getaffinity(0))  # number of available CPUs for this process
+    or os.cpu_count()  # total number of physical CPUs on the machine
+    or -1  # fallback error value
+)
 
 
 class ShowVersion(Action):
@@ -30,7 +38,7 @@ class ShowVersion(Action):
         super().__init__(nargs=0, help=self.__doc__, **kwargs)
 
     def __call__(self, *_):
-        print("homccd 0.0.1")
+        print(f"homccd {server.__version__}")
         sys.exit(os.EX_OK)
 
 
@@ -56,6 +64,7 @@ class ShowProfiles(Action):
 class ServerConfig:
     """Class to encapsulate and default client configuration information"""
 
+    files: List[str]
     address: Optional[str]
     port: Optional[int]
     limit: Optional[int]
@@ -65,12 +74,14 @@ class ServerConfig:
     def __init__(
         self,
         *,
+        files: List[str],
         limit: Optional[int] = None,
         port: Optional[int] = None,
         address: Optional[str] = None,
         log_level: Optional[str] = None,
         verbose: Optional[bool] = None,
     ):
+        self.files = files
         self.limit = limit
         self.port = port
         self.address = address
@@ -78,14 +89,24 @@ class ServerConfig:
         self.verbose = verbose is not None and verbose
 
     @classmethod
-    def from_config_section(cls, homccd_config: SectionProxy) -> ServerConfig:
+    def from_config_section(cls, files: List[str], homccd_config: SectionProxy) -> ServerConfig:
         limit: Optional[int] = homccd_config.getint("limit")
         port: Optional[int] = homccd_config.getint("port")
         address: Optional[str] = homccd_config.get("address")
         log_level: Optional[str] = homccd_config.get("log_level")
         verbose: Optional[bool] = homccd_config.getboolean("verbose")
 
-        return ServerConfig(limit=limit, port=port, address=address, log_level=log_level, verbose=verbose)
+        return ServerConfig(files=files, limit=limit, port=port, address=address, log_level=log_level, verbose=verbose)
+
+    def __str__(self):
+        return (
+            f'Configuration (from [{", ".join(self.files)}]):\n'
+            f"\tLimit:\t{self.limit}\n"
+            f"\tPort:\t{self.port}\n"
+            f"\tAddress:\t{self.address}\n"
+            f"\tLog-Level:\t{self.log_level}\n"
+            f"\tVerbosity:\t{str(self.verbose)}\n"
+        )
 
 
 def parse_cli_args(args: List[str]) -> Dict[str, Any]:
@@ -121,7 +142,7 @@ def parse_cli_args(args: List[str]) -> Dict[str, Any]:
         required=False,
         metavar="LIMIT",
         type=min_job_limit,
-        help=f"maximum LIMIT of concurrent compilation jobs, might default to {TCPServer.DEFAULT_LIMIT + 2} as "
+        help=f"maximum LIMIT of concurrent compilation jobs, might default to {DEFAULT_LIMIT + 2} as "
         "determined via the CPU count",
     )
 
@@ -130,7 +151,7 @@ def parse_cli_args(args: List[str]) -> Dict[str, Any]:
         "--port",
         required=False,
         type=int,
-        help=f"TCP PORT to listen on, defaults to {TCPServer.DEFAULT_PORT}",
+        help=f"TCP PORT to listen on, defaults to {DEFAULT_PORT}",
     )
 
     networking_group.add_argument(
@@ -138,7 +159,7 @@ def parse_cli_args(args: List[str]) -> Dict[str, Any]:
         required=False,
         metavar="ADDRESS",
         type=str,
-        help=f"IP ADDRESS to listen on, defaults to {TCPServer.DEFAULT_ADDRESS}",
+        help=f"IP ADDRESS to listen on, defaults to {DEFAULT_ADDRESS}",
     )
 
     # debug
@@ -161,12 +182,16 @@ def parse_cli_args(args: List[str]) -> Dict[str, Any]:
 
 
 def parse_config(filenames: List[Path] = None) -> ServerConfig:
-    cfg: ConfigParser = parse_configs(filenames or default_locations(HOMCC_CONFIG_FILENAME))
+    try:
+        files, cfg = parse_configs(filenames or default_locations(HOMCC_CONFIG_FILENAME))
+    except Error as err:
+        print(f"{err}; using default configuration instead")
+        return ServerConfig(files=[])
 
     if HOMCC_SERVER_CONFIG_SECTION not in cfg.sections():
-        return ServerConfig()
+        return ServerConfig(files=files)
 
-    return ServerConfig.from_config_section(cfg[HOMCC_SERVER_CONFIG_SECTION])
+    return ServerConfig.from_config_section(files, cfg[HOMCC_SERVER_CONFIG_SECTION])
 
 
 def default_schroot_locations() -> List[Path]:

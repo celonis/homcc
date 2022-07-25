@@ -7,7 +7,7 @@ import logging
 import os
 import sys
 
-from typing import List
+from typing import List, Optional
 
 sys.path.append(os.path.join(os.path.dirname(__file__), "../.."))
 
@@ -40,8 +40,23 @@ from homcc.common.logging import (  # pylint: disable=wrong-import-position
 
 logger: logging.Logger = logging.getLogger(__name__)
 
+HOMCC_SAFEGUARD_ENV_VAR: str = "_HOMCC_SAFEGUARD"
+
+
+def is_recursively_invoked() -> bool:
+    """Check whether homcc was called recursively by checking the existence of a safeguard environment variable"""
+
+    is_safeguard_active: bool = HOMCC_SAFEGUARD_ENV_VAR in os.environ
+    os.environ[HOMCC_SAFEGUARD_ENV_VAR] = "1"  # activate safeguard
+    return is_safeguard_active
+
 
 def main():
+    # cancel execution if recursive call is detected
+    if is_recursively_invoked():
+        print(f"{sys.argv[0]} seems to have been invoked recursively!", file=sys.stderr)
+        raise SystemExit(os.EX_USAGE)
+
     # load and parse arguments and configuration information
     homcc_args_dict, compiler_arguments = parse_cli_args(sys.argv[1:])
     homcc_config: ClientConfig = parse_config()
@@ -55,25 +70,26 @@ def main():
     log_level: str = homcc_args_dict["log_level"]
 
     # verbosity implies debug mode
-    if (
-        homcc_args_dict["verbose"]
-        or homcc_config.verbose
-        or log_level == "DEBUG"
-        or homcc_config.log_level == LogLevel.DEBUG
-    ):
-        logging_config.config |= FormatterConfig.DETAILED
-        logging_config.level = logging.DEBUG
+    if homcc_args_dict["verbose"] or homcc_config.verbose:
+        logging_config.set_verbose()
+        homcc_config.set_verbose()
+    elif log_level == "DEBUG" or homcc_config.log_level == LogLevel.DEBUG:
+        logging_config.set_debug()
+        homcc_config.set_debug()
 
     # overwrite verbose debug logging level
     if log_level is not None:
         logging_config.level = LogLevel[log_level].value
+        homcc_config.log_level = LogLevel[log_level]
     elif homcc_config.log_level is not None:
         logging_config.level = int(homcc_config.log_level)
 
     setup_logging(logging_config)
 
     # COMPILER; default: "cc"
-    if compiler_arguments.compiler is None:
+    if (compiler := compiler_arguments.compiler) is not None:
+        homcc_config.compiler = compiler
+    else:
         compiler_arguments.compiler = homcc_config.compiler
 
     # SCAN-INCLUDES; and exit
@@ -85,14 +101,16 @@ def main():
 
     # HOST; get singular host from cli parameter or load hosts from $HOMCC_HOSTS env var or hosts file
     hosts: List[Host] = []
+    hosts_file: Optional[str] = None
     localhost: Host = DEFAULT_LOCALHOST
 
     if (host_str := homcc_args_dict["host"]) is not None:
         hosts = [Host.from_str(host_str)]
     else:
+        hosts_file, hosts_str = load_hosts()
         has_local: bool = False
 
-        for host_str in load_hosts():
+        for host_str in hosts_str:
             try:
                 host: Host = Host.from_str(host_str)
             except HostParsingError as error:
@@ -137,6 +155,20 @@ def main():
     # TIMEOUT
     if (timeout := homcc_args_dict["timeout"]) is not None:
         homcc_config.timeout = timeout
+
+    # provide additional DEBUG information
+    logger.debug(
+        "%s - %s\n"  # homcc location and version
+        "Caller:\t%s\n"  # homcc caller
+        "%s"  # config info
+        "Hosts (from [%s]):\n\t%s",  # hosts info
+        sys.argv[0],
+        "0.0.1",
+        sys.executable,
+        homcc_config,
+        hosts_file or f"--host={host_str}",
+        "\n\t".join(str(host) for host in hosts),
+    )
 
     # force local compilation on specific conditions
     if compiler_arguments.is_linking_only():  # TODO(s.pirsch): this should probably be removed!

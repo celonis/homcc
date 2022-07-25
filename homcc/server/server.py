@@ -12,8 +12,9 @@ from socket import SHUT_RD
 from tempfile import TemporaryDirectory
 from threading import Lock
 from typing import Dict, List, Optional, Tuple
-from homcc.common.errors import ServerInitializationError, TargetsRetrievalError
 
+from homcc.common.errors import ServerInitializationError, TargetsRetrievalError
+from homcc.common.arguments import Arguments
 from homcc.common.hashing import hash_file_with_bytes
 from homcc.common.messages import (
     ArgumentMessage,
@@ -24,11 +25,10 @@ from homcc.common.messages import (
     CompilationResultMessage,
 )
 
-from homcc.server.environment import Environment, create_root_temp_folder
-
-from homcc.common.arguments import Arguments
-
 from homcc.server.cache import Cache
+from homcc.server.environment import Environment, create_root_temp_folder
+from homcc.server.parsing import DEFAULT_ADDRESS, DEFAULT_LIMIT, DEFAULT_PORT, ServerConfig
+
 
 from homcc.server.docker import is_valid_docker_container, is_docker_available
 
@@ -38,24 +38,16 @@ logger = logging.getLogger(__name__)
 class TCPServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
     """TCP Server instance, holding data relevant across compilations."""
 
-    DEFAULT_ADDRESS: str = "0.0.0.0"
-    DEFAULT_PORT: int = 3633
-    DEFAULT_LIMIT: int = (
-        len(os.sched_getaffinity(0))  # number of available CPUs for this process
-        or os.cpu_count()  # total number of physical CPUs on the machine
-        or -1  # fallback error value
-    )
-
     def __init__(self, address: Optional[str], port: Optional[int], limit: Optional[int], schroot_profiles: List[str]):
-        address = address or self.DEFAULT_ADDRESS
-        port = port or self.DEFAULT_PORT
+        address = address or DEFAULT_ADDRESS
+        port = port or DEFAULT_PORT
 
         super().__init__((address, port), TCPRequestHandler)
 
         # default 1 job per (available) CPU, +2 to enable more concurrency while waiting for disk or network IO
-        self.connections_limit: int = limit or (self.DEFAULT_LIMIT + 2)
+        self.connections_limit: int = limit or (DEFAULT_LIMIT + 2)
 
-        if self.DEFAULT_LIMIT == -1:
+        if DEFAULT_LIMIT == -1:
             logger.error(
                 "A meaningful CPU count could not be determined and the maximum job limit is set to %i.\n"
                 "Please provide the job limit explicitly either via the CLI or the configuration file!",
@@ -454,11 +446,9 @@ class TCPRequestHandler(socketserver.BaseRequestHandler):
                 self.server.current_amount_connections -= 1
 
 
-def start_server(
-    address: Optional[str], port: Optional[int], limit: Optional[int], schroot_profiles: List[str]
-) -> Tuple[TCPServer, threading.Thread]:
+def start_server(config: ServerConfig, schroot_profiles: List[str]) -> Tuple[TCPServer, threading.Thread]:
     try:
-        server: TCPServer = TCPServer(address, port, limit, schroot_profiles)
+        server: TCPServer = TCPServer(config.address, config.port, config.limit, schroot_profiles)
     except OSError as err:
         logger.error("Could not start TCP server: %s", err)
         raise ServerInitializationError from err
