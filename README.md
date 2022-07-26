@@ -18,7 +18,7 @@ Although `HOMCC` is still in an early stage of development, we can already see i
 The main solution to enable faster compilation times for thinner connections is the compression and `server`-side caching of dependencies.
 Due to caching, only missing dependencies are requested from `client`s which drastically decreases the overall network traffic once the cache is warmed up.
 Transmitted files like the requested dependencies and also the resulting object files are compressed to further improve build times.
-Additionally, `HOMCC` provides sandboxed compiler execution for remote compilations (via `schroot`).
+Additionally, `HOMCC` provides sandboxed compiler execution for remote compilations via `schroot` and `docker`.
 
 ---
 
@@ -108,6 +108,11 @@ Additionally, `HOMCC` provides sandboxed compiler execution for remote compilati
     </pre></sub></td>
     </tr>
   </table>
+- \[Optional] Sandboxed execution via either `schroot` or `docker` can be enabled by specifying their respective environmental variables `HOMCC_SCHROOT_PROFILE`and `HOMCC_DOCKER_CONTAINER`, e.g.:
+  ```sh
+  $ HOMCC_SCHROOT_PROFILE=jammy homcc g++ foo.cpp
+  ```
+  Utilizable profile and container names need to be provided by the administrator of the relevant host server.
 
 
 ### Server: `homccd` 

@@ -248,9 +248,10 @@ class TestEndToEnd:
         Path("foo.o").unlink(missing_ok=True)
         Path(self.OUTPUT).unlink(missing_ok=True)
 
+    # client failures
     @pytest.mark.timeout(TIMEOUT)
-    def test_end_to_end_recursive_client(self, unused_tcp_port: int):
-        try:
+    def test_end_to_end_client_recursive(self, unused_tcp_port: int):
+        with pytest.raises(subprocess.CalledProcessError) as err:
             subprocess.run(  # client receiving itself as compiler arg
                 self.BasicClientArguments("./homcc/client/main.py", unused_tcp_port).to_list(),
                 check=True,
@@ -258,8 +259,24 @@ class TestEndToEnd:
                 stderr=subprocess.STDOUT,
                 encoding="utf-8",
             )
-        except subprocess.CalledProcessError as err:
-            assert "seems to have been invoked recursively!" in err.stdout
+
+        assert err.value.returncode == os.EX_USAGE
+        assert "seems to have been invoked recursively!" in err.value.stdout
+
+    @pytest.mark.timeout(TIMEOUT)
+    def test_end_to_end_client_multiple_sandbox(self, unused_tcp_port: int):
+        with pytest.raises(subprocess.CalledProcessError) as err:
+            subprocess.run(  # client receiving multiple sandbox options
+                self.BasicClientArguments("g++", unused_tcp_port, schroot_profile="foo").to_list(),
+                check=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                encoding="utf-8",
+                env={"HOMCC_DOCKER_CONTAINER": "bar"},
+            )
+
+        assert err.value.returncode == os.EX_USAGE
+        assert "Can not specify a schroot profile and a docker container to be used simultaneously." in err.value.stdout
 
     # g++ tests
     @pytest.mark.gplusplus
