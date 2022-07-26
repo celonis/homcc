@@ -121,7 +121,7 @@ class TCPRequestHandler(socketserver.BaseRequestHandler):
     """Shuffled list of keys for the needed dependencies dict."""
     compiler_arguments: Arguments
     """List of compiler arguments."""
-    instance_path: str = ""
+    instance_path: str
     """Path to the current compilation inside /tmp/."""
     mapped_cwd: str
     """Absolute path to the working directory."""
@@ -163,6 +163,7 @@ class TCPRequestHandler(socketserver.BaseRequestHandler):
 
         if target is not None:
             self.compiler_arguments.add_target(target)
+            logger.info("Added target '%s' to compiler arguments.", target)
 
         self.compiler_arguments = self.environment.map_args(self.compiler_arguments)
         logger.debug("Mapped compiler args: %s", str(self.compiler_arguments))

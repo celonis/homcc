@@ -9,13 +9,13 @@ class TestCompiler:
     """Tests the compiler class of homcc."""
 
     def test_from_str(self):
-        assert type(Compiler.from_str("gcc")) == Gcc
-        assert type(Compiler.from_str("gcc-11")) == Gcc
-        assert type(Compiler.from_str("g++")) == Gcc
-        assert type(Compiler.from_str("g++-11")) == Gcc
+        assert isinstance(Compiler.from_str("gcc"), Gcc)
+        assert isinstance(Compiler.from_str("gcc-11"), Gcc)
+        assert isinstance(Compiler.from_str("g++"), Gcc)
+        assert isinstance(Compiler.from_str("g++-11"), Gcc)
 
-        assert type(Compiler.from_str("clang++")) == Clang
-        assert type(Compiler.from_str("clang++-11")) == Clang
+        assert isinstance(Compiler.from_str("clang++"), Clang)
+        assert isinstance(Compiler.from_str("clang++-11"), Clang)
 
         with pytest.raises(UnsupportedCompilerError):
             Compiler.from_str("unknown++")
