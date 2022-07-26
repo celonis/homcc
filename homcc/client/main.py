@@ -11,6 +11,7 @@ from typing import List, Optional
 
 sys.path.append(os.path.join(os.path.dirname(__file__), "../.."))
 
+from homcc import client  # pylint: disable=wrong-import-position
 from homcc.client.compilation import (  # pylint: disable=wrong-import-position
     DEFAULT_LOCALHOST,
     compile_locally,
@@ -163,7 +164,7 @@ def main():
         "%s"  # config info
         "Hosts (from [%s]):\n\t%s",  # hosts info
         sys.argv[0],
-        "0.0.1",
+        client.__version__,
         sys.executable,
         homcc_config,
         hosts_file or f"--host={host_str}",

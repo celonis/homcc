@@ -9,6 +9,7 @@ from typing import Any, Dict, List
 
 sys.path.append(os.path.join(os.path.dirname(__file__), "../.."))
 
+from homcc import server  # pylint: disable=wrong-import-position
 from homcc.common.logging import (  # pylint: disable=wrong-import-position
     Formatter,
     FormatterConfig,
@@ -84,20 +85,20 @@ def main():
     logger.debug(
         "%s - %s\n" "Caller:\t%s\n" "%s",  # homccd location and version; homccd caller; config info
         sys.argv[0],
-        "0.0.1",
+        server.__version__,
         sys.executable,
         homccd_config,
     )
 
     # start server
     try:
-        server, server_thread = start_server(homccd_config, schroot_profiles=schroot_profiles)
+        tcp_server, server_thread = start_server(homccd_config, schroot_profiles=schroot_profiles)
     except ServerInitializationError:
         logger.error("Could not start homccd, terminating.")
         sys.exit(os.EX_OSERR)
 
     def signal_handler(*_):
-        stop_server(server)
+        stop_server(tcp_server)
 
     signal.signal(signal.SIGINT, signal_handler)
     server_thread.join()
