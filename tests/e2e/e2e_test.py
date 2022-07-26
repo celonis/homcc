@@ -56,7 +56,7 @@ class TestEndToEnd:
             return [
                 "./homcc/client/main.py",
                 "--no-config",  # disable external configuration
-                "--verbose",  # required to assert on stdout
+                "--verbose",  # required for assertions on stdout
                 host_arg,
                 sandbox_arg,
                 self.compiler,
@@ -85,12 +85,13 @@ class TestEndToEnd:
         def __init__(self, unused_tcp_port: int):
             self.unused_tcp_port: int = unused_tcp_port
             self.process: subprocess.Popen = subprocess.Popen(  # pylint: disable=consider-using-with
-                [  # specify all relevant args explicitly so that config files may not disturb e2e tests
+                [
                     "./homcc/server/main.py",
+                    "--no-config",  # disable external configuration
+                    "--verbose",  # required for assertions on stdout
                     f"--listen={TestEndToEnd.ADDRESS}",
                     f"--port={unused_tcp_port}",
                     "--jobs=1",
-                    "--verbose",
                 ],
                 bufsize=TestEndToEnd.BUF_SIZE,
                 encoding="utf-8",

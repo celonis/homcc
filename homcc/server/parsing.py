@@ -89,6 +89,10 @@ class ServerConfig:
         self.verbose = verbose is not None and verbose
 
     @classmethod
+    def empty(cls):
+        return cls(files=[])
+
+    @classmethod
     def from_config_section(cls, files: List[str], homccd_config: SectionProxy) -> ServerConfig:
         limit: Optional[int] = homccd_config.getint("limit")
         port: Optional[int] = homccd_config.getint("port")
@@ -144,6 +148,11 @@ def parse_cli_args(args: List[str]) -> Dict[str, Any]:
         type=min_job_limit,
         help=f"maximum LIMIT of concurrent compilation jobs, might default to {DEFAULT_LIMIT + 2} as "
         "determined via the CPU count",
+    )
+    general_options_group.add_argument(
+        "--no-config",
+        action="store_true",
+        help="enforce that only configurations provided via the CLI are used",
     )
 
     # networking
