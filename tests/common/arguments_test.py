@@ -269,3 +269,8 @@ class TestArguments:
 
         args = ["g++", "-Iinclude", "foo.cpp"]
         assert not Arguments.from_args(args).has_debug_symbols()
+
+    def test_compiler_normalized(self):
+        assert Arguments.from_args(["gcc", "foo"]).compiler_normalized() == "gcc"
+        assert Arguments.from_args(["/usr/bin/gcc", "foo"]).compiler_normalized() == "gcc"
+        assert Arguments.from_args(["~/bin/g++", "foo"]).compiler_normalized() == "g++"

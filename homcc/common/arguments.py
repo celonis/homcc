@@ -316,6 +316,13 @@ class Arguments:
     def compiler(self, compiler: str):
         self._compiler = compiler
 
+    def compiler_normalized(self) -> Optional[str]:
+        """normalize the compiler (remove path, keep just executable if a path is provided as compiler)"""
+        if self.compiler is None:
+            return None
+
+        return Path(self.compiler).name
+
     def compiler_object(self):
         """if present, return a new specified compiler object"""
         # avoid circular import
@@ -324,7 +331,7 @@ class Arguments:
         if self.compiler is None:
             return None
 
-        return Compiler.from_str(self.compiler)
+        return Compiler.from_str(self.compiler_normalized())
 
     @cached_property
     def output(self) -> Optional[str]:
