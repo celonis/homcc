@@ -36,35 +36,26 @@ class TestEndToEnd:
 
         compiler: str
         tcp_port: int
-        compression: Optional[Compression] = NoCompression()
+        compression: Compression = NoCompression()
         schroot_profile: Optional[str] = None
         docker_container: Optional[str] = None
 
         def to_list(self) -> List[str]:
-            compression_arg = (
-                ""
-                if self.compression is None or isinstance(self.compression, NoCompression)
-                else f",{self.compression}"
+            compression_str = (
+                f",{self.compression}" if self.compression is not isinstance(self.compression, NoCompression) else ""
             )
+            host_arg = f"--host={TestEndToEnd.ADDRESS}:{self.tcp_port}/1{compression_str}"
 
-            schroot_arg = (
-                "--no-schroot-profile" if self.schroot_profile is None else f"--schroot-profile={self.schroot_profile}"
-            )
+            schroot_arg = f"--schroot-profile={self.schroot_profile}" if self.schroot_profile is not None else ""
+            docker_arg = f"--docker-container={self.docker_container}" if self.docker_container is not None else ""
 
-            docker_arg = (
-                "--no-docker-container"
-                if self.docker_container is None
-                else f"--docker-container={self.docker_container}"
-            )
-
-            return [  # specify all relevant args explicitly so that config files may not disturb e2e tests
+            return [
                 "./homcc/client/main.py",
-                "--log-level=DEBUG",
-                "--verbose",
-                f"--host={TestEndToEnd.ADDRESS}:{self.tcp_port}/1{compression_arg}",
+                "--no-config",  # disable external configuration
+                "--verbose",  # required to assert on stdout
+                host_arg,
                 schroot_arg,
                 docker_arg,
-                "--timeout=20",
                 self.compiler,
             ]
 
