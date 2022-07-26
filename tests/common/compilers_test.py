@@ -13,9 +13,11 @@ class TestCompiler:
         assert isinstance(Compiler.from_str("gcc-11"), Gcc)
         assert isinstance(Compiler.from_str("g++"), Gcc)
         assert isinstance(Compiler.from_str("g++-11"), Gcc)
+        assert isinstance(Compiler.from_str("/usr/lib/ccache/gcc-11"), Gcc)
 
         assert isinstance(Compiler.from_str("clang++"), Clang)
         assert isinstance(Compiler.from_str("clang++-11"), Clang)
+        assert isinstance(Compiler.from_str("/usr/lib/ccache/clang-14"), Clang)
 
         with pytest.raises(UnsupportedCompilerError):
             Compiler.from_str("unknown++")

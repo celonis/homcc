@@ -60,7 +60,7 @@ class Clang(Compiler):
 
     @staticmethod
     def is_matching_str(compiler_str: str) -> bool:
-        return compiler_str.startswith("clang")
+        return "clang" in compiler_str
 
     def supports_target(self, target: str) -> bool:
         """For clang, we can not really check if it supports the target prior to compiling:
@@ -99,7 +99,7 @@ class Gcc(Compiler):
 
     @staticmethod
     def is_matching_str(compiler_str: str) -> bool:
-        return compiler_str.startswith("gcc") or compiler_str.startswith("g++")
+        return "gcc" in compiler_str or "g++" in compiler_str
 
     def supports_target(self, target: str) -> bool:
         return shutil.which(f"{target}-{self.compiler_str}") is not None
