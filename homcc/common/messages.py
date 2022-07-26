@@ -158,6 +158,7 @@ class ArgumentMessage(Message):
         - dependencies (keys: file paths, values: SHA1 hash),
         - compilation target triple (e.g. x86_64-pc-linux-gnu),
         - schroot environment profile name,
+        - docker container name,
         - compression algorithm
     """
 
