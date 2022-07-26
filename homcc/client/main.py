@@ -61,7 +61,7 @@ def main():
     homcc_args_dict, compiler_arguments = parse_cli_args(sys.argv[1:])
 
     # prevent config loading and parsing if --no-config was specified
-    homcc_config: ClientConfig = ClientConfig(files=[]) if homcc_args_dict["no_config"] else parse_config()
+    homcc_config: ClientConfig = ClientConfig.empty() if homcc_args_dict["no_config"] else parse_config()
     logging_config: LoggingConfig = LoggingConfig(
         config=FormatterConfig.COLORED,
         formatter=Formatter.CLIENT,
@@ -133,20 +133,15 @@ def main():
         if not has_local:
             hosts.append(localhost)
 
-    # SCHROOT_PROFILE
-    if (schroot_profile := homcc_args_dict["schroot_profile"]) is not None:
+    # SCHROOT_PROFILE; DOCKER_CONTAINER; if --no-sandbox is specified do not use
+    # any specified schroot profiles from cli or config file
+    if homcc_args_dict["no_sandbox"]:
+        homcc_config.schroot_profile = None
+        homcc_config.docker_container = None
+    elif (schroot_profile := homcc_args_dict["schroot_profile"]) is not None:
         homcc_config.schroot_profile = schroot_profile
-
-    # DOCKER_CONTAINER
-    if (docker_container := homcc_args_dict["docker_container"]) is not None:
+    elif (docker_container := homcc_args_dict["docker_container"]) is not None:
         homcc_config.docker_container = docker_container
-
-    if homcc_config.schroot_profile is not None and homcc_config.docker_container is not None:
-        logger.error(
-            "Can not specify a schroot profile and a docker container to use simultaneously."
-            "Please specify only one of these options."
-        )
-        sys.exit(os.EX_USAGE)
 
     # TIMEOUT
     if (timeout := homcc_args_dict["timeout"]) is not None:

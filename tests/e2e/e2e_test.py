@@ -41,21 +41,24 @@ class TestEndToEnd:
         docker_container: Optional[str] = None
 
         def to_list(self) -> List[str]:
-            compression_str = (
+            compression = (
                 f",{self.compression}" if self.compression is not isinstance(self.compression, NoCompression) else ""
             )
-            host_arg = f"--host={TestEndToEnd.ADDRESS}:{self.tcp_port}/1{compression_str}"
+            host_arg = f"--host={TestEndToEnd.ADDRESS}:{self.tcp_port}/1{compression}"
 
-            schroot_arg = f"--schroot-profile={self.schroot_profile}" if self.schroot_profile is not None else ""
-            docker_arg = f"--docker-container={self.docker_container}" if self.docker_container is not None else ""
+            sandbox_arg: str = "--no-sandbox"
+
+            if self.schroot_profile is not None:
+                sandbox_arg = f"--schroot-profile={self.schroot_profile}"
+            elif self.docker_container is not None:
+                sandbox_arg = f"--docker-container={self.docker_container}"
 
             return [
                 "./homcc/client/main.py",
                 "--no-config",  # disable external configuration
                 "--verbose",  # required to assert on stdout
                 host_arg,
-                schroot_arg,
-                docker_arg,
+                sandbox_arg,
                 self.compiler,
             ]
 
@@ -315,32 +318,6 @@ class TestEndToEnd:
     def test_end_to_end_gplusplus_shared_host_slot(self, unused_tcp_port: int):
         self.cpp_end_to_end_multiple_clients_shared_host(self.BasicClientArguments("g++", unused_tcp_port))
 
-    # clang++ tests
-    @pytest.mark.clangplusplus
-    @pytest.mark.timeout(TIMEOUT)
-    def test_end_to_end_clangplusplus(self, unused_tcp_port: int):
-        self.cpp_end_to_end(self.BasicClientArguments("clang++", unused_tcp_port))
-
-    @pytest.mark.clangplusplus
-    @pytest.mark.timeout(TIMEOUT)
-    def test_end_to_end_clangplusplus_no_linking(self, unused_tcp_port: int):
-        self.cpp_end_to_end_no_linking(self.BasicClientArguments("clang++", unused_tcp_port))
-
-    @pytest.mark.clangplusplus
-    @pytest.mark.timeout(TIMEOUT)
-    def test_cpp_end_to_end_clangplusplus_preprocessor_side_effects(self, unused_tcp_port: int):
-        self.cpp_end_to_end_preprocessor_side_effects(self.BasicClientArguments("clang++", unused_tcp_port))
-
-    @pytest.mark.clangplusplus
-    @pytest.mark.timeout(TIMEOUT)
-    def test_end_to_end_clangplusplus_linking_only(self, unused_tcp_port: int):
-        self.cpp_end_to_end_linking_only(self.BasicClientArguments("clang++", unused_tcp_port))
-
-    @pytest.mark.clangplusplus
-    @pytest.mark.timeout(TIMEOUT)
-    def test_end_to_end_clangplusplus_shared_host_slot(self, unused_tcp_port: int):
-        self.cpp_end_to_end_multiple_clients_shared_host(self.BasicClientArguments("clang++", unused_tcp_port))
-
     @pytest.mark.gplusplus
     @pytest.mark.docker
     @pytest.mark.timeout(TIMEOUT)
@@ -369,3 +346,29 @@ class TestEndToEnd:
             self.BasicClientArguments("g++", unused_tcp_port, docker_container=docker_container),
             additional_args=["-fPIC"],
         )
+
+    # clang++ tests
+    @pytest.mark.clangplusplus
+    @pytest.mark.timeout(TIMEOUT)
+    def test_end_to_end_clangplusplus(self, unused_tcp_port: int):
+        self.cpp_end_to_end(self.BasicClientArguments("clang++", unused_tcp_port))
+
+    @pytest.mark.clangplusplus
+    @pytest.mark.timeout(TIMEOUT)
+    def test_end_to_end_clangplusplus_no_linking(self, unused_tcp_port: int):
+        self.cpp_end_to_end_no_linking(self.BasicClientArguments("clang++", unused_tcp_port))
+
+    @pytest.mark.clangplusplus
+    @pytest.mark.timeout(TIMEOUT)
+    def test_cpp_end_to_end_clangplusplus_preprocessor_side_effects(self, unused_tcp_port: int):
+        self.cpp_end_to_end_preprocessor_side_effects(self.BasicClientArguments("clang++", unused_tcp_port))
+
+    @pytest.mark.clangplusplus
+    @pytest.mark.timeout(TIMEOUT)
+    def test_end_to_end_clangplusplus_linking_only(self, unused_tcp_port: int):
+        self.cpp_end_to_end_linking_only(self.BasicClientArguments("clang++", unused_tcp_port))
+
+    @pytest.mark.clangplusplus
+    @pytest.mark.timeout(TIMEOUT)
+    def test_end_to_end_clangplusplus_shared_host_slot(self, unused_tcp_port: int):
+        self.cpp_end_to_end_multiple_clients_shared_host(self.BasicClientArguments("clang++", unused_tcp_port))

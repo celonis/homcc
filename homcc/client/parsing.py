@@ -252,7 +252,7 @@ class ClientConfig:
     ):
         self.files = files
 
-        # environmental variables have higher precedence than those specified via config files
+        # configurations via environmental variables have higher precedence than those specified via config files
         self.compiler = self.EnvironmentVariables.get_compiler() or compiler or Arguments.DEFAULT_COMPILER
         self.compression = Compression.from_name(self.EnvironmentVariables.get_compression() or compression)
         self.schroot_profile = self.EnvironmentVariables.get_schroot_profile() or schroot_profile
@@ -262,6 +262,10 @@ class ClientConfig:
 
         verbose = self.EnvironmentVariables.get_verbose() or verbose
         self.verbose = verbose is not None and verbose
+
+    @classmethod
+    def empty(cls):
+        return cls(files=[])
 
     @classmethod
     def from_config_section(cls, files: List[str], homcc_config: SectionProxy) -> ClientConfig:
@@ -374,6 +378,11 @@ def parse_cli_args(args: List[str]) -> Tuple[Dict[str, Any], Arguments]:
         type=str,
         help="DOCKER_CONTAINER name which will be used to compile in on the selected remote compilation server,"
         " no docker container is being used on default",
+    )
+    sandbox_execution.add_argument(
+        "--no-sandbox",
+        action="store_true",
+        help="enforce that no sandboxed execution is performed even if it is specified in the configuration file",
     )
 
     parser.add_argument(
@@ -514,7 +523,7 @@ def parse_config(filenames: List[Path] = None) -> ClientConfig:
         files, cfg = parse_configs(filenames or default_locations(HOMCC_CONFIG_FILENAME))
     except Error as err:
         print(f"{err}; using default configuration instead")
-        return ClientConfig(files=[])
+        return ClientConfig.empty()
 
     if HOMCC_CLIENT_CONFIG_SECTION not in cfg.sections():
         return ClientConfig(files=files)
