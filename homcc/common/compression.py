@@ -1,11 +1,11 @@
 """Compression related functionality"""
 from __future__ import annotations
 from abc import ABC, abstractmethod
-from typing import Optional, List, Type
+from typing import List, Optional, Type
 
+import logging
 import lzma
 import lzo
-import logging
 
 logger = logging.getLogger(__name__)
 
@@ -39,10 +39,10 @@ class CompressedBytes:
         self.compressed_data = self.compression.compress(self.data)
         return self.compressed_data
 
-    @staticmethod
-    def from_wire(data: bytearray, compression: Compression) -> CompressedBytes:
+    @classmethod
+    def from_wire(cls, data: bytearray, compression: Compression) -> CompressedBytes:
         """Creates an object from data in the wire format."""
-        return CompressedBytes(compression.decompress(data), compression)
+        return cls(compression.decompress(data), compression)
 
     def __eq__(self, other) -> bool:
         if isinstance(other, CompressedBytes):
@@ -54,8 +54,8 @@ class CompressedBytes:
 class Compression(ABC):
     """Base class for compression algorithms"""
 
-    @staticmethod
-    def from_name(name: Optional[str]) -> Compression:
+    @classmethod
+    def from_name(cls, name: Optional[str]) -> Compression:
         if name is None:
             return NoCompression()
 

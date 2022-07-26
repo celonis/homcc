@@ -12,7 +12,7 @@ from configparser import Error, SectionProxy
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, ClassVar, Dict, List, Optional, Tuple, Union
 
 from homcc import client
 from homcc.common.arguments import Arguments
@@ -159,6 +159,50 @@ class Host:
 class ClientConfig:
     """Class to encapsulate and default client configuration information"""
 
+    class EnvironmentVariables:
+        """Encapsulation of all environment variables relevant to client configuration"""
+
+        HOMCC_COMPILER_ENV_VAR: ClassVar[str] = "$HOMCC_COMPILER"
+        HOMCC_COMPRESSION_ENV_VAR: ClassVar[str] = "$HOMCC_COMPRESSION"
+        HOMCC_SCHROOT_PROFILE_ENV_VAR: ClassVar[str] = "$HOMCC_SCHROOT_PROFILE"
+        HOMCC_DOCKER_CONTAINER_ENV_VAR: ClassVar[str] = "$HOMCC_DOCKER_CONTAINER"
+        HOMCC_TIMEOUT_ENV_VAR: ClassVar[str] = "$HOMCC_TIMEOUT"
+        HOMCC_LOG_LEVEL_ENV_VAR: ClassVar[str] = "$HOMCC_LOG_LEVEL"
+        HOMCC_VERBOSE_ENV_VAR: ClassVar[str] = "$HOMCC_VERBOSE"
+
+        @classmethod
+        def get_compiler(cls) -> Optional[str]:
+            return os.getenv(cls.HOMCC_COMPILER_ENV_VAR)
+
+        @classmethod
+        def get_compression(cls) -> Optional[str]:
+            return os.getenv(cls.HOMCC_COMPRESSION_ENV_VAR)
+
+        @classmethod
+        def get_schroot_profile(cls) -> Optional[str]:
+            return os.getenv(cls.HOMCC_SCHROOT_PROFILE_ENV_VAR)
+
+        @classmethod
+        def get_docker_container(cls) -> Optional[str]:
+            return os.getenv(cls.HOMCC_DOCKER_CONTAINER_ENV_VAR)
+
+        @classmethod
+        def get_timeout(cls) -> Optional[float]:
+            if timeout := os.getenv(cls.HOMCC_TIMEOUT_ENV_VAR):
+                return float(timeout)
+            return None
+
+        @classmethod
+        def get_log_level(cls) -> Optional[str]:
+            return os.getenv(cls.HOMCC_LOG_LEVEL_ENV_VAR)
+
+        @classmethod
+        def get_verbose(cls) -> Optional[bool]:
+            if (verbose := os.getenv(cls.HOMCC_VERBOSE_ENV_VAR)) is not None:
+                # parse analogously to configparser.getboolean
+                return re.match(r"^(1)|(yes)|(true)|(on)$", verbose, re.IGNORECASE) is not None
+            return None
+
     files: List[str]
     compiler: str
     compression: Compression
@@ -181,12 +225,16 @@ class ClientConfig:
         verbose: Optional[bool] = None,
     ):
         self.files = files
-        self.compiler = compiler or Arguments.DEFAULT_COMPILER
-        self.compression = Compression.from_name(compression)
-        self.schroot_profile = schroot_profile
-        self.docker_container = docker_container
-        self.timeout = timeout
-        self.log_level = LogLevel[log_level] if log_level else None
+
+        # environmental variables have higher precedence than those specified via config files
+        self.compiler = self.EnvironmentVariables.get_compiler() or compiler or Arguments.DEFAULT_COMPILER
+        self.compression = Compression.from_name(self.EnvironmentVariables.get_compression() or compression)
+        self.schroot_profile = self.EnvironmentVariables.get_schroot_profile() or schroot_profile
+        self.docker_container = self.EnvironmentVariables.get_docker_container() or docker_container
+        self.timeout = self.EnvironmentVariables.get_timeout() or timeout
+        self.log_level = LogLevel.from_str(self.EnvironmentVariables.get_log_level() or log_level)
+
+        verbose = self.EnvironmentVariables.get_verbose() or verbose
         self.verbose = verbose is not None and verbose
 
     @classmethod
