@@ -213,13 +213,13 @@ class ClientConfig:
     def __str__(self):
         return (
             f'Configuration (from [{", ".join(self.files)}]):\n'
-            f"\tCompiler:\t{self.compiler}\n"
-            f"\tCompression:\t{self.compression}\n"
+            f"\tcompiler:\t{self.compiler}\n"
+            f"\tcompression:\t{self.compression}\n"
             f"\tschroot_profile:\t{self.schroot_profile}\n"
             f"\tdocker_container:\t{self.docker_container}\n"
-            f"\tTimeout:\t{self.timeout}s\n"
-            f"\tLog-Level:\t{self.log_level.name}\n"
-            f"\tVerbosity:\t{str(self.verbose)}\n"
+            f"\ttimeout:\t{self.timeout}s\n"
+            f"\tlog_level:\t{self.log_level.name}\n"
+            f"\tverbose:\t{str(self.verbose)}\n"
         )
 
     def set_verbose(self):
