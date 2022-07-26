@@ -91,6 +91,18 @@ class Clang(Compiler):
         return matches[0].strip()
 
     def add_target_to_arguments(self, arguments: Arguments, target: str) -> Arguments:
+        if arguments.compiler is None:
+            raise UnsupportedCompilerError
+
+        for arg in arguments.args:
+            if "--target=" in arg or "-target" in arg:
+                logger.info(
+                    "Not adding target '%s' to compiler '%s', as (potentially another) target is already specified.",
+                    target,
+                    arguments.compiler,
+                )
+                return arguments
+
         return arguments.copy().add_arg(f"--target={target}")
 
 
@@ -121,6 +133,15 @@ class Gcc(Compiler):
         return result.stdout.strip()
 
     def add_target_to_arguments(self, arguments: Arguments, target: str) -> Arguments:
+        if arguments.compiler is None:
+            raise UnsupportedCompilerError
+
+        if target in arguments.compiler:
+            logger.info(
+                "Not adding target '%s' to compiler '%s', as target is already specified.", target, arguments.compiler
+            )
+            return arguments
+
         copied_arguments = arguments.copy()
         # e.g. g++ -> x86_64-linux-gnu-g++
         copied_arguments.compiler = f"{target}-{self.compiler_str}"

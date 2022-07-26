@@ -163,7 +163,7 @@ class TCPRequestHandler(socketserver.BaseRequestHandler):
 
         if target is not None:
             self.compiler_arguments.add_target(target)
-            logger.info("Added target '%s' to compiler arguments.", target)
+            logger.info("Using explicit target '%s' for compilation.", target)
 
         self.compiler_arguments = self.environment.map_args(self.compiler_arguments)
         logger.debug("Mapped compiler args: %s", str(self.compiler_arguments))
