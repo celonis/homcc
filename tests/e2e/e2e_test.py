@@ -7,7 +7,7 @@ import subprocess
 import time
 
 from pathlib import Path
-from typing import List, Optional
+from typing import Dict, List, Optional
 from dataclasses import dataclass
 
 from homcc.common.compression import Compression, NoCompression, LZO, LZMA
@@ -264,10 +264,14 @@ class TestEndToEnd:
                 encoding="utf-8",
             )
 
+        assert err.value.returncode == os.EX_USAGE
         assert "seems to have been invoked recursively!" in err.value.stdout
 
     @pytest.mark.timeout(TIMEOUT)
     def test_end_to_end_client_multiple_sandbox(self, unused_tcp_port: int):
+        env: Dict[str, str] = os.environ.copy()
+        env["HOMCC_DOCKER_CONTAINER"] = "bar"
+
         with pytest.raises(subprocess.CalledProcessError) as err:
             subprocess.run(  # client receiving multiple sandbox options
                 self.BasicClientArguments("g++", unused_tcp_port, schroot_profile="foo").to_list(),
@@ -275,9 +279,10 @@ class TestEndToEnd:
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
                 encoding="utf-8",
-                env={"HOMCC_DOCKER_CONTAINER": "bar"},
+                env=env,
             )
 
+        assert err.value.returncode == os.EX_USAGE
         assert "Can not specify a schroot profile and a docker container to be used simultaneously." in err.value.stdout
 
     # g++ tests
