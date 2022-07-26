@@ -40,6 +40,10 @@ class TestEndToEnd:
         schroot_profile: Optional[str] = None
         docker_container: Optional[str] = None
 
+        def __post_init__(self):
+            if self.schroot_profile is not None and self.docker_container is not None:
+                raise NotImplementedError("schroot profile and docker container are provided simultaneously")
+
         def to_list(self) -> List[str]:
             compression = (
                 f",{self.compression}" if self.compression is not isinstance(self.compression, NoCompression) else ""
@@ -260,7 +264,6 @@ class TestEndToEnd:
                 encoding="utf-8",
             )
 
-        assert err.value.returncode == os.EX_USAGE
         assert "seems to have been invoked recursively!" in err.value.stdout
 
     @pytest.mark.timeout(TIMEOUT)
@@ -275,7 +278,6 @@ class TestEndToEnd:
                 env={"HOMCC_DOCKER_CONTAINER": "bar"},
             )
 
-        assert err.value.returncode == os.EX_USAGE
         assert "Can not specify a schroot profile and a docker container to be used simultaneously." in err.value.stdout
 
     # g++ tests
