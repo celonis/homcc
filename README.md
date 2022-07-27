@@ -153,7 +153,7 @@ Additionally, `HOMCC` provides sandboxed compiler execution for remote compilati
     <tr align="center"><th>Environmental Variable</th><th>Example: <code>homcc.conf</code></th><th>Explanation</th></tr>
     <tr valign="top">
     <td><sub><pre lang="ini">
-  
+     
     HOMCC_COMPILER
     HOMCC_TIMEOUT
     HOMCC_COMPRESSION
@@ -161,7 +161,7 @@ Additionally, `HOMCC` provides sandboxed compiler execution for remote compilati
     HOMCC_DOCKER_CONTAINER
     HOMCC_LOG_LEVEL
     HOMCC_VERBOSE
-
+     
     HOMCCD_LIMIT
     HOMCCD_PORT
     HOMCCD_ADDRESS
