@@ -94,17 +94,17 @@ async def compile_remotely_at(
         remote_arguments: Arguments = arguments.copy().remove_local_args()
 
         logger.debug(
-            "Rewriting compiler '%s' to '%s' for the server.",
+            "Normalizing compiler '%s' to '%s' for the server.",
             remote_arguments.compiler,
             remote_arguments.compiler_normalized(),
         )
         # normalize compiler (e.g. /usr/bin/g++ -> g++)
         remote_arguments.compiler = remote_arguments.compiler_normalized()
 
+        target: Optional[str] = None
         try:
             target = arguments.get_compiler_target_triple()
         except TargetInferationError as err:
-            target = None
             logger.warning(
                 "Could not get target architecture. Omiting passing explicit target to remote compilation host. "
                 "This may lead to unexpected results if the remote compilation host has a different architecture. %s",

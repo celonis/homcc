@@ -286,12 +286,19 @@ class TCPRequestHandler(socketserver.BaseRequestHandler):
         docker_container: Optional[str],
     ) -> bool:
         """Checks whether a request from a client can be satisfied."""
-        compiler_satisfiable = self.check_compiler_arguments(arguments)
-        target_satisfiable = self.check_target_argument(arguments, target)
-        schroot_satisfiable = self.check_schroot_profile_argument(schroot_profile)
-        docker_satisfiable = self.check_docker_container_argument(docker_container)
+        if not self.check_compiler_arguments(arguments):
+            return False
 
-        return compiler_satisfiable and target_satisfiable and schroot_satisfiable and docker_satisfiable
+        if not self.check_target_argument(arguments, target):
+            return False
+
+        if not self.check_schroot_profile_argument(schroot_profile):
+            return False
+
+        if not self.check_docker_container_argument(docker_container):
+            return False
+
+        return True
 
     def check_target_argument(self, arguments: Arguments, target: Optional[str]) -> bool:
         """Checks whether the local compiler supports the specified target."""
