@@ -85,12 +85,16 @@ class ServerConfig:
             ]
 
         @classmethod
-        def get_limit(cls) -> Optional[str]:
-            return os.getenv(cls.HOMCCD_LIMIT_ENV_VAR)
+        def get_limit(cls) -> Optional[int]:
+            if limit := os.getenv(cls.HOMCCD_LIMIT_ENV_VAR):
+                return int(limit)
+            return None
 
         @classmethod
-        def get_port(cls) -> Optional[str]:
-            return os.getenv(cls.HOMCCD_PORT_ENV_VAR)
+        def get_port(cls) -> Optional[int]:
+            if port := os.getenv(cls.HOMCCD_PORT_ENV_VAR):
+                return int(port)
+            return None
 
         @classmethod
         def get_address(cls) -> Optional[str]:
