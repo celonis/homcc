@@ -112,6 +112,7 @@ Additionally, `HOMCC` provides sandboxed compiler execution for remote compilati
   ```sh
   $ HOMCC_SCHROOT_PROFILE=jammy homcc g++ foo.cpp
   ```
+  There is also the possibility to use CLI arguments or config files to specify sandboxed execution, see [Configuration](#configuration).
   Utilizable profile and container names need to be provided by the administrator of the relevant host server.
 
 
@@ -137,7 +138,7 @@ Additionally, `HOMCC` provides sandboxed compiler execution for remote compilati
 
 
 ## Configuration
-- Overwrite defaults globally via a `homcc.conf` configuration file:
+- Overwrite defaults globally via specifying environmental variables with the `HOMCC_` prefix a `homcc.conf` configuration file:
   <table>
     <tr align="center"><th><code>homcc.conf</code> file locations</th></tr>
     <tr valign="top"><td>
@@ -149,8 +150,18 @@ Additionally, `HOMCC` provides sandboxed compiler execution for remote compilati
   </table>
 - :exclamation: Explicit configuration is currently not necessary, only do this if you know exactly what you are doing!
   <table>
-    <tr align="center"><th>Example: <code>homcc.conf</code></th><th>Explanation</th></tr>
+    <tr align="center"><th>Environmental Variable</th><th>Example: <code>homcc.conf</code></th><th>Explanation</th></tr>
     <tr valign="top">
+    <td><sub><pre lang="ini">
+  
+    HOMCC_COMPILER
+    HOMCC_TIMEOUT
+    HOMCC_COMPRESSION
+    HOMCC_SCHROOT_PROFILE
+    HOMCC_DOCKER_CONTAINER
+    HOMCC_LOG_LEVEL
+    HOMCC_VERBOSE
+    </pre></sub></td>
     <td><sub><pre lang="ini">
     [homcc]
     compiler=g++
@@ -160,6 +171,7 @@ Additionally, `HOMCC` provides sandboxed compiler execution for remote compilati
     docker_container=example_container
     log_level=DEBUG
     verbose=True
+    
     [homccd]
     limit=64
     port=3633
@@ -176,6 +188,7 @@ Additionally, `HOMCC` provides sandboxed compiler execution for remote compilati
     Docker container that should be used on the server for remote compilations
     Detail level for log messages: {DEBUG, INFO, WARNING, ERROR, CRITICAL}
     Enable verbosity mode which implies detailed and colored logging
+
     # Server configuration
     Maximum limit of concurrent compilations
     TCP port to listen on
