@@ -138,7 +138,7 @@ Additionally, `HOMCC` provides sandboxed compiler execution for remote compilati
 
 
 ## Configuration
-- Overwrite defaults globally via specifying environmental variables with the `HOMCC_` prefix a `homcc.conf` configuration file:
+- Overwrite defaults globally via specifying environmental variables with the `HOMCC_` or `HOMCCD_` prefix or via `homcc.conf` configuration files:
   <table>
     <tr align="center"><th><code>homcc.conf</code> file locations</th></tr>
     <tr valign="top"><td>
@@ -161,6 +161,12 @@ Additionally, `HOMCC` provides sandboxed compiler execution for remote compilati
     HOMCC_DOCKER_CONTAINER
     HOMCC_LOG_LEVEL
     HOMCC_VERBOSE
+
+    HOMCCD_LIMIT
+    HOMCCD_PORT
+    HOMCCD_ADDRESS
+    HOMCCD_LOG_LEVEL
+    HOMCCD_VERBOSE
     </pre></sub></td>
     <td><sub><pre lang="ini">
     [homcc]
@@ -171,7 +177,6 @@ Additionally, `HOMCC` provides sandboxed compiler execution for remote compilati
     docker_container=example_container
     log_level=DEBUG
     verbose=True
-    
     [homccd]
     limit=64
     port=3633
@@ -188,7 +193,6 @@ Additionally, `HOMCC` provides sandboxed compiler execution for remote compilati
     Docker container that should be used on the server for remote compilations
     Detail level for log messages: {DEBUG, INFO, WARNING, ERROR, CRITICAL}
     Enable verbosity mode which implies detailed and colored logging
-
     # Server configuration
     Maximum limit of concurrent compilations
     TCP port to listen on
