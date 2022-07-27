@@ -6,7 +6,7 @@ import os
 import sys
 
 from argparse import Action, ArgumentParser, ArgumentTypeError, RawTextHelpFormatter
-from configparser import ConfigParser, Error, SectionProxy
+from configparser import Error, SectionProxy
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
@@ -14,13 +14,11 @@ from typing import Any, Dict, List, Optional, Union
 from homcc import server
 from homcc.common.logging import LogLevel
 from homcc.common.parsing import HOMCC_CONFIG_FILENAME, default_locations, parse_configs
+from homcc.server.schroot import get_schroot_profiles
 
 logger = logging.getLogger(__name__)
 
 HOMCC_SERVER_CONFIG_SECTION: str = "homccd"
-ETC_SCHROOT_DIR: str = "/etc/schroot/"
-SCHROOT_CONF_FILENAME: str = "schroot.conf"
-CHROOT_D_SUB_DIR: str = "chroot.d/"
 
 DEFAULT_ADDRESS: str = "0.0.0.0"
 DEFAULT_PORT: int = 3633
@@ -49,7 +47,7 @@ class ShowProfiles(Action):
         super().__init__(nargs=0, help=self.__doc__, **kwargs)
 
     def __call__(self, *_):
-        profiles: List[str] = load_schroot_profiles()
+        profiles: List[str] = get_schroot_profiles()
 
         if not profiles:
             print("No chroots found. Run 'schroot -l' to verify their existence.")
@@ -192,49 +190,3 @@ def parse_config(filenames: List[Path] = None) -> ServerConfig:
         return ServerConfig(files=files)
 
     return ServerConfig.from_config_section(files, cfg[HOMCC_SERVER_CONFIG_SECTION])
-
-
-def default_schroot_locations() -> List[Path]:
-    """
-    Look for schroot config files in the default locations:
-    - File: "/etc/schroot/schroot.conf"
-    - Directory: "/etc/schroot/chroot.d/"
-    """
-
-    etc_schroot_dir = Path(ETC_SCHROOT_DIR)
-    etc_schroot_schroot_conf = etc_schroot_dir / SCHROOT_CONF_FILENAME
-    etc_schroot_chroot_d_dir = etc_schroot_dir / CHROOT_D_SUB_DIR
-
-    schroot_config_locations: List[Path] = []
-
-    # /etc/schroot/chroot.d/*
-    if etc_schroot_chroot_d_dir.is_dir():
-        for chroot_d_config in etc_schroot_chroot_d_dir.glob("*"):
-            schroot_config_locations.append(chroot_d_config)
-
-    # /etc/schroot/schroot.conf
-    if etc_schroot_schroot_conf.exists():
-        schroot_config_locations.append(etc_schroot_schroot_conf)
-
-    return schroot_config_locations
-
-
-def load_schroot_profiles(schroot_config_file_locations: Optional[List[Path]] = None) -> List[str]:
-    """Load schroot profiles as parameterized by schroot_config_file_locations or from the default schroot locations"""
-    schroot_configparser: ConfigParser = ConfigParser()
-
-    successfully_read_files: List[str] = schroot_configparser.read(
-        schroot_config_file_locations or default_schroot_locations()
-    )
-
-    logger.info("Read schroot files: [%s]", ", ".join(successfully_read_files))
-
-    profiles: List[str] = []
-
-    for section in schroot_configparser.sections():
-        profiles.append(section)
-        aliases: str = schroot_configparser[section].get("aliases")
-        if aliases is not None:
-            profiles.extend(aliases.split(","))
-
-    return profiles

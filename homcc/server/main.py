@@ -5,7 +5,7 @@ import os
 import signal
 import sys
 
-from typing import Any, Dict, List
+from typing import Any, Dict
 
 sys.path.append(os.path.join(os.path.dirname(__file__), "../.."))
 
@@ -21,7 +21,6 @@ from homcc.server.parsing import (  # pylint: disable=wrong-import-position
     ServerConfig,
     parse_cli_args,
     parse_config,
-    load_schroot_profiles,
 )
 from homcc.server.server import (  # pylint: disable=wrong-import-position
     start_server,
@@ -77,9 +76,6 @@ def main():
     if (address := homccd_args_dict["listen"]) is not None:
         homccd_config.address = address
 
-    # schroot profiles
-    schroot_profiles: List[str] = load_schroot_profiles()
-
     # provide additional DEBUG information
     logger.debug(
         "%s - %s\n" "Caller:\t%s\n" "%s",  # homccd location and version; homccd caller; config info
@@ -91,7 +87,7 @@ def main():
 
     # start server
     try:
-        server, server_thread = start_server(homccd_config, schroot_profiles=schroot_profiles)
+        server, server_thread = start_server(homccd_config)
     except ServerInitializationError:
         logger.error("Could not start homccd, terminating.")
         sys.exit(os.EX_OSERR)

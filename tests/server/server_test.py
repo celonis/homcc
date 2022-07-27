@@ -95,6 +95,35 @@ class TestServer:
             assert self.request_handler.check_docker_container_argument("some_container")
             mocked_close_connection.assert_not_called()
 
+    def test_check_schroot_profile_argument(self, mocker: MockerFixture):
+        mocker.patch(
+            "homcc.server.server.is_schroot_available",
+            return_value=False,
+        )
+        with patch.object(self.request_handler, "close_connection") as mocked_close_connection:
+            assert not self.request_handler.check_schroot_profile_argument("some_profile")
+            mocked_close_connection.assert_called_once()
+
+        mocker.patch(
+            "homcc.server.server.is_schroot_available",
+            return_value=True,
+        )
+        mocker.patch(
+            "homcc.server.server.is_valid_schroot_profile",
+            return_value=False,
+        )
+        with patch.object(self.request_handler, "close_connection") as mocked_close_connection:
+            assert not self.request_handler.check_schroot_profile_argument("some_profile")
+            mocked_close_connection.assert_called_once()
+
+        mocker.patch(
+            "homcc.server.server.is_valid_schroot_profile",
+            return_value=True,
+        )
+        with patch.object(self.request_handler, "close_connection") as mocked_close_connection:
+            assert self.request_handler.check_schroot_profile_argument("some_profile")
+            mocked_close_connection.assert_not_called()
+
 
 class TestServerReceive:
     """Integration test to test if the server is handling received messages correctly."""
@@ -126,7 +155,7 @@ class TestServerReceive:
 
         config: ServerConfig = ServerConfig(files=[], address="0.0.0.0", port=unused_tcp_port, limit=1)
 
-        server, _ = start_server(config, schroot_profiles=[])
+        server, _ = start_server(config)
         with server:
             arguments = ["-a", "-b", "--help"]
             cwd = "/home/o.layer/test"

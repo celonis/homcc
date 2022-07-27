@@ -2,7 +2,6 @@
 import logging
 import os
 import random
-import shutil
 import socketserver
 import threading
 
@@ -28,9 +27,8 @@ from homcc.common.messages import (
 from homcc.server.cache import Cache
 from homcc.server.environment import Environment, create_root_temp_folder
 from homcc.server.parsing import DEFAULT_ADDRESS, DEFAULT_LIMIT, DEFAULT_PORT, ServerConfig
-
-
 from homcc.server.docker import is_valid_docker_container, is_docker_available
+from homcc.server.schroot import is_valid_schroot_profile, is_schroot_available, get_schroot_profiles
 
 logger = logging.getLogger(__name__)
 
@@ -38,7 +36,7 @@ logger = logging.getLogger(__name__)
 class TCPServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
     """TCP Server instance, holding data relevant across compilations."""
 
-    def __init__(self, address: Optional[str], port: Optional[int], limit: Optional[int], schroot_profiles: List[str]):
+    def __init__(self, address: Optional[str], port: Optional[int], limit: Optional[int]):
         address = address or DEFAULT_ADDRESS
         port = port or DEFAULT_PORT
 
@@ -53,9 +51,6 @@ class TCPServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
                 "Please provide the job limit explicitly either via the CLI or the configuration file!",
                 self.connections_limit,
             )
-
-        self.schroot_profiles_enabled: bool = shutil.which("schroot") is not None
-        self.schroot_profiles: List[str] = schroot_profiles
 
         self.root_temp_folder: TemporaryDirectory = create_root_temp_folder()
 
@@ -337,22 +332,25 @@ class TCPRequestHandler(socketserver.BaseRequestHandler):
         if schroot_profile is None:
             return True
 
-        if not self.server.schroot_profiles_enabled:
-            logger.info("Refusing client because 'schroot' compilation could not be executed.")
+        if not is_schroot_available():
+            logger.info(
+                "Refusing client because 'schroot' compilation could not be executed as 'schroot' "
+                "is not installed on the server."
+            )
             self.close_connection(
                 f"Profile {schroot_profile} could not be used as 'schroot' is not installed on the server",
             )
             return False
 
-        if schroot_profile not in self.server.schroot_profiles:
+        if not is_valid_schroot_profile(schroot_profile):
             logger.info("Refusing client because 'schroot' environment '%s' is not provided.", schroot_profile)
             self.close_connection(
                 f"Profile {schroot_profile} could not be used as it is not a provided profile "
-                f"[{', '.join(self.server.schroot_profiles)}].",
+                f"[{', '.join(get_schroot_profiles())}].",
             )
             return False
 
-        logger.info("Using %s profile.", schroot_profile)
+        logger.info("Using '%s' schroot profile.", schroot_profile)
         return True
 
     def check_docker_container_argument(self, docker_container: Optional[str]) -> bool:
@@ -447,9 +445,9 @@ class TCPRequestHandler(socketserver.BaseRequestHandler):
                 self.server.current_amount_connections -= 1
 
 
-def start_server(config: ServerConfig, schroot_profiles: List[str]) -> Tuple[TCPServer, threading.Thread]:
+def start_server(config: ServerConfig) -> Tuple[TCPServer, threading.Thread]:
     try:
-        server: TCPServer = TCPServer(config.address, config.port, config.limit, schroot_profiles)
+        server: TCPServer = TCPServer(config.address, config.port, config.limit)
     except OSError as err:
         logger.error("Could not start TCP server: %s", err)
         raise ServerInitializationError from err

@@ -118,10 +118,6 @@ Additionally, `HOMCC` provides sandboxed compiler execution for remote compilati
   ```
 - \[Optional] Sandboxed execution:
   - `schroot`: Set up your `schroot` environments at `/etc/schroot/schroot.conf` or in the `/etc/schroot/chroot.d/` directory and mount the `/tmp/` directory to enable sandboxed compiler execution.
-  Currently, in order for these changes to apply, you have to restart `homccd`:
-    ```sh
-    $ sudo systemctl restart homccd.service
-    ```
   - `docker`:
     - Make sure that the docker containers that you want to compile in have mounted the host's `/tmp` directory to `/tmp` (this is necessary to access cached dependencies):
       ```sh
