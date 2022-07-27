@@ -97,6 +97,10 @@ class TestServer:
 
     def test_check_schroot_profile_argument(self, mocker: MockerFixture):
         mocker.patch(
+            "homcc.server.server.get_schroot_profiles",
+            return_value=[],
+        )
+        mocker.patch(
             "homcc.server.server.is_schroot_available",
             return_value=False,
         )
