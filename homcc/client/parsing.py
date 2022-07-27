@@ -12,7 +12,7 @@ from configparser import Error, SectionProxy
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, ClassVar, Dict, List, Optional, Tuple, Union
 
 from homcc import client
 from homcc.common.arguments import Arguments
@@ -23,7 +23,7 @@ from homcc.common.errors import HostParsingError, NoHostsFoundError
 
 logger = logging.getLogger(__name__)
 
-HOMCC_HOSTS_ENV_VAR: str = "$HOMCC_HOSTS"
+HOMCC_HOSTS_ENV_VAR: str = "HOMCC_HOSTS"
 HOMCC_HOSTS_FILENAME: str = "hosts"
 HOMCC_CLIENT_CONFIG_SECTION: str = "homcc"
 
@@ -100,6 +100,20 @@ class ShowConcurrencyLevel(ShowAndExitAction):
         sys.exit(os.EX_OK)
 
 
+class ShowEnvironmentVariables(ShowAndExitAction):
+    """show all utilized environmental variables with their set values and exit"""
+
+    def __call__(self, *_):
+        if (homcc_hosts_env_var := os.getenv(HOMCC_HOSTS_ENV_VAR)) is not None:
+            print(f"{HOMCC_HOSTS_ENV_VAR}: {homcc_hosts_env_var}")
+
+        for config_env_var in ClientConfig.EnvironmentVariables.to_list():
+            if (config := os.getenv(config_env_var)) is not None:
+                print(f"{config_env_var}: {config}")
+
+        sys.exit(os.EX_OK)
+
+
 @dataclass
 class Host:
     """Class to encapsulate host information"""
@@ -159,6 +173,62 @@ class Host:
 class ClientConfig:
     """Class to encapsulate and default client configuration information"""
 
+    class EnvironmentVariables:
+        """Encapsulation of all environment variables relevant to client configuration"""
+
+        HOMCC_COMPILER_ENV_VAR: ClassVar[str] = "HOMCC_COMPILER"
+        HOMCC_COMPRESSION_ENV_VAR: ClassVar[str] = "HOMCC_COMPRESSION"
+        HOMCC_SCHROOT_PROFILE_ENV_VAR: ClassVar[str] = "HOMCC_SCHROOT_PROFILE"
+        HOMCC_DOCKER_CONTAINER_ENV_VAR: ClassVar[str] = "HOMCC_DOCKER_CONTAINER"
+        HOMCC_TIMEOUT_ENV_VAR: ClassVar[str] = "HOMCC_TIMEOUT"
+        HOMCC_LOG_LEVEL_ENV_VAR: ClassVar[str] = "HOMCC_LOG_LEVEL"
+        HOMCC_VERBOSE_ENV_VAR: ClassVar[str] = "HOMCC_VERBOSE"
+
+        @classmethod
+        def to_list(cls) -> List[str]:
+            return [
+                cls.HOMCC_COMPILER_ENV_VAR,
+                cls.HOMCC_COMPRESSION_ENV_VAR,
+                cls.HOMCC_SCHROOT_PROFILE_ENV_VAR,
+                cls.HOMCC_DOCKER_CONTAINER_ENV_VAR,
+                cls.HOMCC_TIMEOUT_ENV_VAR,
+                cls.HOMCC_LOG_LEVEL_ENV_VAR,
+                cls.HOMCC_VERBOSE_ENV_VAR,
+            ]
+
+        @classmethod
+        def get_compiler(cls) -> Optional[str]:
+            return os.getenv(cls.HOMCC_COMPILER_ENV_VAR)
+
+        @classmethod
+        def get_compression(cls) -> Optional[str]:
+            return os.getenv(cls.HOMCC_COMPRESSION_ENV_VAR)
+
+        @classmethod
+        def get_schroot_profile(cls) -> Optional[str]:
+            return os.getenv(cls.HOMCC_SCHROOT_PROFILE_ENV_VAR)
+
+        @classmethod
+        def get_docker_container(cls) -> Optional[str]:
+            return os.getenv(cls.HOMCC_DOCKER_CONTAINER_ENV_VAR)
+
+        @classmethod
+        def get_timeout(cls) -> Optional[float]:
+            if timeout := os.getenv(cls.HOMCC_TIMEOUT_ENV_VAR):
+                return float(timeout)
+            return None
+
+        @classmethod
+        def get_log_level(cls) -> Optional[str]:
+            return os.getenv(cls.HOMCC_LOG_LEVEL_ENV_VAR)
+
+        @classmethod
+        def get_verbose(cls) -> Optional[bool]:
+            if (verbose := os.getenv(cls.HOMCC_VERBOSE_ENV_VAR)) is not None:
+                # parse analogously to configparser.getboolean
+                return re.match(r"^(1)|(yes)|(true)|(on)$", verbose, re.IGNORECASE) is not None
+            return None
+
     files: List[str]
     compiler: str
     compression: Compression
@@ -181,13 +251,21 @@ class ClientConfig:
         verbose: Optional[bool] = None,
     ):
         self.files = files
-        self.compiler = compiler or Arguments.DEFAULT_COMPILER
-        self.compression = Compression.from_name(compression)
-        self.schroot_profile = schroot_profile
-        self.docker_container = docker_container
-        self.timeout = timeout
-        self.log_level = LogLevel[log_level] if log_level else None
+
+        # configurations via environmental variables have higher precedence than those specified via config files
+        self.compiler = self.EnvironmentVariables.get_compiler() or compiler or Arguments.DEFAULT_COMPILER
+        self.compression = Compression.from_name(self.EnvironmentVariables.get_compression() or compression)
+        self.schroot_profile = self.EnvironmentVariables.get_schroot_profile() or schroot_profile
+        self.docker_container = self.EnvironmentVariables.get_docker_container() or docker_container
+        self.timeout = self.EnvironmentVariables.get_timeout() or timeout
+        self.log_level = LogLevel.from_str(self.EnvironmentVariables.get_log_level() or log_level)
+
+        verbose = self.EnvironmentVariables.get_verbose() or verbose
         self.verbose = verbose is not None and verbose
+
+    @classmethod
+    def empty(cls):
+        return cls(files=[])
 
     @classmethod
     def from_config_section(cls, files: List[str], homcc_config: SectionProxy) -> ClientConfig:
@@ -215,7 +293,8 @@ class ClientConfig:
             f'Configuration (from [{", ".join(self.files)}]):\n'
             f"\tCompiler:\t{self.compiler}\n"
             f"\tCompression:\t{self.compression}\n"
-            f"\tProfile:\t{self.profile}\n"
+            f"\tschroot_profile:\t{self.schroot_profile}\n"
+            f"\tdocker_container:\t{self.docker_container}\n"
             f"\tTimeout:\t{self.timeout}s\n"
             f"\tLog-Level:\t{self.log_level.name}\n"
             f"\tVerbosity:\t{str(self.verbose)}\n"
@@ -241,13 +320,20 @@ def parse_cli_args(args: List[str]) -> Tuple[Dict[str, Any], Arguments]:
     show_and_exit.add_argument("--help", action="help", help="show this help message and exit")
     show_and_exit.add_argument("--version", action=ShowVersion)
     show_and_exit.add_argument("--show-hosts", action=ShowHosts)
-    show_and_exit.add_argument("-j", action=ShowConcurrencyLevel)
+    show_and_exit.add_argument("-j", "--show-concurrency", action=ShowConcurrencyLevel)
+    show_and_exit.add_argument("--show-variables", action=ShowEnvironmentVariables)
 
     parser.add_argument(
         "--scan-includes",
         action="store_true",
         help="show all header dependencies that would be sent to the server, as calculated from the given arguments, "
         "and exit",
+    )
+
+    parser.add_argument(
+        "--no-config",
+        action="store_true",
+        help="enforce that only configurations provided via the CLI are used",
     )
 
     parser.add_argument(
@@ -280,30 +366,23 @@ def parse_cli_args(args: List[str]) -> Tuple[Dict[str, Any], Arguments]:
         f"{indented_newline.join(Compression.descriptions())}",
     )
 
-    schroot_profile = parser.add_mutually_exclusive_group()
-    schroot_profile.add_argument(
+    sandbox_execution = parser.add_mutually_exclusive_group()
+    sandbox_execution.add_argument(
         "--schroot-profile",
         type=str,
         help="SCHROOT_PROFILE which will be mapped to predefined chroot environments on "
         "the selected remote compilation server, no schroot profile is being used on default",
     )
-    schroot_profile.add_argument(
-        "--no-schroot-profile",
-        action="store_true",
-        help="enforce that no SCHROOT_PROFILE is used even if one is specified in the configuration file",
-    )
-
-    docker_container = parser.add_mutually_exclusive_group()
-    docker_container.add_argument(
+    sandbox_execution.add_argument(
         "--docker-container",
         type=str,
         help="DOCKER_CONTAINER name which will be used to compile in on the selected remote compilation server,"
         " no docker container is being used on default",
     )
-    docker_container.add_argument(
-        "--no-docker-container",
+    sandbox_execution.add_argument(
+        "--no-sandbox",
         action="store_true",
-        help="enforce that no DOCKER_CONTAINER is used even if one is specified in the configuration file",
+        help="enforce that no sandboxed execution is performed even if it is specified in the configuration file",
     )
 
     parser.add_argument(
@@ -444,7 +523,7 @@ def parse_config(filenames: List[Path] = None) -> ClientConfig:
         files, cfg = parse_configs(filenames or default_locations(HOMCC_CONFIG_FILENAME))
     except Error as err:
         print(f"{err}; using default configuration instead")
-        return ClientConfig(files=[])
+        return ClientConfig.empty()
 
     if HOMCC_CLIENT_CONFIG_SECTION not in cfg.sections():
         return ClientConfig(files=files)
