@@ -22,6 +22,7 @@ from homcc.common.errors import (
     RemoteCompilationError,
     RemoteCompilationTimeoutError,
     PreprocessorError,
+    TargetInferationError,
     UnexpectedMessageTypeError,
     SlotsExhaustedError,
 )
@@ -92,10 +93,29 @@ async def compile_remotely_at(
         dependency_dict: Dict[str, str] = calculate_dependency_dict(find_dependencies(arguments))
         remote_arguments: Arguments = arguments.copy().remove_local_args()
 
+        logger.debug(
+            "Normalizing compiler '%s' to '%s' for the server.",
+            remote_arguments.compiler,
+            remote_arguments.compiler_normalized(),
+        )
+        # normalize compiler (e.g. /usr/bin/g++ -> g++)
+        remote_arguments.compiler = remote_arguments.compiler_normalized()
+
+        target: Optional[str] = None
+        try:
+            target = arguments.get_compiler_target_triple()
+        except TargetInferationError as err:
+            logger.warning(
+                "Could not get target architecture. Omiting passing explicit target to remote compilation host. "
+                "This may lead to unexpected results if the remote compilation host has a different architecture. %s",
+                err,
+            )
+
         await client.send_argument_message(
             arguments=remote_arguments,
             cwd=os.getcwd(),
             dependency_dict=dependency_dict,
+            target=target,
             schroot_profile=schroot_profile,
             docker_container=docker_container,
         )

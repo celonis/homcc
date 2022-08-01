@@ -56,11 +56,13 @@ def main():
     # cancel execution if recursive call is detected
     if is_recursively_invoked():
         print(f"{sys.argv[0]} seems to have been invoked recursively!", file=sys.stderr)
-        raise SystemExit(os.EX_USAGE)
+        sys.exit(os.EX_USAGE)
 
     # load and parse arguments and configuration information
     homcc_args_dict, compiler_arguments = parse_cli_args(sys.argv[1:])
-    homcc_config: ClientConfig = parse_config()
+
+    # prevent config loading and parsing if --no-config was specified
+    homcc_config: ClientConfig = ClientConfig.empty() if homcc_args_dict["no_config"] else parse_config()
     logging_config: LoggingConfig = LoggingConfig(
         config=FormatterConfig.COLORED,
         formatter=Formatter.CLIENT,
@@ -132,26 +134,23 @@ def main():
         if not has_local:
             hosts.append(localhost)
 
-    # SCHROOT_PROFILE; if --no-schroot-profile is specified do not use
-    # any specified schroot profiles from cli or config file
-    if homcc_args_dict["no_schroot_profile"]:
+    # SCHROOT_PROFILE; DOCKER_CONTAINER; if --no-sandbox is specified do not use any specified sandbox configurations
+    if homcc_args_dict["no_sandbox"]:
         homcc_config.schroot_profile = None
-    elif (profile := homcc_args_dict["schroot_profile"]) is not None:
-        homcc_config.schroot_profile = profile
-
-    # DOCKER_CONTAINER; if --no-docker-container is specified do not use
-    # any specified docker containers from cli or config file
-    if homcc_args_dict["no_docker_container"]:
         homcc_config.docker_container = None
-    elif (docker_container := homcc_args_dict["docker_container"]) is not None:
-        homcc_config.docker_container = docker_container
+    else:
+        if (schroot_profile := homcc_args_dict["schroot_profile"]) is not None:
+            homcc_config.schroot_profile = schroot_profile
 
-    if homcc_config.schroot_profile is not None and homcc_config.docker_container is not None:
-        logger.error(
-            "Can not specify a schroot profile and a docker container to use simultaneously."
-            "Please remove one of the config options."
-        )
-        sys.exit(os.EX_USAGE)
+        if (docker_container := homcc_args_dict["docker_container"]) is not None:
+            homcc_config.docker_container = docker_container
+
+        if homcc_config.schroot_profile is not None and homcc_config.docker_container is not None:
+            logger.error(
+                "Can not specify a schroot profile and a docker container to be used simultaneously. "
+                "Please specify only one of these config options."
+            )
+            sys.exit(os.EX_USAGE)
 
     # TIMEOUT
     if (timeout := homcc_args_dict["timeout"]) is not None:

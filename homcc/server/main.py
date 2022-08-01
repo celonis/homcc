@@ -38,7 +38,9 @@ logger: logging.Logger = logging.getLogger(__name__)
 def main():
     # load and parse arguments and configuration information
     homccd_args_dict: Dict[str, Any] = parse_cli_args(sys.argv[1:])
-    homccd_config: ServerConfig = parse_config()
+
+    # prevent config loading and parsing if --no-config was specified
+    homccd_config: ServerConfig = ServerConfig.empty() if homccd_args_dict["no_config"] else parse_config()
     logging_config: LoggingConfig = LoggingConfig(
         config=FormatterConfig.COLORED,
         formatter=Formatter.SERVER,

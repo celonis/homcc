@@ -415,6 +415,7 @@ class TCPClient:
         arguments: Arguments,
         cwd: str,
         dependency_dict: Dict[str, str],
+        target: Optional[str],
         schroot_profile: Optional[str],
         docker_container: Optional[str],
     ):
@@ -424,6 +425,7 @@ class TCPClient:
                 args=list(arguments),
                 cwd=cwd,
                 dependencies=dependency_dict,
+                target=target,
                 schroot_profile=schroot_profile,
                 docker_container=docker_container,
                 compression=self.compression,
