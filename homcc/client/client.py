@@ -365,7 +365,7 @@ class StateFile:
 class TCPClient:
     """Wrapper class to exchange homcc protocol messages via TCP"""
 
-    DEFAULT_PORT: int = 3633
+    DEFAULT_PORT: int = 3126
     DEFAULT_BUFFER_SIZE_LIMIT: int = 65_536  # default buffer size limit of StreamReader is 64 KiB
     DEFAULT_OPEN_CONNECTION_TIMEOUT: float = 5
 

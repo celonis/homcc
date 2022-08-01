@@ -23,7 +23,7 @@ SCHROOT_CONF_FILENAME: str = "schroot.conf"
 CHROOT_D_SUB_DIR: str = "chroot.d/"
 
 DEFAULT_ADDRESS: str = "0.0.0.0"
-DEFAULT_PORT: int = 3633
+DEFAULT_PORT: int = 3126
 DEFAULT_LIMIT: int = (
     len(os.sched_getaffinity(0))  # number of available CPUs for this process
     or os.cpu_count()  # total number of physical CPUs on the machine

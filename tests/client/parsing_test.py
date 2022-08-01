@@ -99,7 +99,7 @@ class TestParsingHosts:
             "#",
             ",",
             "remotehost/-1",
-            "remotehost:3633/-1",
+            "remotehost:3126/-1",
             "@remotehost/-1",
             "user@remotehost/-1",
         ]
@@ -148,28 +148,28 @@ class TestParsingHosts:
         tcp: ConnectionType = ConnectionType.TCP
 
         # NAME:PORT
-        assert Host.from_str("localhost:3633") == Host(type=local, name="localhost", port=3633)
-        assert Host.from_str("127.0.0.1:3633") == Host(type=tcp, name="127.0.0.1", port=3633)
-        assert Host.from_str("[::1]:3633") == Host(type=tcp, name="::1", port=3633)
+        assert Host.from_str("localhost:3126") == Host(type=local, name="localhost", port=3126)
+        assert Host.from_str("127.0.0.1:3126") == Host(type=tcp, name="127.0.0.1", port=3126)
+        assert Host.from_str("[::1]:3126") == Host(type=tcp, name="::1", port=3126)
 
         # NAME:PORT/LIMIT
-        assert Host.from_str("localhost:3633/64") == Host(type=local, name="localhost", limit=64, port=3633)
-        assert Host.from_str("127.0.0.1:3633/64") == Host(type=tcp, name="127.0.0.1", limit=64, port=3633)
-        assert Host.from_str("[::1]:3633/64") == Host(type=tcp, name="::1", limit=64, port=3633)
+        assert Host.from_str("localhost:3126/64") == Host(type=local, name="localhost", limit=64, port=3126)
+        assert Host.from_str("127.0.0.1:3126/64") == Host(type=tcp, name="127.0.0.1", limit=64, port=3126)
+        assert Host.from_str("[::1]:3126/64") == Host(type=tcp, name="::1", limit=64, port=3126)
 
         # NAME:PORT,COMPRESSION
-        assert Host.from_str("localhost:3633,lzo") == Host(type=local, name="localhost", compression="lzo", port=3633)
-        assert Host.from_str("127.0.0.1:3633,lzo") == Host(type=tcp, name="127.0.0.1", compression="lzo", port=3633)
-        assert Host.from_str("[::1]:3633,lzo") == Host(type=tcp, name="::1", compression="lzo", port=3633)
+        assert Host.from_str("localhost:3126,lzo") == Host(type=local, name="localhost", compression="lzo", port=3126)
+        assert Host.from_str("127.0.0.1:3126,lzo") == Host(type=tcp, name="127.0.0.1", compression="lzo", port=3126)
+        assert Host.from_str("[::1]:3126,lzo") == Host(type=tcp, name="::1", compression="lzo", port=3126)
 
         # NAME:PORT/LIMIT,COMPRESSION
-        assert Host.from_str("localhost:3633/64,lzo") == Host(
-            type=local, name="localhost", limit=64, compression="lzo", port=3633
+        assert Host.from_str("localhost:3126/64,lzo") == Host(
+            type=local, name="localhost", limit=64, compression="lzo", port=3126
         )
-        assert Host.from_str("127.0.0.1:3633/64,lzo") == Host(
-            type=tcp, name="127.0.0.1", limit=64, compression="lzo", port=3633
+        assert Host.from_str("127.0.0.1:3126/64,lzo") == Host(
+            type=tcp, name="127.0.0.1", limit=64, compression="lzo", port=3126
         )
-        assert Host.from_str("[::1]:3633/64,lzo") == Host(type=tcp, name="::1", limit=64, compression="lzo", port=3633)
+        assert Host.from_str("[::1]:3126/64,lzo") == Host(type=tcp, name="::1", limit=64, compression="lzo", port=3126)
 
     def test_at_host(self):
         local: ConnectionType = ConnectionType.LOCAL
@@ -224,8 +224,8 @@ class TestParsingHosts:
         assert Host.from_str("user@::1/64,lzo") == Host(type=ssh, name="::1", limit=64, compression="lzo", user="user")
 
     def test_load_hosts(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
-        hosts = ["localhost", "localhost:3633 ", "localhost:3633,lzo\t", " ", ""]
-        hosts_no_whitespace = ["localhost", "localhost:3633", "localhost:3633,lzo"]
+        hosts = ["localhost", "localhost:3126 ", "localhost:3126,lzo\t", " ", ""]
+        hosts_no_whitespace = ["localhost", "localhost:3126", "localhost:3126,lzo"]
 
         # $HOMCC_HOSTS
         monkeypatch.setenv(HOMCC_HOSTS_ENV_VAR, "\n".join(hosts))
