@@ -26,7 +26,7 @@ from homcc.common.messages import (
 )
 
 from homcc.server.cache import Cache
-from homcc.server.environment import Environment, create_root_temp_folder
+from homcc.server.environment import COMPILATION_TIMEOUT, Environment, create_root_temp_folder
 from homcc.server.parsing import DEFAULT_ADDRESS, DEFAULT_LIMIT, DEFAULT_PORT, ServerConfig
 
 
@@ -238,7 +238,10 @@ class TCPRequestHandler(socketserver.BaseRequestHandler):
             next_needed_file: str = next(iter(self.needed_dependency_keys))
             next_needed_hash: str = self.needed_dependencies[next_needed_file]
 
+            logger.debug("#%i needed dependencies left.", len(self.needed_dependencies))
+
             if next_needed_hash in self.server.cache:
+                logger.debug("Dependency with hash '%s' is in cache.", next_needed_hash)
                 self.environment.link_dependency_to_cache(next_needed_file, next_needed_hash, self.server.cache)
 
                 del self.needed_dependencies[next_needed_file]
@@ -246,7 +249,7 @@ class TCPRequestHandler(socketserver.BaseRequestHandler):
             else:
                 request_message = DependencyRequestMessage(next_needed_hash)
 
-                logger.debug("Sending request for dependency with hash %s", str(request_message.get_sha1sum()))
+                logger.debug("Sending request for dependency with hash '%s'.", str(request_message.get_sha1sum()))
                 self.send_message(request_message)
                 return len(self.needed_dependencies) > 0
 
@@ -254,7 +257,9 @@ class TCPRequestHandler(socketserver.BaseRequestHandler):
 
     def check_dependencies_exist(self):
         """Checks if all dependencies exist. If yes, starts compiling. If no, requests missing dependencies."""
-        if not self._request_next_dependency():
+        if self._request_next_dependency():
+            logger.debug("Waiting for a dependency to be sent by the client.")
+        else:
             # no further dependencies needed, compile now
             try:
                 result_message = self.environment.do_compilation(self.compiler_arguments)
@@ -391,6 +396,8 @@ class TCPRequestHandler(socketserver.BaseRequestHandler):
     def handle(self):
         """Handles incoming requests. Returning from this function means
         that the connection will be closed from the server side."""
+        self.request.settimeout(COMPILATION_TIMEOUT)
+
         with self.server.current_amount_connections_mutex:
             self.server.current_amount_connections += 1
 
