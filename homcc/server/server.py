@@ -286,16 +286,23 @@ class TCPRequestHandler(socketserver.BaseRequestHandler):
         docker_container: Optional[str],
     ) -> bool:
         """Checks whether a request from a client can be satisfied."""
-        if not self.check_compiler_arguments(arguments):
-            return False
-
-        if not self.check_target_argument(arguments, target):
-            return False
-
         if not self.check_schroot_profile_argument(schroot_profile):
             return False
 
         if not self.check_docker_container_argument(docker_container):
+            return False
+
+        if schroot_profile is not None or docker_container is not None:
+            # TODO(o.layer): currently, the checks below check the local environment,
+            # not the environment inside the sandbox. To avoid falsely declining a request
+            # while it is actually possible, we skip the checks for sandboxes until we implement
+            # these checks to work inside the sandbox
+            return True
+
+        if not self.check_compiler_arguments(arguments):
+            return False
+
+        if not self.check_target_argument(arguments, target):
             return False
 
         return True

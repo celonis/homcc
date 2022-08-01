@@ -317,17 +317,17 @@ class Arguments:
     def compiler(self, compiler: str):
         self._compiler = compiler
 
-    def compiler_normalized(self) -> Optional[str]:
+    def compiler_normalized(self) -> str:
         """normalize the compiler (remove path, keep just executable if a path is provided as compiler)"""
         if self.compiler is None:
-            return None
+            raise UnsupportedCompilerError
 
         return Path(self.compiler).name
 
-    def compiler_object(self):
+    def compiler_object(self) -> Compiler:
         """if present, return a new specified compiler object"""
         if self.compiler is None:
-            return None
+            raise UnsupportedCompilerError
 
         return Compiler.from_str(self.compiler_normalized())
 
@@ -696,7 +696,7 @@ class Clang(Compiler):
             raise UnsupportedCompilerError
 
         for arg in arguments.args:
-            if "--target=" in arg or "-target" in arg:
+            if arg.startswith("--target=") or arg == "-target":
                 logger.info(
                     "Not adding target '%s' to compiler '%s', as (potentially another) target is already specified.",
                     target,
