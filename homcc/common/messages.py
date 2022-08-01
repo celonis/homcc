@@ -152,8 +152,14 @@ class Message(ABC):
 class ArgumentMessage(Message):
     """
     Initial message in the homcc protocol.
-    Client sends args, working directory, dependencies (key: file paths, value: SHA1 hash), the chroot env profile and
-    the to be used compression algorithm.
+    Client sends:
+        - args (compiler arguments),
+        - working directory path,
+        - dependencies (keys: file paths, values: SHA1 hash),
+        - compilation target triple (e.g. x86_64-pc-linux-gnu),
+        - schroot environment profile name,
+        - docker container name,
+        - compression algorithm
     """
 
     def __init__(
@@ -161,6 +167,7 @@ class ArgumentMessage(Message):
         args: List[str],
         cwd: str,
         dependencies: Dict[str, str],
+        target: Optional[str],
         schroot_profile: Optional[str],
         docker_container: Optional[str],
         compression: Compression,
@@ -168,6 +175,7 @@ class ArgumentMessage(Message):
         self.args: List[str] = args
         self.cwd: str = cwd
         self.dependencies: Dict[str, str] = dependencies
+        self.target: Optional[str] = target
         self.schroot_profile: Optional[str] = schroot_profile
         self.docker_container: Optional[str] = docker_container
         self.compression: Compression = compression
@@ -181,6 +189,9 @@ class ArgumentMessage(Message):
         json_dict["args"] = self.args
         json_dict["cwd"] = self.cwd
         json_dict["dependencies"] = self.dependencies
+
+        if self.target:
+            json_dict["target"] = self.target
 
         if self.schroot_profile:
             json_dict["schroot_profile"] = self.schroot_profile
@@ -196,6 +207,10 @@ class ArgumentMessage(Message):
     def get_args(self) -> List[str]:
         """Returns the args as a list of strings."""
         return self.args
+
+    def get_target(self) -> Optional[str]:
+        """Returns the compilation target if provided."""
+        return self.target
 
     def get_cwd(self) -> str:
         """Returns the current working directory."""
@@ -223,6 +238,7 @@ class ArgumentMessage(Message):
                 self.get_args() == other.get_args()
                 and self.get_cwd() == other.get_cwd()
                 and self.get_dependencies() == other.get_dependencies()
+                and self.get_target() == other.get_target()
                 and self.get_schroot_profile() == other.get_schroot_profile()
                 and self.get_docker_container() == other.get_docker_container()
                 and self.get_compression() == other.get_compression()
@@ -235,6 +251,7 @@ class ArgumentMessage(Message):
             args=json_dict["args"],
             cwd=json_dict["cwd"],
             dependencies=json_dict["dependencies"],
+            target=json_dict.get("target"),
             schroot_profile=json_dict.get("schroot_profile"),
             docker_container=json_dict.get("docker_container"),
             compression=Compression.from_name(json_dict.get("compression")),
