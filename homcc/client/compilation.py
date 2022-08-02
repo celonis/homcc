@@ -12,8 +12,9 @@ from typing import Dict, Optional, List, Set, Tuple
 
 from homcc.client.client import (
     HostSelector,
-    RemoteHostSemaphore,
     LocalHostSemaphore,
+    RemoteHostSemaphore,
+    StateFile,
     TCPClient,
 )
 from homcc.common.errors import (
@@ -61,7 +62,7 @@ async def compile_remotely(arguments: Arguments, hosts: List[Host], config: Clie
         host.compression = host.compression or config.compression
 
         try:
-            with RemoteHostSemaphore(host):
+            with RemoteHostSemaphore(host), StateFile(arguments, host):
                 return await asyncio.wait_for(
                     compile_remotely_at(arguments, host, schroot_profile, docker_container), timeout=timeout
                 )
@@ -159,7 +160,7 @@ async def compile_remotely_at(
 def compile_locally(arguments: Arguments, localhost: Host) -> int:
     """execute local compilation"""
 
-    with LocalHostSemaphore(localhost):
+    with LocalHostSemaphore(localhost), StateFile(arguments, localhost):
         try:
             # execute compile command, e.g.: "g++ foo.cpp -o foo"
             result: ArgumentsExecutionResult = arguments.execute(check=True)

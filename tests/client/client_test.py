@@ -4,7 +4,6 @@ import pytest
 
 import os
 import posix_ipc
-import struct
 import threading
 import time
 
@@ -188,34 +187,5 @@ class TestStateFile:
         assert StateFile.DISTCC_TASK_STATE_STRUCT_SIZE == 8 + 8 + 8 + 128 + 128 + 4 + 4 + 8
         assert StateFile.DISTCC_STATE_MAGIC == int.from_bytes(b"DIH\0", byteorder="big")  # confirm comment
 
-        for i, phases in enumerate(StateFile.DISTCC_CLIENT_PHASES):
+        for i, phases in enumerate(StateFile.ClientPhase):
             assert i == phases.value
-
-    def test_bytes(self):
-        state_file: StateFile = StateFile("foo.cpp", "hostname", 42)
-        state_file.phase = StateFile.DISTCC_CLIENT_PHASES.STARTUP
-
-        packed_state: bytes = bytes(state_file)
-        assert packed_state == b"".join(
-            [  # individual struct packing because it would be too tedious to test byte equality otherwise
-                struct.pack("N", StateFile.DISTCC_TASK_STATE_STRUCT_SIZE),
-                struct.pack("L", StateFile.DISTCC_STATE_MAGIC),
-                struct.pack("L", state_file.pid),
-                struct.pack("128s", state_file.source_base_filename),
-                struct.pack("128s", state_file.hostname),
-                struct.pack("i", state_file.slot),
-                struct.pack("i", state_file.phase),
-                struct.pack("P", StateFile.DISTCC_NEXT_TASK_STATE),
-            ]
-        )
-
-        assert state_file == StateFile.from_bytes(packed_state)
-
-    def test_set_phase(self, tmp_path: Path):
-        with StateFile("foo.cpp", "hostname", 42, state_dir=tmp_path) as state_file:
-            assert state_file.filepath.exists()  # file touched
-
-            for phase in StateFile.DISTCC_CLIENT_PHASES:
-                state_file.set_phase(phase)  # phase set and status written to file
-                assert state_file.phase == phase
-                assert StateFile.from_bytes(state_file.filepath.read_bytes()).phase == phase
