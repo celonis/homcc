@@ -171,7 +171,7 @@ Additionally, `HOMCC` provides sandboxed compiler execution for remote compilati
     <td><sub><pre lang="ini">
     [homcc]
     compiler=g++
-    timeout=60
+    timeout=120
     compression=lzo
     schroot_profile=jammy
     docker_container=example_container
