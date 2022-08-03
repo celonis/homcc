@@ -26,7 +26,7 @@ The script uses `--keep` and `--force` flags by default, so the original files w
 
     python3 benchmark.py --dir="/home/arinmirza/Desktop/RELEASE_object_files_gcc11" --mode="RELEASE" --level=1 --compiler="gcc11" --algorithm lzop lzma snappy
 
-![screenshots/sample-benchmark-csv.png]
+![](screenshots/sample-benchmark-csv.png)
 
 ### Analysis (visualizer.ipynb)
 
@@ -34,9 +34,9 @@ The script uses `--keep` and `--force` flags by default, so the original files w
 
 #### Example plots
 
-[[plots/compratio-vs-comptime.png]]
-[[plots/compression_time_ratio_release_clang14.png]]
-[[plots/compratio-vs-total-time.png]]
+![](plots/compratio-vs-comptime.png)
+![](plots/compression_time_ratio_release_clang14.png)
+![](plots/compratio-vs-total-time.png)
 
 ## Results
 
