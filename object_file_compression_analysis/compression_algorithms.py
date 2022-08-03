@@ -3,13 +3,13 @@ from compression_utils import compress_decompress_implicit, compress_decompress_
 
 
 class Compressor:
-    '''
+    """
     :param compressor_name: The name of the compression algorithm
     :param file_extension: The extension to be appended to filename as suffix after compression
     :param procedure_function: A function that returns timings and size information of the algorithm
     :param flags: A dictionary containing the system command and flags for (de)compression
     :param files: A list of files to (de)compress and benchmark
-    '''
+    """
 
     def __init__(self,
                  compressor_name: str,
