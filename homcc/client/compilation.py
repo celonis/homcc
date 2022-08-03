@@ -39,7 +39,7 @@ from homcc.common.messages import (
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_COMPILATION_REQUEST_TIMEOUT: float = 60
+DEFAULT_COMPILATION_REQUEST_TIMEOUT: float = 120
 DEFAULT_LOCALHOST_LIMIT: int = (
     len(os.sched_getaffinity(0))  # number of available CPUs for this process
     or os.cpu_count()  # total number of physical CPUs on the machine
