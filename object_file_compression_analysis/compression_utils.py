@@ -3,7 +3,7 @@ import os
 
 
 def compress(flags: dict, input_filename, output_filename=None) -> float:
-    '''Executes the specified compression command with the given flags.'''
+    """Executes the specified compression command with the given flags."""
     command = ' '.join([
         flags['shell_command'], flags['keep'], flags['force'],
         flags['compression_level'], flags['compress'], input_filename])
@@ -20,7 +20,7 @@ def compress(flags: dict, input_filename, output_filename=None) -> float:
 
 
 def decompress(flags: dict, input_filename, output_filename=None) -> float:
-    '''Executes the specified decompression command with the given flags.'''
+    """Executes the specified decompression command with the given flags."""
     command = ' '.join([
         flags['shell_command'], flags['keep'], flags['force'],
         flags['compression_level'], flags['decompress'], input_filename])
@@ -36,12 +36,12 @@ def decompress(flags: dict, input_filename, output_filename=None) -> float:
 
 
 def compare_file_sizes(input_filename, output_filename) -> tuple:
-    '''
+    """
     Returns a tuple with the following content
     [0]: size of the input file in bytes
     [1]: size of the output file in bytes
     [2]: size difference percentage based on the size of the input file
-    '''
+    """
     size_original = os.path.getsize(input_filename)
     size_compressed = os.path.getsize(output_filename)
     compression_ratio = 100 * (size_original-size_compressed) / size_original
@@ -53,7 +53,7 @@ def rename_file(old_filename, new_filename):
 
 
 def compress_decompress_implicit(file: str, extension: str, flags: dict):
-    '''
+    """
     Compresses and decompresses the given file with the specified flags.
     This method should be used for algorithms, whose (de)compression command 
     does not support passing an output filename as parameter.
@@ -66,7 +66,7 @@ def compress_decompress_implicit(file: str, extension: str, flags: dict):
     When called with the --keep and --force flags, this function generates 
     two additional files input.copy and input.extension. The first one should be
     identical to the original input file, and the latter is the compressed data.
-    '''
+    """
     filename_0 = file
     filename_1 = f'{file}.{extension}'
     filename_2 = f'{file}.copy.{extension}'
@@ -80,7 +80,7 @@ def compress_decompress_implicit(file: str, extension: str, flags: dict):
 
 
 def compress_decompress_explicit(file: str, extension: str, flags: dict):
-    '''
+    """
     Compresses and decompresses the given file with the specified flags.
     This method should be used for algorithms, whose (de)compression command 
     expects explicit input and output file names as parameter.
@@ -93,7 +93,7 @@ def compress_decompress_explicit(file: str, extension: str, flags: dict):
     implicit file names. Two new files will be generated with the names input.copy
     and input.copy.extension. The first one should be identical to the original input
     file, and the latter is the compressed data.
-    '''
+    """
     filename_0 = file
     filename_1 = f'{file}.copy.{extension}'
     filename_2 = f'{file}.copy'
