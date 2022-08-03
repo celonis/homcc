@@ -356,7 +356,7 @@ def parse_cli_args(args: List[str]) -> Tuple[Dict[str, Any], Arguments]:
         metavar="HOST",
         type=str,
         help="HOST defines the connection to the remote compilation server:\n"
-        "\tHOST\t\tTCP connection to specified HOST with default port 3633\n"
+        "\tHOST\t\tTCP connection to specified HOST with default port 3126\n"
         "\tHOST:PORT\tTCP connection to specified HOST with specified PORT\n"
         # TODO(s.pirsch): enable these lines once SSHClient is implemented, parsing should already work however
         # "\t@HOST\t\tSSH connection to specified HOST\n"

@@ -479,7 +479,7 @@ class Arguments:
         if len(self.source_files) > 1:
             logger.warning("Executing [%s] might not create the intended dependency files.", self)
 
-        return self.copy(), dependency_output_file
+        return self.copy().add_arg(self.Unsendable.PREPROCESSOR_DEPENDENCY_ARG), dependency_output_file
 
     def no_linking(self) -> Arguments:
         """return a copy of arguments where all output args are removed and the no linking arg is added"""
