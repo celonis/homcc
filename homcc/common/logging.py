@@ -202,7 +202,7 @@ def setup_logging(logging_config: LoggingConfig):
         handler.setFormatter(fmt)
 
     else:
-        raise ValueError(f'Unrecognized formatter destination "{logging_config.destination}"')
+        raise ValueError(f"Unrecognized formatter destination '{logging_config.destination}'")
 
     # configure the root logger
     logging.basicConfig(level=logging_config.level, handlers=[handler])

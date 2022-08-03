@@ -285,13 +285,13 @@ class StateFile:
             self.source_base_filename = "".encode()
 
         if len(self.source_base_filename) > 127:
-            logger.warning('Trimming too long Source Base Filename "%s"', self.source_base_filename.decode())
+            logger.warning("Trimming too long Source Base Filename '%s'", self.source_base_filename.decode())
             self.source_base_filename = self.source_base_filename[:127]
 
         self.hostname = host.name.encode()  # char host[128]
 
         if len(self.hostname) > 127:
-            logger.warning('Trimming too long Hostname "%s"', self.hostname.decode())
+            logger.warning("Trimming too long Hostname '%s'", self.hostname.decode())
             self.hostname = self.hostname[:127]
 
         self.slot = slot or 0

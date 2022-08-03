@@ -549,7 +549,7 @@ class Arguments:
         # sanity check if different execution options required by client and server compilations are explicitly enabled
         for kwarg in kwargs:
             if kwarg not in Arguments.ALLOWED_SUBPROCESS_KWARGS:
-                raise NotImplementedError(f'Unsupported subprocess option "{kwarg}"')
+                raise NotImplementedError(f"Unsupported subprocess option '{kwarg}'")
 
         check: bool = kwargs.pop("check", False)  # explicitly set check to satisfy pylint-W1510
 
