@@ -146,7 +146,7 @@ class Arguments:
         return len(self.args) + 1
 
     def __str__(self) -> str:
-        return f'[{self.compiler} {" ".join(self.args)}]'
+        return f"[{self.compiler} {' '.join(self.args)}]"
 
     def __repr__(self) -> str:
         return f"{self.__class__}({str(self)})"
@@ -386,7 +386,7 @@ class Arguments:
         """check whether the remote execution of arguments would be successful"""
         # "-o -" might either be treated as "write result to stdout" or "write result to file named '-'"
         if self.output == "-":
-            logger.info('Cannot compile %s remotely because output "%s" is ambiguous', self, self.output)
+            logger.info("Cannot compile %s remotely because output '%s' is ambiguous", self, self.output)
             return False
 
         # no source files
@@ -399,7 +399,7 @@ class Arguments:
             tuple(Arguments.ALLOWED_LANGUAGE_PREFIXES)
         ):
             logger.info(
-                'Cannot compile %s remotely because handling of language "%s" is too complex',
+                "Cannot compile %s remotely because handling of language '%s' is too complex",
                 self,
                 self.specified_language,
             )

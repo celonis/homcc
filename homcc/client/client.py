@@ -330,7 +330,7 @@ class StateFile:
         try:
             self.filepath.touch(exist_ok=False)
         except FileExistsError:
-            logger.warning('Could not create client state file "%s" as it already exists!', self.filepath.absolute())
+            logger.warning("Could not create client state file '%s' as it already exists!", self.filepath.absolute())
 
         self.filepath.write_bytes(bytes(self))
 
@@ -340,7 +340,7 @@ class StateFile:
         try:
             self.filepath.unlink()
         except FileNotFoundError:
-            logger.warning('File "%s" was already deleted!', self.filepath.absolute())
+            logger.warning("File '%s' was already deleted!", self.filepath.absolute())
 
 
 class TCPClient:

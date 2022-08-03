@@ -120,7 +120,7 @@ async def compile_remotely_at(
 
     # extract and use compilation result if possible
     if not isinstance(host_response, CompilationResultMessage):
-        raise UnexpectedMessageTypeError(f'Received message of unexpected type "{host_response.message_type}"!')
+        raise UnexpectedMessageTypeError(f"Received message of unexpected type '{host_response.message_type}'!")
 
     host_result: ArgumentsExecutionResult = host_response.get_compilation_result()
 

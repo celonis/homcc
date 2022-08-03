@@ -290,7 +290,7 @@ class ClientConfig:
 
     def __str__(self):
         return (
-            f'Configuration (from [{", ".join(self.files)}]):\n'
+            f"Configuration (from [{', '.join(self.files)}]):\n"
             f"\tCompiler:\t{self.compiler}\n"
             f"\tCompression:\t{self.compression}\n"
             f"\tschroot_profile:\t{self.schroot_profile}\n"
@@ -399,7 +399,7 @@ def parse_cli_args(args: List[str]) -> Tuple[Dict[str, Any], Arguments]:
         type=str,
         metavar="[COMPILER] ARGUMENTS ...",
         help="COMPILER, if not specified explicitly, is either read from the config file or defaults to "
-        f'"{Arguments.DEFAULT_COMPILER}"\n'
+        f"'{Arguments.DEFAULT_COMPILER}'\n"
         "dependant on remote execution, the remaining ARGUMENTS may be altered before being forwarded to the COMPILER",
     )
 
@@ -468,7 +468,7 @@ def parse_host(host: str) -> Host:
         connection_type = ConnectionType.TCP
 
     else:
-        raise HostParsingError(f'Host "{host}" could not be parsed correctly, please provide it in the correct format!')
+        raise HostParsingError(f"Host '{host}' could not be parsed correctly, please provide it in the correct format!")
 
     # extract remaining limit info: HOST_FORMAT/LIMIT
     if (host_limit_match := re.match(r"^(\S+)/(\d+)$", host)) is not None:
@@ -511,7 +511,7 @@ def load_hosts(hosts_file_locations: Optional[List[Path]] = None) -> Tuple[str, 
     for hosts_file_location in hosts_file_locations:
         if hosts_file_location.exists():
             if hosts_file_location.stat().st_size == 0:
-                logger.warning('Skipping empty hosts file "%s"!', hosts_file_location)
+                logger.warning("Skipping empty hosts file '%s'!", hosts_file_location)
                 continue
             return str(hosts_file_location), filtered_lines(hosts_file_location.read_text(encoding="utf-8"))
 
