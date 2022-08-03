@@ -18,7 +18,7 @@ Although `HOMCC` is still in an early stage of development, we can already see i
 The main solution to enable faster compilation times for thinner connections is the compression and `server`-side caching of dependencies.
 Due to caching, only missing dependencies are requested from `client`s which drastically decreases the overall network traffic once the cache is warmed up.
 Transmitted files like the requested dependencies and also the resulting object files are compressed to further improve build times.
-Additionally, `HOMCC` provides sandboxed compiler execution for remote compilations (via `schroot`).
+Additionally, `HOMCC` provides sandboxed compiler execution for remote compilations via `schroot` and `docker`.
 
 ---
 
@@ -78,7 +78,7 @@ Additionally, `HOMCC` provides sandboxed compiler execution for remote compilati
     </table>
 - Possible `hosts` formats:
     - `HOST` format:
-      - `HOST`: TCP connection to specified `HOST` with default port `3633`
+      - `HOST`: TCP connection to specified `HOST` with default port `3126`
       - `HOST:PORT`: TCP connection to specified `HOST` with specified `PORT`
     - `HOST/LIMIT` format:
       - Define any of the above `HOST` formats with an additional `LIMIT` parameter that specifies the maximum connection limit to the corresponding `HOST`
@@ -96,18 +96,24 @@ Additionally, `HOMCC` provides sandboxed compiler execution for remote compilati
     # homcc: hosts
     localhost
     remotehost/12
-    192.168.0.1:3633/21
-    [FC00::1]:3633/42,lzo
+    192.168.0.1:3126/21
+    [FC00::1]:3126/42,lzo
     </pre></sub></td>
     <td><sub><pre>
     # Comment
     "localhost" host with default limit of 2
-    Named "remotehost" TCP host with limit of 12 at default port 3633
-    IPv4 "192.168.0.1" TCP host at port 3633 with limit of 21
-    IPv6 "FC00::1" TCP host at port 3633 with limit of 42 and lzo compression
+    Named "remotehost" TCP host with limit of 12 at default port 3126
+    IPv4 "192.168.0.1" TCP host at port 3126 with limit of 21
+    IPv6 "FC00::1" TCP host at port 3126 with limit of 42 and lzo compression
     </pre></sub></td>
     </tr>
   </table>
+- \[Optional] Sandboxed execution via either `schroot` or `docker` can be enabled by specifying their respective environmental variables `HOMCC_SCHROOT_PROFILE`and `HOMCC_DOCKER_CONTAINER`, e.g.:
+  ```sh
+  $ HOMCC_SCHROOT_PROFILE=jammy homcc g++ foo.cpp
+  ```
+  There is also the possibility to use CLI arguments or config files to specify sandboxed execution, see [Configuration](#configuration).
+  Utilizable profile and container names need to be provided by the administrator of the relevant host server.
 
 
 ### Server: `homccd` 
@@ -128,7 +134,7 @@ Additionally, `HOMCC` provides sandboxed compiler execution for remote compilati
 
 
 ## Configuration
-- Overwrite defaults globally via a `homcc.conf` configuration file:
+- Overwrite defaults globally via specifying environmental variables with the `HOMCC_` or `HOMCCD_` prefix or via `homcc.conf` configuration files:
   <table>
     <tr align="center"><th><code>homcc.conf</code> file locations</th></tr>
     <tr valign="top"><td>
@@ -140,8 +146,24 @@ Additionally, `HOMCC` provides sandboxed compiler execution for remote compilati
   </table>
 - :exclamation: Explicit configuration is currently not necessary, only do this if you know exactly what you are doing!
   <table>
-    <tr align="center"><th>Example: <code>homcc.conf</code></th><th>Explanation</th></tr>
+    <tr align="center"><th>Environmental Variable</th><th>Example: <code>homcc.conf</code></th><th>Explanation</th></tr>
     <tr valign="top">
+    <td><sub><pre lang="ini">
+     
+    HOMCC_COMPILER
+    HOMCC_TIMEOUT
+    HOMCC_COMPRESSION
+    HOMCC_SCHROOT_PROFILE
+    HOMCC_DOCKER_CONTAINER
+    HOMCC_LOG_LEVEL
+    HOMCC_VERBOSE
+     
+    HOMCCD_LIMIT
+    HOMCCD_PORT
+    HOMCCD_ADDRESS
+    HOMCCD_LOG_LEVEL
+    HOMCCD_VERBOSE
+    </pre></sub></td>
     <td><sub><pre lang="ini">
     [homcc]
     compiler=g++
@@ -153,7 +175,7 @@ Additionally, `HOMCC` provides sandboxed compiler execution for remote compilati
     verbose=True
     [homccd]
     limit=64
-    port=3633
+    port=3126
     address=0.0.0.0
     log_level=DEBUG
     verbose=True

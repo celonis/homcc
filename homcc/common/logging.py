@@ -20,6 +20,10 @@ class LogLevel(int, Enum):
     ERROR = logging.ERROR
     CRITICAL = logging.CRITICAL
 
+    @classmethod
+    def from_str(cls, log_level: Optional[str]) -> Optional[LogLevel]:
+        return cls[log_level] if log_level else None
+
 
 class Formatter(Enum):
     """Enum fields specifying whether to choose the ClientFormatter or ServerFormatter."""

@@ -7,7 +7,7 @@ import subprocess
 import time
 
 from pathlib import Path
-from typing import List, Optional
+from typing import Dict, List, Optional
 from dataclasses import dataclass
 
 from homcc.common.compression import Compression, NoCompression, LZO, LZMA
@@ -36,35 +36,33 @@ class TestEndToEnd:
 
         compiler: str
         tcp_port: int
-        compression: Optional[Compression] = NoCompression()
+        compression: Compression = NoCompression()
         schroot_profile: Optional[str] = None
         docker_container: Optional[str] = None
 
+        def __post_init__(self):
+            if self.schroot_profile is not None and self.docker_container is not None:
+                raise NotImplementedError("schroot profile and docker container are provided simultaneously")
+
         def to_list(self) -> List[str]:
-            compression_arg = (
-                ""
-                if self.compression is None or isinstance(self.compression, NoCompression)
-                else f",{self.compression}"
+            compression = (
+                f",{self.compression}" if self.compression is not isinstance(self.compression, NoCompression) else ""
             )
+            host_arg = f"--host={TestEndToEnd.ADDRESS}:{self.tcp_port}/1{compression}"
 
-            schroot_arg = (
-                "--no-schroot-profile" if self.schroot_profile is None else f"--schroot-profile={self.schroot_profile}"
-            )
+            sandbox_arg: str = "--no-sandbox"
 
-            docker_arg = (
-                "--no-docker-container"
-                if self.docker_container is None
-                else f"--docker-container={self.docker_container}"
-            )
+            if self.schroot_profile is not None:
+                sandbox_arg = f"--schroot-profile={self.schroot_profile}"
+            elif self.docker_container is not None:
+                sandbox_arg = f"--docker-container={self.docker_container}"
 
-            return [  # specify all relevant args explicitly so that config files may not disturb e2e tests
+            return [
                 "./homcc/client/main.py",
-                "--log-level=DEBUG",
-                "--verbose",
-                f"--host={TestEndToEnd.ADDRESS}:{self.tcp_port}/1{compression_arg}",
-                schroot_arg,
-                docker_arg,
-                "--timeout=20",
+                "--no-config",  # disable external configuration
+                "--verbose",  # required for assertions on stdout
+                host_arg,
+                sandbox_arg,
                 self.compiler,
             ]
 
@@ -91,12 +89,13 @@ class TestEndToEnd:
         def __init__(self, unused_tcp_port: int):
             self.unused_tcp_port: int = unused_tcp_port
             self.process: subprocess.Popen = subprocess.Popen(  # pylint: disable=consider-using-with
-                [  # specify all relevant args explicitly so that config files may not disturb e2e tests
+                [
                     "./homcc/server/main.py",
+                    "--no-config",  # disable external configuration
+                    "--verbose",  # required for assertions on stdout
                     f"--listen={TestEndToEnd.ADDRESS}",
                     f"--port={unused_tcp_port}",
                     "--jobs=1",
-                    "--verbose",
                 ],
                 bufsize=TestEndToEnd.BUF_SIZE,
                 encoding="utf-8",
@@ -253,9 +252,10 @@ class TestEndToEnd:
         Path("foo.o").unlink(missing_ok=True)
         Path(self.OUTPUT).unlink(missing_ok=True)
 
+    # client failures
     @pytest.mark.timeout(TIMEOUT)
-    def test_end_to_end_recursive_client(self, unused_tcp_port: int):
-        try:
+    def test_end_to_end_client_recursive(self, unused_tcp_port: int):
+        with pytest.raises(subprocess.CalledProcessError) as err:
             subprocess.run(  # client receiving itself as compiler arg
                 self.BasicClientArguments("./homcc/client/main.py", unused_tcp_port).to_list(),
                 check=True,
@@ -263,8 +263,27 @@ class TestEndToEnd:
                 stderr=subprocess.STDOUT,
                 encoding="utf-8",
             )
-        except subprocess.CalledProcessError as err:
-            assert "seems to have been invoked recursively!" in err.stdout
+
+        assert err.value.returncode == os.EX_USAGE
+        assert "seems to have been invoked recursively!" in err.value.stdout
+
+    @pytest.mark.timeout(TIMEOUT)
+    def test_end_to_end_client_multiple_sandbox(self, unused_tcp_port: int):
+        env: Dict[str, str] = os.environ.copy()
+        env["HOMCC_DOCKER_CONTAINER"] = "bar"
+
+        with pytest.raises(subprocess.CalledProcessError) as err:
+            subprocess.run(  # client receiving multiple sandbox options
+                self.BasicClientArguments("g++", unused_tcp_port, schroot_profile="foo").to_list(),
+                check=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                encoding="utf-8",
+                env=env,
+            )
+
+        assert err.value.returncode == os.EX_USAGE
+        assert "Can not specify a schroot profile and a docker container to be used simultaneously." in err.value.stdout
 
     # g++ tests
     @pytest.mark.gplusplus
@@ -324,32 +343,6 @@ class TestEndToEnd:
     def test_end_to_end_gplusplus_shared_host_slot(self, unused_tcp_port: int):
         self.cpp_end_to_end_multiple_clients_shared_host(self.BasicClientArguments("g++", unused_tcp_port))
 
-    # clang++ tests
-    @pytest.mark.clangplusplus
-    @pytest.mark.timeout(TIMEOUT)
-    def test_end_to_end_clangplusplus(self, unused_tcp_port: int):
-        self.cpp_end_to_end(self.BasicClientArguments("clang++", unused_tcp_port))
-
-    @pytest.mark.clangplusplus
-    @pytest.mark.timeout(TIMEOUT)
-    def test_end_to_end_clangplusplus_no_linking(self, unused_tcp_port: int):
-        self.cpp_end_to_end_no_linking(self.BasicClientArguments("clang++", unused_tcp_port))
-
-    @pytest.mark.clangplusplus
-    @pytest.mark.timeout(TIMEOUT)
-    def test_cpp_end_to_end_clangplusplus_preprocessor_side_effects(self, unused_tcp_port: int):
-        self.cpp_end_to_end_preprocessor_side_effects(self.BasicClientArguments("clang++", unused_tcp_port))
-
-    @pytest.mark.clangplusplus
-    @pytest.mark.timeout(TIMEOUT)
-    def test_end_to_end_clangplusplus_linking_only(self, unused_tcp_port: int):
-        self.cpp_end_to_end_linking_only(self.BasicClientArguments("clang++", unused_tcp_port))
-
-    @pytest.mark.clangplusplus
-    @pytest.mark.timeout(TIMEOUT)
-    def test_end_to_end_clangplusplus_shared_host_slot(self, unused_tcp_port: int):
-        self.cpp_end_to_end_multiple_clients_shared_host(self.BasicClientArguments("clang++", unused_tcp_port))
-
     @pytest.mark.gplusplus
     @pytest.mark.docker
     @pytest.mark.timeout(TIMEOUT)
@@ -378,3 +371,29 @@ class TestEndToEnd:
             self.BasicClientArguments("g++", unused_tcp_port, docker_container=docker_container),
             additional_args=["-fPIC"],
         )
+
+    # clang++ tests
+    @pytest.mark.clangplusplus
+    @pytest.mark.timeout(TIMEOUT)
+    def test_end_to_end_clangplusplus(self, unused_tcp_port: int):
+        self.cpp_end_to_end(self.BasicClientArguments("clang++", unused_tcp_port))
+
+    @pytest.mark.clangplusplus
+    @pytest.mark.timeout(TIMEOUT)
+    def test_end_to_end_clangplusplus_no_linking(self, unused_tcp_port: int):
+        self.cpp_end_to_end_no_linking(self.BasicClientArguments("clang++", unused_tcp_port))
+
+    @pytest.mark.clangplusplus
+    @pytest.mark.timeout(TIMEOUT)
+    def test_cpp_end_to_end_clangplusplus_preprocessor_side_effects(self, unused_tcp_port: int):
+        self.cpp_end_to_end_preprocessor_side_effects(self.BasicClientArguments("clang++", unused_tcp_port))
+
+    @pytest.mark.clangplusplus
+    @pytest.mark.timeout(TIMEOUT)
+    def test_end_to_end_clangplusplus_linking_only(self, unused_tcp_port: int):
+        self.cpp_end_to_end_linking_only(self.BasicClientArguments("clang++", unused_tcp_port))
+
+    @pytest.mark.clangplusplus
+    @pytest.mark.timeout(TIMEOUT)
+    def test_end_to_end_clangplusplus_shared_host_slot(self, unused_tcp_port: int):
+        self.cpp_end_to_end_multiple_clients_shared_host(self.BasicClientArguments("clang++", unused_tcp_port))

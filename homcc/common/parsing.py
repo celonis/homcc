@@ -8,7 +8,7 @@ from typing import List, Tuple
 
 logger = logging.getLogger(__name__)
 
-HOMCC_DIR_ENV_VAR = "$HOMCC_DIR"
+HOMCC_DIR_ENV_VAR = "HOMCC_DIR"
 HOMCC_CONFIG_FILENAME: str = "homcc.conf"
 
 

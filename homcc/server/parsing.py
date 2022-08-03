@@ -3,13 +3,14 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 import sys
 
 from argparse import Action, ArgumentParser, ArgumentTypeError, RawTextHelpFormatter
 from configparser import Error, SectionProxy
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, ClassVar, Dict, List, Optional, Union
 
 from homcc import server
 from homcc.common.logging import LogLevel
@@ -21,7 +22,7 @@ logger = logging.getLogger(__name__)
 HOMCC_SERVER_CONFIG_SECTION: str = "homccd"
 
 DEFAULT_ADDRESS: str = "0.0.0.0"
-DEFAULT_PORT: int = 3633
+DEFAULT_PORT: int = 3126
 DEFAULT_LIMIT: int = (
     len(os.sched_getaffinity(0))  # number of available CPUs for this process
     or os.cpu_count()  # total number of physical CPUs on the machine
@@ -62,6 +63,52 @@ class ShowProfiles(Action):
 class ServerConfig:
     """Class to encapsulate and default client configuration information"""
 
+    class EnvironmentVariables:
+        """Encapsulation of all environment variables relevant to server configuration"""
+
+        HOMCCD_LIMIT_ENV_VAR: ClassVar[str] = "HOMCCD_LIMIT"
+        HOMCCD_PORT_ENV_VAR: ClassVar[str] = "HOMCCD_PORT"
+        HOMCCD_ADDRESS_ENV_VAR: ClassVar[str] = "HOMCCD_ADDRESS"
+        HOMCCD_LOG_LEVEL_ENV_VAR: ClassVar[str] = "HOMCCD_LOG_LEVEL"
+        HOMCCD_VERBOSE_ENV_VAR: ClassVar[str] = "HOMCCD_VERBOSE"
+
+        @classmethod
+        def to_list(cls) -> List[str]:
+            return [
+                cls.HOMCCD_LIMIT_ENV_VAR,
+                cls.HOMCCD_PORT_ENV_VAR,
+                cls.HOMCCD_ADDRESS_ENV_VAR,
+                cls.HOMCCD_LOG_LEVEL_ENV_VAR,
+                cls.HOMCCD_VERBOSE_ENV_VAR,
+            ]
+
+        @classmethod
+        def get_limit(cls) -> Optional[int]:
+            if limit := os.getenv(cls.HOMCCD_LIMIT_ENV_VAR):
+                return int(limit)
+            return None
+
+        @classmethod
+        def get_port(cls) -> Optional[int]:
+            if port := os.getenv(cls.HOMCCD_PORT_ENV_VAR):
+                return int(port)
+            return None
+
+        @classmethod
+        def get_address(cls) -> Optional[str]:
+            return os.getenv(cls.HOMCCD_ADDRESS_ENV_VAR)
+
+        @classmethod
+        def get_log_level(cls) -> Optional[str]:
+            return os.getenv(cls.HOMCCD_LOG_LEVEL_ENV_VAR)
+
+        @classmethod
+        def get_verbose(cls) -> Optional[bool]:
+            if (verbose := os.getenv(cls.HOMCCD_VERBOSE_ENV_VAR)) is not None:
+                # parse analogously to configparser.getboolean
+                return re.match(r"^(1)|(yes)|(true)|(on)$", verbose, re.IGNORECASE) is not None
+            return None
+
     files: List[str]
     address: Optional[str]
     port: Optional[int]
@@ -80,11 +127,19 @@ class ServerConfig:
         verbose: Optional[bool] = None,
     ):
         self.files = files
-        self.limit = limit
-        self.port = port
-        self.address = address
-        self.log_level = LogLevel[log_level] if log_level else None
+
+        # configurations via environmental variables have higher precedence than those specified via config files
+        self.limit = self.EnvironmentVariables.get_limit() or limit
+        self.port = self.EnvironmentVariables.get_port() or port
+        self.address = self.EnvironmentVariables.get_address() or address
+        self.log_level = LogLevel.from_str(self.EnvironmentVariables.get_log_level() or log_level)
+
+        verbose = self.EnvironmentVariables.get_verbose() or verbose
         self.verbose = verbose is not None and verbose
+
+    @classmethod
+    def empty(cls):
+        return cls(files=[])
 
     @classmethod
     def from_config_section(cls, files: List[str], homccd_config: SectionProxy) -> ServerConfig:
@@ -99,11 +154,11 @@ class ServerConfig:
     def __str__(self):
         return (
             f'Configuration (from [{", ".join(self.files)}]):\n'
-            f"\tLimit:\t{self.limit}\n"
-            f"\tPort:\t{self.port}\n"
-            f"\tAddress:\t{self.address}\n"
-            f"\tLog-Level:\t{self.log_level}\n"
-            f"\tVerbosity:\t{str(self.verbose)}\n"
+            f"\tlimit:\t{self.limit}\n"
+            f"\tport:\t{self.port}\n"
+            f"\taddress:\t{self.address}\n"
+            f"\tlog_level:\t{self.log_level}\n"
+            f"\tverbose:\t{str(self.verbose)}\n"
         )
 
 
@@ -142,6 +197,11 @@ def parse_cli_args(args: List[str]) -> Dict[str, Any]:
         type=min_job_limit,
         help=f"maximum LIMIT of concurrent compilation jobs, might default to {DEFAULT_LIMIT + 2} as "
         "determined via the CPU count",
+    )
+    general_options_group.add_argument(
+        "--no-config",
+        action="store_true",
+        help="enforce that only configurations provided via the CLI are used",
     )
 
     # networking

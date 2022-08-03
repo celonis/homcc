@@ -7,8 +7,7 @@ import logging
 from pathlib import Path
 from typing import Dict, List, Optional
 
-from homcc.common.arguments import Arguments, ArgumentsExecutionResult
-from homcc.common.compilers import Compiler
+from homcc.common.arguments import Arguments, ArgumentsExecutionResult, Compiler
 from homcc.common.compression import Compression
 from homcc.common.messages import CompilationResultMessage, ObjectFile
 from homcc.server.cache import Cache

@@ -9,6 +9,7 @@ from typing import Any, Dict
 
 sys.path.append(os.path.join(os.path.dirname(__file__), "../.."))
 
+from homcc import server  # pylint: disable=wrong-import-position
 from homcc.common.logging import (  # pylint: disable=wrong-import-position
     Formatter,
     FormatterConfig,
@@ -36,7 +37,9 @@ logger: logging.Logger = logging.getLogger(__name__)
 def main():
     # load and parse arguments and configuration information
     homccd_args_dict: Dict[str, Any] = parse_cli_args(sys.argv[1:])
-    homccd_config: ServerConfig = parse_config()
+
+    # prevent config loading and parsing if --no-config was specified
+    homccd_config: ServerConfig = ServerConfig.empty() if homccd_args_dict["no_config"] else parse_config()
     logging_config: LoggingConfig = LoggingConfig(
         config=FormatterConfig.COLORED,
         formatter=Formatter.SERVER,
@@ -80,20 +83,20 @@ def main():
     logger.debug(
         "%s - %s\n" "Caller:\t%s\n" "%s",  # homccd location and version; homccd caller; config info
         sys.argv[0],
-        "0.0.1",
+        server.__version__,
         sys.executable,
         homccd_config,
     )
 
     # start server
     try:
-        server, server_thread = start_server(homccd_config)
+        tcp_server, server_thread = start_server(homccd_config)
     except ServerInitializationError:
         logger.error("Could not start homccd, terminating.")
         sys.exit(os.EX_OSERR)
 
     def signal_handler(*_):
-        stop_server(server)
+        stop_server(tcp_server)
 
     signal.signal(signal.SIGINT, signal_handler)
     server_thread.join()
