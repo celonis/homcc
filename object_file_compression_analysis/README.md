@@ -34,9 +34,9 @@ The script uses `--keep` and `--force` flags by default, so the original files w
 
 #### Example plots
 
-![plots/compratio-vs-comptime.png]
-![plots/compression_time_ratio_release_clang14.png]
-![plots/compratio-vs-total-time.png]
+[[plots/compratio-vs-comptime.png]]
+[[plots/compression_time_ratio_release_clang14.png]]
+[[plots/compratio-vs-total-time.png]]
 
 ## Results
 
