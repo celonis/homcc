@@ -12,11 +12,11 @@ Both of them work relative to the directory they are located in and they will re
 
     python3 benchmark.py --dir <object-files-directory> --mode <compilation-mode> --level <compression-level> --compiler <compiler> --algorithm <compression-algorithms>
 
-- <object-files-directory>: Absolute path of the folder containing the compiled `.o` files. This is not relative to the current working directory.
-- <compilation-mode>: `debug` or `release`. This parameter affects the naming of the generated csv files, so make sure to provide the <object-files-directory>: corresponding to the compilation mode.
-- <compression-level>: Compression level flag for the compression algorithm. Some implementations (e.g. snappy) ignore this flag.
-- <compiler> `clang14` or `gcc11`. This parameter only affects the naming of the generated csv files, so make sure to provide the corresponding files.
-- <compression-algorithm> `lzop`, `lzma`, `lz4`, `gzip`, `bzip2` or `snappy`. If multiple algorithms are provided, separate them by spaces.
+- **object-files-directory**: Absolute path of the folder containing the compiled `.o` files. This is not relative to the current working directory.
+- **compilation-mode**: `debug` or `release`. This parameter affects the naming of the generated csv files, so make sure to provide the object-files-directory corresponding to the compilation mode.
+- **compression-level**: Compression level flag for the compression algorithm. Some implementations (e.g. snappy) ignore this flag.
+- **compiler**: `clang14` or `gcc11`. This parameter only affects the naming of the generated csv files, so make sure to provide the corresponding files.
+- **compression-algorithm**:`lzop`, `lzma`, `lz4`, `gzip`, `bzip2` or `snappy`. If multiple algorithms are provided, separate them by spaces.
 
 The script will recursively traverse the given directory, compress and then decompress every object file it finds. Then it will prepare a report in the form of a `csv` file containing the original file size, size after compression, compression ratio (calculated as `100 * (old_size - new_size) / old_size`), time needed for compression, and time needed for decompression. 
 
@@ -26,7 +26,7 @@ The script uses `--keep` and `--force` flags by default, so the original files w
 
     python3 benchmark.py --dir="/home/arinmirza/Desktop/RELEASE_object_files_gcc11" --mode="RELEASE" --level=1 --compiler="gcc11" --algorithm lzop lzma snappy
 
-![screenshots/sample-benchmark-csv.png]
+![](screenshots/sample-benchmark-csv.png)
 
 ### Analysis (visualizer.ipynb)
 
@@ -34,9 +34,9 @@ The script uses `--keep` and `--force` flags by default, so the original files w
 
 #### Example plots
 
-![plots/compratio-vs-comptime.png]
-![plots/compression_time_ratio_release_clang14.png]
-![plots/compratio-vs-total-time.png]
+![](plots/compratio-vs-comptime.png)
+![](plots/compression_time_ratio_release_clang14.png)
+![](plots/compratio-vs-total-time.png)
 
 ## Results
 
