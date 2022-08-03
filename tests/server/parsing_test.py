@@ -27,7 +27,7 @@ class TestParsingConfig:
         "[homccd]",
         "# Server global config",
         "LIMIT=42",
-        "port=3633",
+        "port=3126",
         "AdDrEsS=0.0.0.0",
         "LOG_LEVEL=DEBUG",
         "verbose=TRUE",
@@ -60,7 +60,7 @@ class TestParsingConfig:
         assert parse_config([tmp_config_file]) == ServerConfig(
             files=[str(tmp_config_file.absolute())],
             limit=42,
-            port=3633,
+            port=3126,
             address="0.0.0.0",
             log_level="DEBUG",
             verbose=True,
@@ -76,7 +76,7 @@ class TestParsingConfig:
         assert parse_config([tmp_config_file_overwrite, tmp_config_file]) == ServerConfig(
             files=[str(file.absolute()) for file in [tmp_config_file, tmp_config_file_overwrite]],
             limit=42,
-            port=3633,
+            port=3126,
             address="0.0.0.0",
             log_level="INFO",
             verbose=False,
