@@ -67,7 +67,8 @@ class Lz4(Compressor):
 
 
 class Snappy(Compressor):
-    def __init__(self, files: list):
+    def __init__(self, files: list, compression_level=None):
+        # Snappy does not have compression levels
         flags = {'shell_command': 'python3.9 -m snappy', 'compress': '-c',
                  'decompress': '-d', 'keep': '', 'force': '', 'compression_level': ''}
         super(Snappy, self).__init__('snappy', 'snappy', compress_decompress_explicit, flags, files)
