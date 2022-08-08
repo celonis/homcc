@@ -30,13 +30,7 @@ def get_schroot_profiles() -> List[str]:
         logger.error("Could not load schroot profiles: %s", err)
         return []
 
-    matches: List[str] = re.findall("(?<=chroot:).*?(?=\n)", result.stdout, re.IGNORECASE)
-
-    profiles: List[str] = []
-    for match in matches:
-        profiles.append(match)
-
-    return profiles
+    return re.findall("(?<=chroot:).*?(?=\n)", result.stdout, re.IGNORECASE)
 
 
 def is_valid_schroot_profile(schroot_profile: str) -> bool:
