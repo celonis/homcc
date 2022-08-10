@@ -79,7 +79,7 @@ jobs:
         run: |
           docker exec jammy /bin/sh -c "apt update && apt install -y build-essential clang"
       - name: Run tests
-        run: pytest -v -rfE --cov=homcc --capture=tee-sys --runschroot=focal --rundocker=gcc
+        run: pytest -v -rfE --cov=homcc --capture=tee-sys --runschroot=focal --rundocker=jammy
   build:
     runs-on: ubuntu-22.04
     steps:
