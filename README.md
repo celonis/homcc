@@ -299,11 +299,11 @@ Additionally, `HOMCC` provides sandboxed compiler execution for remote compilati
   ```
 
 ### `docker` testing setup
-- Create a docker container with a working `gcc` compiler, the easiest image to get is probably the official `gcc` docker image:
+- Create a docker container with a working `gcc` compiler, the easiest image to get is probably the official `ubuntu` docker image:
   ```sh
-  docker run -dit --name gcc -v /tmp:/tmp gcc:bullseye
+  docker run -dit --name gcc -v /tmp:/tmp ubuntu:jammy
   ```
-- Execute all tests (including the docker tests by specifying `--rundocker=gcc`) and perform test coverage:
+- Execute all tests (including the docker tests by specifying `--rundocker=jammy`) and perform test coverage:
   ```sh
-  $ pytest -v -rfEs --cov=homcc --rundocker=gcc
+  $ pytest -v -rfEs --cov=homcc --rundocker=jammy
   ```

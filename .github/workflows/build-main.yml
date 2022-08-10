@@ -2,8 +2,8 @@ name: Build Main Branch
 
 on:
   push:
-    branches:
-      - main
+    #branches:
+    #  - main
     paths-ignore:
       - README.md
       - .gitignore
@@ -74,7 +74,10 @@ jobs:
         uses: docker-practice/actions-setup-docker@master
       - name: Setup docker container
         run: |
-          docker run -dit --name gcc -v /tmp:/tmp gcc:bullseye
+          docker run -dit --name jammy -v /tmp:/tmp ubuntu:jammy
+      - name: Install build-essential in docker container
+        run: |
+          docker exec jammy /bin/sh -c "apt update && apt install -y build-essential clang"
       - name: Run tests
         run: pytest -v -rfE --cov=homcc --capture=tee-sys --runschroot=focal --rundocker=gcc
   build:
