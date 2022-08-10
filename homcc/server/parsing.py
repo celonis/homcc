@@ -5,7 +5,6 @@ import logging
 import os
 import re
 import sys
-
 from argparse import Action, ArgumentParser, ArgumentTypeError, RawTextHelpFormatter
 from configparser import ConfigParser, Error, SectionProxy
 from dataclasses import dataclass

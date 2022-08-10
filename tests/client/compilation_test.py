@@ -1,19 +1,14 @@
 """ Tests for client/compilation.py"""
-import pytest
-
 import os
 import subprocess
-
 from pathlib import Path
 from typing import List, Set
 
-from homcc.common.arguments import Arguments
-from homcc.client.compilation import (
-    compile_locally,
-    find_dependencies,
-    scan_includes,
-)
+import pytest
+
+from homcc.client.compilation import compile_locally, find_dependencies, scan_includes
 from homcc.client.parsing import Host
+from homcc.common.arguments import Arguments
 
 
 class TestCompilation:

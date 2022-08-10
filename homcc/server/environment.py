@@ -1,10 +1,10 @@
 """Module containing methods to manage the server environment, mostly file and path manipulation."""
-from tempfile import TemporaryDirectory
-import uuid
+import logging
 import os
 import shutil
-import logging
+import uuid
 from pathlib import Path
+from tempfile import TemporaryDirectory
 from typing import Dict, List, Optional
 
 from homcc.common.arguments import Arguments, ArgumentsExecutionResult, Compiler
