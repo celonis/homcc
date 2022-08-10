@@ -598,7 +598,7 @@ class Compiler(ABC):
         normalized_compiler = arguments.compiler_normalized()
         for compiler in Compiler.available_compilers():
             if compiler.is_matching_str(normalized_compiler):
-                return compiler(arguments.compiler)
+                return compiler(arguments.compiler)  # type: ignore[arg-type]
 
         raise UnsupportedCompilerError(f"Compiler '{arguments.compiler}' is not supported.")
 
