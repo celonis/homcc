@@ -52,6 +52,8 @@ jobs:
         uses: psf/black@stable
         with:
           options: "--check --color --diff --verbose"
+        run: |
+          isort --check --diff --color --gitignore --verbose *.py homcc tests
   tests:
     runs-on: ubuntu-latest
     steps:
