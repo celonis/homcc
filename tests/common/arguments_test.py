@@ -256,19 +256,19 @@ class TestArguments:
 class TestCompiler:
     """Tests the compiler class of homcc."""
 
-    def test_from_str(self):
-        assert isinstance(Compiler.from_str("gcc"), Gcc)
-        assert isinstance(Compiler.from_str("gcc-11"), Gcc)
-        assert isinstance(Compiler.from_str("g++"), Gcc)
-        assert isinstance(Compiler.from_str("g++-11"), Gcc)
-        assert isinstance(Compiler.from_str("/usr/lib/ccache/gcc-11"), Gcc)
+    def test_from_arguments(self):
+        assert isinstance(Compiler.from_arguments(Arguments("gcc", [])), Gcc)
+        assert isinstance(Compiler.from_arguments(Arguments("gcc-11", [])), Gcc)
+        assert isinstance(Compiler.from_arguments(Arguments("g++", [])), Gcc)
+        assert isinstance(Compiler.from_arguments(Arguments("g++-11", [])), Gcc)
+        assert isinstance(Compiler.from_arguments(Arguments("/usr/lib/ccache/gcc-11", [])), Gcc)
 
-        assert isinstance(Compiler.from_str("clang++"), Clang)
-        assert isinstance(Compiler.from_str("clang++-11"), Clang)
-        assert isinstance(Compiler.from_str("/usr/lib/ccache/clang-14"), Clang)
+        assert isinstance(Compiler.from_arguments(Arguments("clang++", [])), Clang)
+        assert isinstance(Compiler.from_arguments(Arguments("clang++-11", [])), Clang)
+        assert isinstance(Compiler.from_arguments(Arguments("/usr/lib/ccache/clang-14", [])), Clang)
 
         with pytest.raises(UnsupportedCompilerError):
-            Compiler.from_str("unknown++")
+            Compiler.from_arguments(Arguments("unknown++", []))
 
 
 class TestGcc:
