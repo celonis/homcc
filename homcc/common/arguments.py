@@ -1,13 +1,13 @@
 """shared common functionality for server and client regarding compiler arguments"""
 from __future__ import annotations
-from abc import ABC, abstractmethod
 
 import logging
 import os
 import re
 import shutil
 import subprocess
-
+import sys
+from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from functools import cached_property
 from pathlib import Path
@@ -53,9 +53,6 @@ class Arguments:
 
     # languages
     ALLOWED_LANGUAGE_PREFIXES: List[str] = ["c", "c++", "objective-c", "objective-c++", "go"]
-
-    # allow list for subprocess calls options
-    ALLOWED_SUBPROCESS_KWARGS: List[str] = ["check", "timeout", "cwd"]
 
     class Local:
         """
@@ -546,18 +543,23 @@ class Arguments:
         raise TargetInferationError("No compiler to ask for targets")
 
     @staticmethod
-    def _execute_args(args: List[str], **kwargs) -> ArgumentsExecutionResult:
-        # sanity check if different execution options required by client and server compilations are explicitly enabled
-        for kwarg in kwargs:
-            if kwarg not in Arguments.ALLOWED_SUBPROCESS_KWARGS:
-                raise NotImplementedError(f'Unsupported subprocess option "{kwarg}"')
-
-        check: bool = kwargs.pop("check", False)  # explicitly set check to satisfy pylint-W1510
-
+    def _execute_args(
+        args: List[str],
+        check: bool = False,
+        cwd: Path = Path.cwd(),
+        output: bool = True,
+        timeout: Optional[float] = None,
+    ) -> ArgumentsExecutionResult:
         logger.debug("Executing: [%s]", " ".join(args))
+
         result: subprocess.CompletedProcess = subprocess.run(
-            args=args, check=check, encoding="utf-8", capture_output=True, **kwargs
+            args=args, check=check, cwd=cwd, encoding="utf-8", capture_output=True, timeout=timeout
         )
+
+        if output:
+            sys.stdout.write(result.stdout)
+            sys.stderr.write(result.stderr)
+
         return ArgumentsExecutionResult.from_process_result(result)
 
     def execute(self, **kwargs) -> ArgumentsExecutionResult:
@@ -645,7 +647,7 @@ class Clang(Compiler):
         clang_arguments = Arguments(self.compiler_str, ["--version"])
 
         try:
-            result = clang_arguments.execute(check=True)
+            result = clang_arguments.execute(check=True, output=False)
         except subprocess.CalledProcessError as err:
             logger.error(
                 "Could not get target triple for compiler '%s', executed '%s'. %s",
@@ -690,7 +692,7 @@ class Gcc(Compiler):
         gcc_arguments = Arguments(self.compiler_str, ["-dumpmachine"])
 
         try:
-            result = gcc_arguments.execute(check=True)
+            result = gcc_arguments.execute(check=True, output=False)
         except subprocess.CalledProcessError as err:
             logger.error(
                 "Could not get target triple for compiler '%s', executed '%s'. %s",
