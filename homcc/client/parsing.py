@@ -291,13 +291,13 @@ class ClientConfig:
     def __str__(self):
         return (
             f"Configuration (from [{', '.join(self.files)}]):\n"
-            f"\tCompiler:\t{self.compiler}\n"
-            f"\tCompression:\t{self.compression}\n"
+            f"\tcompiler:\t\t{self.compiler}\n"
+            f"\tcompression:\t\t{self.compression}\n"
             f"\tschroot_profile:\t{self.schroot_profile}\n"
             f"\tdocker_container:\t{self.docker_container}\n"
-            f"\tTimeout:\t{self.timeout}s\n"
-            f"\tLog-Level:\t{self.log_level.name}\n"
-            f"\tVerbosity:\t{str(self.verbose)}\n"
+            f"\ttimeout:\t\t{self.timeout}\n"
+            f"\tlog_level:\t\t{self.log_level.name}\n"
+            f"\tverbose:\t\t{str(self.verbose)}\n"
         )
 
     def set_verbose(self):
@@ -356,7 +356,7 @@ def parse_cli_args(args: List[str]) -> Tuple[Dict[str, Any], Arguments]:
         metavar="HOST",
         type=str,
         help="HOST defines the connection to the remote compilation server:\n"
-        "\tHOST\t\tTCP connection to specified HOST with default port 3633\n"
+        "\tHOST\t\tTCP connection to specified HOST with default port 3126\n"
         "\tHOST:PORT\tTCP connection to specified HOST with specified PORT\n"
         # TODO(s.pirsch): enable these lines once SSHClient is implemented, parsing should already work however
         # "\t@HOST\t\tSSH connection to specified HOST\n"

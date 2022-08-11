@@ -78,7 +78,7 @@ Additionally, `HOMCC` provides sandboxed compiler execution for remote compilati
     </table>
 - Possible `hosts` formats:
     - `HOST` format:
-      - `HOST`: TCP connection to specified `HOST` with default port `3633`
+      - `HOST`: TCP connection to specified `HOST` with default port `3126`
       - `HOST:PORT`: TCP connection to specified `HOST` with specified `PORT`
     - `HOST/LIMIT` format:
       - Define any of the above `HOST` formats with an additional `LIMIT` parameter that specifies the maximum connection limit to the corresponding `HOST`
@@ -96,15 +96,15 @@ Additionally, `HOMCC` provides sandboxed compiler execution for remote compilati
     # homcc: hosts
     localhost
     remotehost/12
-    192.168.0.1:3633/21
-    [FC00::1]:3633/42,lzo
+    192.168.0.1:3126/21
+    [FC00::1]:3126/42,lzo
     </pre></sub></td>
     <td><sub><pre>
     # Comment
     "localhost" host with default limit of 2
-    Named "remotehost" TCP host with limit of 12 at default port 3633
-    IPv4 "192.168.0.1" TCP host at port 3633 with limit of 21
-    IPv6 "FC00::1" TCP host at port 3633 with limit of 42 and lzo compression
+    Named "remotehost" TCP host with limit of 12 at default port 3126
+    IPv4 "192.168.0.1" TCP host at port 3126 with limit of 21
+    IPv6 "FC00::1" TCP host at port 3126 with limit of 42 and lzo compression
     </pre></sub></td>
     </tr>
   </table>
@@ -171,7 +171,7 @@ Additionally, `HOMCC` provides sandboxed compiler execution for remote compilati
     <td><sub><pre lang="ini">
     [homcc]
     compiler=g++
-    timeout=60
+    timeout=120
     compression=lzo
     schroot_profile=jammy
     docker_container=example_container
@@ -179,7 +179,7 @@ Additionally, `HOMCC` provides sandboxed compiler execution for remote compilati
     verbose=True
     [homccd]
     limit=64
-    port=3633
+    port=3126
     address=0.0.0.0
     log_level=DEBUG
     verbose=True

@@ -2,6 +2,9 @@
 import socket
 import pytest
 from typing import List
+
+from pytest_mock import MockerFixture
+from unittest.mock import MagicMock, patch
 from homcc.common.compression import NoCompression
 
 from homcc.common.messages import (
@@ -14,6 +17,83 @@ from homcc.common.messages import (
 )
 from homcc.server.parsing import ServerConfig
 from homcc.server.server import start_server, stop_server, TCPRequestHandler
+
+
+class TestServer:
+    """Tests the Server class."""
+
+    @pytest.fixture(autouse=True)
+    def setup_mock(self):
+        self.request_handler = TCPRequestHandler.__new__(TCPRequestHandler)
+        self.request_handler.server = MagicMock()
+        self.request_handler.request = MagicMock()
+
+    def test_check_compiler_arguments(self, mocker: MockerFixture):
+        mocker.patch(
+            "homcc.server.environment.Environment.compiler_exists",
+            return_value=False,
+        )
+
+        arguments = MagicMock()
+        with patch.object(self.request_handler, "close_connection") as mocked_close_connection:
+            assert not self.request_handler.check_compiler_arguments(arguments)
+            mocked_close_connection.assert_called_once()
+
+        mocker.patch(
+            "homcc.server.environment.Environment.compiler_exists",
+            return_value=True,
+        )
+        with patch.object(self.request_handler, "close_connection") as mocked_close_connection:
+            assert self.request_handler.check_compiler_arguments(arguments)
+            mocked_close_connection.assert_not_called()
+
+    def test_check_target_argument(self, mocker: MockerFixture):
+        mocker.patch(
+            "homcc.server.environment.Environment.compiler_supports_target",
+            return_value=False,
+        )
+
+        arguments = MagicMock()
+        with patch.object(self.request_handler, "close_connection") as mocked_close_connection:
+            assert not self.request_handler.check_target_argument(arguments, "some_target")
+            mocked_close_connection.assert_called_once()
+
+        mocker.patch(
+            "homcc.server.environment.Environment.compiler_supports_target",
+            return_value=True,
+        )
+        with patch.object(self.request_handler, "close_connection") as mocked_close_connection:
+            assert self.request_handler.check_target_argument(arguments, "some_target")
+            mocked_close_connection.assert_not_called()
+
+    def test_check_docker_container_argument(self, mocker: MockerFixture):
+        mocker.patch(
+            "homcc.server.server.is_docker_available",
+            return_value=False,
+        )
+        with patch.object(self.request_handler, "close_connection") as mocked_close_connection:
+            assert not self.request_handler.check_docker_container_argument("some_container")
+            mocked_close_connection.assert_called_once()
+
+        mocker.patch(
+            "homcc.server.server.is_docker_available",
+            return_value=True,
+        )
+        mocker.patch(
+            "homcc.server.server.is_valid_docker_container",
+            return_value=False,
+        )
+        with patch.object(self.request_handler, "close_connection") as mocked_close_connection:
+            assert not self.request_handler.check_docker_container_argument("some_container")
+            mocked_close_connection.assert_called_once()
+
+        mocker.patch(
+            "homcc.server.server.is_valid_docker_container",
+            return_value=True,
+        )
+        with patch.object(self.request_handler, "close_connection") as mocked_close_connection:
+            assert self.request_handler.check_docker_container_argument("some_container")
+            mocked_close_connection.assert_not_called()
 
 
 class TestServerReceive:
@@ -51,7 +131,7 @@ class TestServerReceive:
             arguments = ["-a", "-b", "--help"]
             cwd = "/home/o.layer/test"
             dependencies = {"server.c": "1239012890312903", "server.h": "testsha1"}
-            self.messages.append(ArgumentMessage(arguments, cwd, dependencies, None, None, NoCompression()))
+            self.messages.append(ArgumentMessage(arguments, cwd, dependencies, None, None, None, NoCompression()))
 
             self.messages.append(DependencyRequestMessage("asd123"))
 

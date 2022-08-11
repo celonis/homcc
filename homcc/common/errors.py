@@ -11,6 +11,10 @@ class PreprocessorError(RecoverableClientError):
     """Exception for errors during the preprocessor stage"""
 
 
+class TargetInferationError(RecoverableClientError):
+    """Exception for errors during infering the compilation target triple."""
+
+
 class RemoteCompilationTimeoutError(RecoverableClientError):
     """Exception for a timed out compilation request"""
 
@@ -58,3 +62,7 @@ class RemoteCompilationError(Exception):
 
 class ServerInitializationError(Exception):
     """Indicates that an error occurred during server startup."""
+
+
+class UnsupportedCompilerError(Exception):
+    """The attempted action is currently not supported with the given compiler."""

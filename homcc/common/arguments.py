@@ -1,5 +1,6 @@
 """shared common functionality for server and client regarding compiler arguments"""
 from __future__ import annotations
+from abc import ABC, abstractmethod
 
 import logging
 import os
@@ -10,7 +11,9 @@ import subprocess
 from dataclasses import dataclass
 from functools import cached_property
 from pathlib import Path
-from typing import Any, Iterator, List, Optional, Tuple
+from typing import Any, Iterator, List, Optional, Tuple, Type
+
+from homcc.common.errors import TargetInferationError, UnsupportedCompilerError
 
 logger = logging.getLogger(__name__)
 
@@ -40,24 +43,6 @@ class Arguments:
     DEFAULT_COMPILER: str = "cc"
 
     NO_LINKING_ARG: str = "-c"
-
-    # for gcc, see https://gcc.gnu.org/onlinedocs/gcc/Debugging-Options.html#Debugging-Options
-    # for clang, see https://clang.llvm.org/docs/ClangCommandLineReference.html#debug-information-generation
-    DEBUG_SYMBOLS_ARGS: List[str] = [
-        "-g",
-        "-ggdb",
-        "-gdwarf",
-        "-gfull",
-        "--debug",
-        "-gused" "-gbtf",
-        "-gctf",
-        "-gstabs",
-        "-gstabs+",
-        "-gxcoff",
-        "-gxcoff+",
-        "-gvms",
-    ]
-    DEBUG_SYMBOLS_WITH_LEVEL: List[str] = ["-g", "-ggdb", "-gdwarf-", "-gctf", "-gstabs", "-gxcoff", "-gvms"]
 
     OUTPUT_ARG: str = "-o"
     SPECIFY_LANGUAGE_ARG: str = "-x"
@@ -313,6 +298,20 @@ class Arguments:
     def compiler(self, compiler: str):
         self._compiler = compiler
 
+    def compiler_normalized(self) -> str:
+        """normalize the compiler (remove path, keep just executable if a path is provided as compiler)"""
+        if self.compiler is None:
+            raise UnsupportedCompilerError
+
+        return Path(self.compiler).name
+
+    def compiler_object(self) -> Compiler:
+        """if present, return a new specified compiler object"""
+        if self.compiler is None:
+            raise UnsupportedCompilerError
+
+        return Compiler.from_str(self.compiler_normalized())
+
     @cached_property
     def output(self) -> Optional[str]:
         """if present, return the last specified output target"""
@@ -417,23 +416,11 @@ class Arguments:
         """check whether the linking arg is present"""
         return self.NO_LINKING_ARG not in self.args
 
-    def has_debug_symbols(self) -> bool:
-        """check whether any flag that indicates debug symbols is present"""
-        for arg in self.args:
-            if arg in self.DEBUG_SYMBOLS_ARGS:
-                # debug arguments without level, e.g. -g or -ggdb
-                return True
-
-            for debug_symbol_flag in self.DEBUG_SYMBOLS_WITH_LEVEL:
-                # recognize arguments like e.g. -g3 or -ggdb2
-                if arg.startswith(debug_symbol_flag) and len(arg) == len(debug_symbol_flag) + 1 and arg[-1].isdigit():
-                    return True
-
-        return False
-
-    def map_debug_symbol_paths(self, old_path: str, new_path: str) -> Arguments:
-        """return a copy of arguments with added command for translating debug symbol paths in the executable"""
-        return self.copy().add_arg(f"-fdebug-prefix-map={old_path}={new_path}")
+    def map_symbol_paths(self, old_path: str, new_path: str) -> Arguments:
+        """return a copy of arguments with added command for translating symbol paths in the executable
+        See https://reproducible-builds.org/docs/build-path/.
+        This maps debug symbols as well as macros such as __FILE__."""
+        return self.copy().add_arg(f"-ffile-prefix-map={old_path}={new_path}")
 
     def is_linking_only(self) -> bool:
         """check whether the execution of arguments leads to calling only the linker"""
@@ -462,11 +449,18 @@ class Arguments:
         if len(self.source_files) > 1:
             logger.warning("Executing [%s] might not create the intended dependency files.", self)
 
-        return self.copy(), dependency_output_file
+        return self.copy().add_arg(self.Unsendable.PREPROCESSOR_DEPENDENCY_ARG), dependency_output_file
 
     def no_linking(self) -> Arguments:
         """return a copy of arguments where all output args are removed and the no linking arg is added"""
         return self.copy().remove_output_args().add_arg(self.NO_LINKING_ARG)
+
+    def add_target(self, target: str) -> Arguments:
+        """returns a copy of arguments where the specified target is added (for cross compilation)"""
+        if (compiler := self.compiler_object()) is not None:
+            return compiler.add_target_to_arguments(self, target)
+
+        raise UnsupportedCompilerError("Could not add target to compilation call as no compiler was given.")
 
     def map(self, instance_path: str, mapped_cwd: str) -> Arguments:
         """modify and return arguments by mapping relevant paths"""
@@ -544,6 +538,13 @@ class Arguments:
         self._args = [arg for arg in self.args if not self.is_source_file_arg(arg)]
         return self
 
+    def get_compiler_target_triple(self) -> str:
+        """returns the target triple for the given compiler"""
+        if (compiler := self.compiler_object()) is not None:
+            return compiler.get_target_triple()
+
+        raise TargetInferationError("No compiler to ask for targets")
+
     @staticmethod
     def _execute_args(args: List[str], **kwargs) -> ArgumentsExecutionResult:
         # sanity check if different execution options required by client and server compilations are explicitly enabled
@@ -583,3 +584,135 @@ class Arguments:
         """
         docker_args: List[str] = ["docker", "exec", "--workdir", cwd, container]
         return self._execute_args(docker_args + list(self), **kwargs)
+
+
+class Compiler(ABC):
+    """Base class for compiler abstraction."""
+
+    def __init__(self, compiler_str: str) -> None:
+        super().__init__()
+        self.compiler_str = compiler_str
+
+    @staticmethod
+    def from_str(compiler_str: str) -> Compiler:
+        for compiler in Compiler.available_compilers():
+            if compiler.is_matching_str(compiler_str):
+                return compiler(compiler_str)
+
+        raise UnsupportedCompilerError(f"Compiler '{compiler_str}' is not supported.")
+
+    @staticmethod
+    @abstractmethod
+    def is_matching_str(compiler_str: str) -> bool:
+        """Returns True if the given compiler string belongs to the certain compiler"""
+        pass
+
+    @abstractmethod
+    def supports_target(self, target: str) -> bool:
+        """Returns True if the compiler supports the given target for cross compilation."""
+        pass
+
+    @abstractmethod
+    def get_target_triple(self) -> str:
+        """Gets the target triple that the compiler produces on the machine. (e.g. x86_64-pc-linux-gnu)"""
+        pass
+
+    @abstractmethod
+    def add_target_to_arguments(self, arguments: Arguments, target: str) -> Arguments:
+        """Copies arguments so that the target is changed to the supplied target."""
+
+    @staticmethod
+    def available_compilers() -> List[Type[Compiler]]:
+        """Returns a list of available compilers for homcc."""
+        return Compiler.__subclasses__()
+
+
+class Clang(Compiler):
+    """Implements clang specific handling."""
+
+    @staticmethod
+    def is_matching_str(compiler_str: str) -> bool:
+        return "clang" in compiler_str
+
+    def supports_target(self, target: str) -> bool:
+        """For clang, we can not really check if it supports the target prior to compiling:
+        '$ clang --print-targets' does not output the same triple format as we get from
+        '$ clang --version' (x86_64 vs. x86-64), so we can not properly check if a target is supported.
+        Therefore, we can just assume clang can handle the target."""
+        return True
+
+    def get_target_triple(self) -> str:
+        clang_arguments = Arguments(self.compiler_str, ["--version"])
+
+        try:
+            result = clang_arguments.execute(check=True)
+        except subprocess.CalledProcessError as err:
+            logger.error(
+                "Could not get target triple for compiler '%s', executed '%s'. %s",
+                self.compiler_str,
+                clang_arguments,
+                err,
+            )
+            raise TargetInferationError from err
+
+        if matches := re.findall("(?<=Target:).*?(?=\n)", result.stdout, re.IGNORECASE):
+            return matches[0].strip()
+
+        raise TargetInferationError("Could not infer target triple for clang. Nothing matches the regex.")
+
+    def add_target_to_arguments(self, arguments: Arguments, target: str) -> Arguments:
+        if arguments.compiler is None:
+            raise UnsupportedCompilerError
+
+        for arg in arguments.args:
+            if arg.startswith("--target=") or arg == "-target":
+                logger.info(
+                    "Not adding target '%s' to compiler '%s', as (potentially another) target is already specified.",
+                    target,
+                    arguments.compiler,
+                )
+                return arguments
+
+        return arguments.copy().add_arg(f"--target={target}")
+
+
+class Gcc(Compiler):
+    """Implements gcc specific handling."""
+
+    @staticmethod
+    def is_matching_str(compiler_str: str) -> bool:
+        return "gcc" in compiler_str or ("g++" in compiler_str and "clang" not in compiler_str)
+
+    def supports_target(self, target: str) -> bool:
+        return shutil.which(f"{target}-{self.compiler_str}") is not None
+
+    def get_target_triple(self) -> str:
+        gcc_arguments = Arguments(self.compiler_str, ["-dumpmachine"])
+
+        try:
+            result = gcc_arguments.execute(check=True)
+        except subprocess.CalledProcessError as err:
+            logger.error(
+                "Could not get target triple for compiler '%s', executed '%s'. %s",
+                self.compiler_str,
+                gcc_arguments,
+                err,
+            )
+            raise TargetInferationError from err
+
+        return result.stdout.strip()
+
+    def add_target_to_arguments(self, arguments: Arguments, target: str) -> Arguments:
+        if arguments.compiler is None:
+            raise UnsupportedCompilerError
+
+        if target in arguments.compiler:
+            logger.info(
+                "Not adding target '%s' to compiler '%s', as target is already specified.", target, arguments.compiler
+            )
+            return arguments
+
+        copied_arguments = arguments.copy()
+        # e.g. g++ -> x86_64-linux-gnu-g++
+        copied_arguments.compiler = f"{target}-{self.compiler_str}"
+        return copied_arguments

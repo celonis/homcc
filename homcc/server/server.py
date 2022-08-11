@@ -13,8 +13,8 @@ from tempfile import TemporaryDirectory
 from threading import Lock
 from typing import Dict, List, Optional, Tuple
 
+from homcc.common.errors import ServerInitializationError, UnsupportedCompilerError
 from homcc.common.arguments import Arguments
-from homcc.common.errors import ServerInitializationError
 from homcc.common.hashing import hash_file_with_bytes
 from homcc.common.messages import (
     ArgumentMessage,
@@ -26,7 +26,7 @@ from homcc.common.messages import (
 )
 
 from homcc.server.cache import Cache
-from homcc.server.environment import Environment, create_root_temp_folder
+from homcc.server.environment import COMPILATION_TIMEOUT, Environment, create_root_temp_folder
 from homcc.server.parsing import DEFAULT_ADDRESS, DEFAULT_LIMIT, DEFAULT_PORT, ServerConfig
 
 
@@ -121,9 +121,9 @@ class TCPRequestHandler(socketserver.BaseRequestHandler):
     """Shuffled list of keys for the needed dependencies dict."""
     compiler_arguments: Arguments
     """List of compiler arguments."""
-    instance_path: str = ""
+    instance_path: str
     """Path to the current compilation inside /tmp/."""
-    mapped_cwd: str = ""
+    mapped_cwd: str
     """Absolute path to the working directory."""
     server: TCPServer
     """The TCP server belonging to this handler. (redefine for typing)"""
@@ -140,11 +140,13 @@ class TCPRequestHandler(socketserver.BaseRequestHandler):
     def _handle_argument_message(self, message: ArgumentMessage):
         logger.info("Handling ArgumentMessage...")
 
+        self.compiler_arguments = Arguments.from_args(message.get_args())
+
+        target = message.target
         schroot_profile = message.schroot_profile
         docker_container = message.docker_container
-
-        if not self.check_schroot_profile_argument(schroot_profile) or not self.check_docker_container_argument(
-            docker_container
+        if not self.check_client_request_satisfiability(
+            self.compiler_arguments, target, schroot_profile, docker_container
         ):
             return
 
@@ -159,21 +161,12 @@ class TCPRequestHandler(socketserver.BaseRequestHandler):
             compression=compression,
         )
 
-        self.compiler_arguments = self.environment.map_args(message.get_args())
-        logger.debug("Mapped compiler args: %s", str(self.compiler_arguments))
+        if target is not None:
+            self.compiler_arguments.add_target(target)
+            logger.info("Using explicit target '%s' for compilation.", target)
 
-        if not self.environment.compiler_exists(self.compiler_arguments):
-            logger.warning(
-                "Compilation with compiler '%s' requested, but this compiler is not installed on the system.",
-                self.compiler_arguments.compiler,
-            )
-            self.close_connection(
-                (
-                    f"Compiler '{self.compiler_arguments.compiler}' is not available on the server, "
-                    "can not compile remotely"
-                ),
-            )
-            return
+        self.compiler_arguments = self.environment.map_args(self.compiler_arguments)
+        logger.debug("Mapped compiler args: %s", str(self.compiler_arguments))
 
         self.mapped_dependencies = self.environment.map_dependency_paths(message.get_dependencies())
         logger.debug("Mapped dependencies: %s", self.mapped_dependencies)
@@ -238,7 +231,10 @@ class TCPRequestHandler(socketserver.BaseRequestHandler):
             next_needed_file: str = next(iter(self.needed_dependency_keys))
             next_needed_hash: str = self.needed_dependencies[next_needed_file]
 
+            logger.debug("#%i needed dependencies left.", len(self.needed_dependencies))
+
             if next_needed_hash in self.server.cache:
+                logger.debug("Dependency with hash '%s' is in cache.", next_needed_hash)
                 self.environment.link_dependency_to_cache(next_needed_file, next_needed_hash, self.server.cache)
 
                 del self.needed_dependencies[next_needed_file]
@@ -246,7 +242,7 @@ class TCPRequestHandler(socketserver.BaseRequestHandler):
             else:
                 request_message = DependencyRequestMessage(next_needed_hash)
 
-                logger.debug("Sending request for dependency with hash %s", str(request_message.get_sha1sum()))
+                logger.debug("Sending request for dependency with hash '%s'.", str(request_message.get_sha1sum()))
                 self.send_message(request_message)
                 return len(self.needed_dependencies) > 0
 
@@ -254,7 +250,9 @@ class TCPRequestHandler(socketserver.BaseRequestHandler):
 
     def check_dependencies_exist(self):
         """Checks if all dependencies exist. If yes, starts compiling. If no, requests missing dependencies."""
-        if not self._request_next_dependency():
+        if self._request_next_dependency():
+            logger.debug("Waiting for a dependency to be sent by the client.")
+        else:
             # no further dependencies needed, compile now
             try:
                 result_message = self.environment.do_compilation(self.compiler_arguments)
@@ -284,6 +282,73 @@ class TCPRequestHandler(socketserver.BaseRequestHandler):
             self._handle_message(parsed_message)
 
         return bytes_needed
+
+    def check_client_request_satisfiability(
+        self,
+        arguments: Arguments,
+        target: Optional[str],
+        schroot_profile: Optional[str],
+        docker_container: Optional[str],
+    ) -> bool:
+        """Checks whether a request from a client can be satisfied."""
+        if not self.check_schroot_profile_argument(schroot_profile):
+            return False
+
+        if not self.check_docker_container_argument(docker_container):
+            return False
+
+        if schroot_profile is not None or docker_container is not None:
+            # TODO(o.layer): currently, the checks below check the local environment,
+            # not the environment inside the sandbox. To avoid falsely declining a request
+            # while it is actually possible, we skip the checks for sandboxes until we implement
+            # these checks to work inside the sandbox
+            return True
+
+        if not self.check_compiler_arguments(arguments):
+            return False
+
+        if not self.check_target_argument(arguments, target):
+            return False
+
+        return True
+
+    def check_target_argument(self, arguments: Arguments, target: Optional[str]) -> bool:
+        """Checks whether the local compiler supports the specified target."""
+        if target is None:
+            return True
+
+        try:
+            supports_target = Environment.compiler_supports_target(arguments, target)
+            if not supports_target:
+                logger.warning(
+                    "Compiler '%s' does not support requested target '%s', declining compilation.",
+                    arguments.compiler,
+                    target,
+                )
+                self.close_connection(f"Compiler '{arguments.compiler}' does not support target '{target}'.")
+
+            return supports_target
+        except UnsupportedCompilerError:
+            logger.error(
+                "Could not retrieve information about targets for the compiler '%s', "
+                "will still try use the given target.",
+                arguments.compiler,
+            )
+            return True
+
+    def check_compiler_arguments(self, arguments: Arguments) -> bool:
+        """Checks whether the specified compiler is available on the system."""
+        if not Environment.compiler_exists(arguments):
+            logger.warning(
+                "Compilation with compiler '%s' requested, but this compiler is not installed on the system.",
+                arguments.compiler,
+            )
+            self.close_connection(
+                f"Compiler '{arguments.compiler}' is not available on the server, can not compile remotely"
+            )
+            return False
+
+        return True
 
     def check_schroot_profile_argument(self, schroot_profile: Optional[str]) -> bool:
         """Checks whether the specified schroot profile requested by the client can be used.
@@ -391,6 +456,8 @@ class TCPRequestHandler(socketserver.BaseRequestHandler):
     def handle(self):
         """Handles incoming requests. Returning from this function means
         that the connection will be closed from the server side."""
+        self.request.settimeout(COMPILATION_TIMEOUT)
+
         with self.server.current_amount_connections_mutex:
             self.server.current_amount_connections += 1
 

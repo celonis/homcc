@@ -24,7 +24,7 @@ SCHROOT_CONF_FILENAME: str = "schroot.conf"
 CHROOT_D_SUB_DIR: str = "chroot.d/"
 
 DEFAULT_ADDRESS: str = "0.0.0.0"
-DEFAULT_PORT: int = 3633
+DEFAULT_PORT: int = 3126
 DEFAULT_LIMIT: int = (
     len(os.sched_getaffinity(0))  # number of available CPUs for this process
     or os.cpu_count()  # total number of physical CPUs on the machine
@@ -155,12 +155,12 @@ class ServerConfig:
 
     def __str__(self):
         return (
-            f"Configuration (from [{', '.join(self.files)}]):\n"
-            f"\tLimit:\t{self.limit}\n"
-            f"\tPort:\t{self.port}\n"
-            f"\tAddress:\t{self.address}\n"
-            f"\tLog-Level:\t{self.log_level}\n"
-            f"\tVerbosity:\t{str(self.verbose)}\n"
+            f'Configuration (from [{", ".join(self.files)}]):\n'
+            f"\tlimit:\t{self.limit}\n"
+            f"\tport:\t{self.port}\n"
+            f"\taddress:\t{self.address}\n"
+            f"\tlog_level:\t{self.log_level.name}\n"
+            f"\tverbose:\t{str(self.verbose)}\n"
         )
 
 
