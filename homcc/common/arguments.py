@@ -307,7 +307,7 @@ class Arguments:
         if self.compiler is None:
             raise UnsupportedCompilerError
 
-        return Compiler.from_str(self.compiler_normalized())
+        return Compiler.from_arguments(self)
 
     @cached_property
     def output(self) -> Optional[str]:
@@ -596,12 +596,13 @@ class Compiler(ABC):
         self.compiler_str = compiler_str
 
     @staticmethod
-    def from_str(compiler_str: str) -> Compiler:
+    def from_arguments(arguments: Arguments) -> Compiler:
+        normalized_compiler = arguments.compiler_normalized()
         for compiler in Compiler.available_compilers():
-            if compiler.is_matching_str(compiler_str):
-                return compiler(compiler_str)
+            if compiler.is_matching_str(normalized_compiler):
+                return compiler(arguments.compiler)  # type: ignore[arg-type]
 
-        raise UnsupportedCompilerError(f"Compiler '{compiler_str}' is not supported.")
+        raise UnsupportedCompilerError(f"Compiler '{arguments.compiler}' is not supported.")
 
     @staticmethod
     @abstractmethod
@@ -636,7 +637,7 @@ class Clang(Compiler):
     def is_matching_str(compiler_str: str) -> bool:
         return "clang" in compiler_str
 
-    def supports_target(self, target: str) -> bool:
+    def supports_target(self, _: str) -> bool:
         """For clang, we can not really check if it supports the target prior to compiling:
         '$ clang --print-targets' does not output the same triple format as we get from
         '$ clang --version' (x86_64 vs. x86-64), so we can not properly check if a target is supported.
