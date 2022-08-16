@@ -3,6 +3,7 @@ posix_ipc==0.9.8 # see https://packages.ubuntu.com/jammy/python3-posix-ipc
 
 # test, CI, package, formatting, linting, ...
 black
+isort[colors]
 mypy>=0.931
 pylint
 pytest

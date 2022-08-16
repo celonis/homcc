@@ -10,10 +10,10 @@ Configure pytest:
 - add option --rundocker=CONTAINER_NAME to enable "docker" marked test to run with the specified CONTAINER_NAME
   as fixture parameter named docker_container and otherwise skip them on default
 """
-import pytest
 import shutil
-
 from typing import List
+
+import pytest
 
 
 def pytest_addoption(parser: pytest.Parser):

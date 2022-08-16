@@ -6,34 +6,33 @@ import logging
 import os
 import subprocess
 import sys
-
 from pathlib import Path
-from typing import Dict, Optional, List, Set, Tuple
+from typing import Dict, List, Optional, Set, Tuple
 
 from homcc.client.client import (
     HostSelector,
-    RemoteHostSemaphore,
     LocalHostSemaphore,
+    RemoteHostSemaphore,
     TCPClient,
-)
-from homcc.common.errors import (
-    FailedHostNameResolutionError,
-    HostsExhaustedError,
-    RemoteCompilationError,
-    RemoteCompilationTimeoutError,
-    PreprocessorError,
-    TargetInferationError,
-    UnexpectedMessageTypeError,
-    SlotsExhaustedError,
 )
 from homcc.client.parsing import ClientConfig, Host
 from homcc.common.arguments import Arguments, ArgumentsExecutionResult
+from homcc.common.errors import (
+    FailedHostNameResolutionError,
+    HostsExhaustedError,
+    PreprocessorError,
+    RemoteCompilationError,
+    RemoteCompilationTimeoutError,
+    SlotsExhaustedError,
+    TargetInferationError,
+    UnexpectedMessageTypeError,
+)
 from homcc.common.hashing import hash_file_with_path
 from homcc.common.messages import (
-    Message,
     CompilationResultMessage,
     ConnectionRefusedMessage,
     DependencyRequestMessage,
+    Message,
     ObjectFile,
 )
 

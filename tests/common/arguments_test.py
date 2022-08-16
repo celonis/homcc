@@ -1,7 +1,8 @@
 """Tests regarding the arguments module of homcc."""
+from typing import List, Optional
+
 import pytest
 
-from typing import List, Optional
 from homcc.common.arguments import Arguments, Clang, Compiler, Gcc
 from homcc.common.errors import UnsupportedCompilerError
 
