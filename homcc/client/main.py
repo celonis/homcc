@@ -6,7 +6,6 @@ import asyncio
 import logging
 import os
 import sys
-
 from typing import List, Optional
 
 sys.path.append(os.path.join(os.path.dirname(__file__), "../.."))
@@ -18,11 +17,6 @@ from homcc.client.compilation import (  # pylint: disable=wrong-import-position
     compile_remotely,
     scan_includes,
 )
-from homcc.common.errors import (  # pylint: disable=wrong-import-position
-    HostParsingError,
-    RecoverableClientError,
-    RemoteCompilationError,
-)
 from homcc.client.parsing import (  # pylint: disable=wrong-import-position
     ClientConfig,
     Host,
@@ -30,6 +24,11 @@ from homcc.client.parsing import (  # pylint: disable=wrong-import-position
     load_hosts,
     parse_cli_args,
     parse_config,
+)
+from homcc.common.errors import (  # pylint: disable=wrong-import-position
+    HostParsingError,
+    RecoverableClientError,
+    RemoteCompilationError,
 )
 from homcc.common.logging import (  # pylint: disable=wrong-import-position
     Formatter,
@@ -171,7 +170,7 @@ def main():
     )
 
     # force local compilation on specific conditions
-    if compiler_arguments.is_linking_only():  # TODO(s.pirsch): this should probably be removed!
+    if compiler_arguments.is_linking_only():
         logger.debug("Linking [%s] to %s", ", ".join(compiler_arguments.object_files), compiler_arguments.output)
         sys.exit(compile_locally(compiler_arguments, localhost))
 

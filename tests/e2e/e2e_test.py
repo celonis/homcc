@@ -1,16 +1,16 @@
 """End to end integration tests, testing both the client and the server."""
 from __future__ import annotations
-import pytest
 
 import os
 import subprocess
 import time
-
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Optional
-from dataclasses import dataclass
 
-from homcc.common.compression import Compression, NoCompression, LZO, LZMA
+import pytest
+
+from homcc.common.compression import LZMA, LZO, Compression, NoCompression
 
 
 class TestEndToEnd:

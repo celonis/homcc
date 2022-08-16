@@ -1,6 +1,5 @@
 """ Tests for common/compression.py"""
-from homcc.common.compression import LZO, LZMA, CompressedBytes, NoCompression
-
+from homcc.common.compression import LZMA, LZO, CompressedBytes, NoCompression
 
 TEST_DATA: bytearray = bytearray([0x1, 0x2, 0x3, 0x4, 0x5, 0x6, 0x6, 0x6, 0x9])
 

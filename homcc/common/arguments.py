@@ -1,13 +1,13 @@
 """shared common functionality for server and client regarding compiler arguments"""
 from __future__ import annotations
-from abc import ABC, abstractmethod
 
 import logging
 import os
 import re
 import shutil
 import subprocess
-
+import sys
+from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from functools import cached_property
 from pathlib import Path
@@ -44,24 +44,6 @@ class Arguments:
 
     NO_LINKING_ARG: str = "-c"
 
-    # for gcc, see https://gcc.gnu.org/onlinedocs/gcc/Debugging-Options.html#Debugging-Options
-    # for clang, see https://clang.llvm.org/docs/ClangCommandLineReference.html#debug-information-generation
-    DEBUG_SYMBOLS_ARGS: List[str] = [
-        "-g",
-        "-ggdb",
-        "-gdwarf",
-        "-gfull",
-        "--debug",
-        "-gused" "-gbtf",
-        "-gctf",
-        "-gstabs",
-        "-gstabs+",
-        "-gxcoff",
-        "-gxcoff+",
-        "-gvms",
-    ]
-    DEBUG_SYMBOLS_WITH_LEVEL: List[str] = ["-g", "-ggdb", "-gdwarf-", "-gctf", "-gstabs", "-gxcoff", "-gvms"]
-
     OUTPUT_ARG: str = "-o"
     SPECIFY_LANGUAGE_ARG: str = "-x"
 
@@ -71,9 +53,6 @@ class Arguments:
 
     # languages
     ALLOWED_LANGUAGE_PREFIXES: List[str] = ["c", "c++", "objective-c", "objective-c++", "go"]
-
-    # allow list for subprocess calls options
-    ALLOWED_SUBPROCESS_KWARGS: List[str] = ["check", "timeout", "cwd"]
 
     class Local:
         """
@@ -149,7 +128,7 @@ class Arguments:
         return len(self.args) + 1
 
     def __str__(self) -> str:
-        return f'[{self.compiler} {" ".join(self.args)}]'
+        return f"[{self.compiler} {' '.join(self.args)}]"
 
     def __repr__(self) -> str:
         return f"{self.__class__}({str(self)})"
@@ -328,7 +307,7 @@ class Arguments:
         if self.compiler is None:
             raise UnsupportedCompilerError
 
-        return Compiler.from_str(self.compiler_normalized())
+        return Compiler.from_arguments(self)
 
     @cached_property
     def output(self) -> Optional[str]:
@@ -403,7 +382,7 @@ class Arguments:
         """check whether the remote execution of arguments would be successful"""
         # "-o -" might either be treated as "write result to stdout" or "write result to file named '-'"
         if self.output == "-":
-            logger.info('Cannot compile %s remotely because output "%s" is ambiguous', self, self.output)
+            logger.info("Cannot compile %s remotely because output '%s' is ambiguous", self, self.output)
             return False
 
         # no source files
@@ -416,7 +395,7 @@ class Arguments:
             tuple(Arguments.ALLOWED_LANGUAGE_PREFIXES)
         ):
             logger.info(
-                'Cannot compile %s remotely because handling of language "%s" is too complex',
+                "Cannot compile %s remotely because handling of language '%s' is too complex",
                 self,
                 self.specified_language,
             )
@@ -434,23 +413,11 @@ class Arguments:
         """check whether the linking arg is present"""
         return self.NO_LINKING_ARG not in self.args
 
-    def has_debug_symbols(self) -> bool:
-        """check whether any flag that indicates debug symbols is present"""
-        for arg in self.args:
-            if arg in self.DEBUG_SYMBOLS_ARGS:
-                # debug arguments without level, e.g. -g or -ggdb
-                return True
-
-            for debug_symbol_flag in self.DEBUG_SYMBOLS_WITH_LEVEL:
-                # recognize arguments like e.g. -g3 or -ggdb2
-                if arg.startswith(debug_symbol_flag) and len(arg) == len(debug_symbol_flag) + 1 and arg[-1].isdigit():
-                    return True
-
-        return False
-
-    def map_debug_symbol_paths(self, old_path: str, new_path: str) -> Arguments:
-        """return a copy of arguments with added command for translating debug symbol paths in the executable"""
-        return self.copy().add_arg(f"-fdebug-prefix-map={old_path}={new_path}")
+    def map_symbol_paths(self, old_path: str, new_path: str) -> Arguments:
+        """return a copy of arguments with added command for translating symbol paths in the executable
+        See https://reproducible-builds.org/docs/build-path/.
+        This maps debug symbols as well as macros such as __FILE__."""
+        return self.copy().add_arg(f"-ffile-prefix-map={old_path}={new_path}")
 
     def is_linking_only(self) -> bool:
         """check whether the execution of arguments leads to calling only the linker"""
@@ -576,18 +543,23 @@ class Arguments:
         raise TargetInferationError("No compiler to ask for targets")
 
     @staticmethod
-    def _execute_args(args: List[str], **kwargs) -> ArgumentsExecutionResult:
-        # sanity check if different execution options required by client and server compilations are explicitly enabled
-        for kwarg in kwargs:
-            if kwarg not in Arguments.ALLOWED_SUBPROCESS_KWARGS:
-                raise NotImplementedError(f'Unsupported subprocess option "{kwarg}"')
-
-        check: bool = kwargs.pop("check", False)  # explicitly set check to satisfy pylint-W1510
-
+    def _execute_args(
+        args: List[str],
+        check: bool = False,
+        cwd: Path = Path.cwd(),
+        output: bool = True,
+        timeout: Optional[float] = None,
+    ) -> ArgumentsExecutionResult:
         logger.debug("Executing: [%s]", " ".join(args))
+
         result: subprocess.CompletedProcess = subprocess.run(
-            args=args, check=check, encoding="utf-8", capture_output=True, **kwargs
+            args=args, check=check, cwd=cwd, encoding="utf-8", capture_output=True, timeout=timeout
         )
+
+        if output:
+            sys.stdout.write(result.stdout)
+            sys.stderr.write(result.stderr)
+
         return ArgumentsExecutionResult.from_process_result(result)
 
     def execute(self, **kwargs) -> ArgumentsExecutionResult:
@@ -624,12 +596,13 @@ class Compiler(ABC):
         self.compiler_str = compiler_str
 
     @staticmethod
-    def from_str(compiler_str: str) -> Compiler:
+    def from_arguments(arguments: Arguments) -> Compiler:
+        normalized_compiler = arguments.compiler_normalized()
         for compiler in Compiler.available_compilers():
-            if compiler.is_matching_str(compiler_str):
-                return compiler(compiler_str)
+            if compiler.is_matching_str(normalized_compiler):
+                return compiler(arguments.compiler)  # type: ignore[arg-type]
 
-        raise UnsupportedCompilerError(f"Compiler '{compiler_str}' is not supported.")
+        raise UnsupportedCompilerError(f"Compiler '{arguments.compiler}' is not supported.")
 
     @staticmethod
     @abstractmethod
@@ -664,7 +637,7 @@ class Clang(Compiler):
     def is_matching_str(compiler_str: str) -> bool:
         return "clang" in compiler_str
 
-    def supports_target(self, target: str) -> bool:
+    def supports_target(self, _: str) -> bool:
         """For clang, we can not really check if it supports the target prior to compiling:
         '$ clang --print-targets' does not output the same triple format as we get from
         '$ clang --version' (x86_64 vs. x86-64), so we can not properly check if a target is supported.
@@ -675,7 +648,7 @@ class Clang(Compiler):
         clang_arguments = Arguments(self.compiler_str, ["--version"])
 
         try:
-            result = clang_arguments.execute(check=True)
+            result = clang_arguments.execute(check=True, output=False)
         except subprocess.CalledProcessError as err:
             logger.error(
                 "Could not get target triple for compiler '%s', executed '%s'. %s",
@@ -720,7 +693,7 @@ class Gcc(Compiler):
         gcc_arguments = Arguments(self.compiler_str, ["-dumpmachine"])
 
         try:
-            result = gcc_arguments.execute(check=True)
+            result = gcc_arguments.execute(check=True, output=False)
         except subprocess.CalledProcessError as err:
             logger.error(
                 "Could not get target triple for compiler '%s', executed '%s'. %s",

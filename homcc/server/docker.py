@@ -1,7 +1,7 @@
 """Logic for the homcc server to interact with docker."""
-import subprocess
-import shutil
 import logging
+import shutil
+import subprocess
 
 logger = logging.getLogger(__name__)
 

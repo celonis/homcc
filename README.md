@@ -167,7 +167,7 @@ Additionally, `HOMCC` provides sandboxed compiler execution for remote compilati
     <td><sub><pre lang="ini">
     [homcc]
     compiler=g++
-    timeout=60
+    timeout=120
     compression=lzo
     schroot_profile=jammy
     docker_container=example_container
@@ -246,10 +246,13 @@ Additionally, `HOMCC` provides sandboxed compiler execution for remote compilati
 
 
 ### Formatting
-- Formatting and format check are executed via [black](https://github.com/psf/black)
-- Check the formatting of all `python` files and list the required changes:
+- Formatting and format check are executed via [black](https://github.com/psf/black):
   ```sh
   $ black --check --color --diff --verbose *.py homcc tests
+  ```
+- Sorting `import`s is performed by [isort](https://github.com/PyCQA/isort):
+  ```sh
+  $ isort --check --color --diff --gitignore --verbose *.py homcc tests
   ```
 
 ### Build Debian packages

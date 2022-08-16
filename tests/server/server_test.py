@@ -1,22 +1,22 @@
 """Tests regarding the server."""
 import socket
-import pytest
 from typing import List
-
-from pytest_mock import MockerFixture
 from unittest.mock import MagicMock, patch
-from homcc.common.compression import NoCompression
 
+import pytest
+from pytest_mock import MockerFixture
+
+from homcc.common.compression import NoCompression
 from homcc.common.messages import (
     ArgumentMessage,
-    DependencyRequestMessage,
-    DependencyReplyMessage,
     CompilationResultMessage,
+    DependencyReplyMessage,
+    DependencyRequestMessage,
     Message,
     ObjectFile,
 )
 from homcc.server.parsing import ServerConfig
-from homcc.server.server import start_server, stop_server, TCPRequestHandler
+from homcc.server.server import TCPRequestHandler, start_server, stop_server
 
 
 class TestServer:

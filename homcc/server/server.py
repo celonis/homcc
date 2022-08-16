@@ -4,7 +4,6 @@ import os
 import random
 import socketserver
 import threading
-
 from functools import singledispatchmethod
 from pathlib import Path
 from socket import SHUT_RD
@@ -12,23 +11,35 @@ from tempfile import TemporaryDirectory
 from threading import Lock
 from typing import Dict, List, Optional, Tuple
 
-from homcc.common.errors import ServerInitializationError, UnsupportedCompilerError
 from homcc.common.arguments import Arguments
+from homcc.common.errors import ServerInitializationError, UnsupportedCompilerError
 from homcc.common.hashing import hash_file_with_bytes
 from homcc.common.messages import (
     ArgumentMessage,
+    CompilationResultMessage,
     ConnectionRefusedMessage,
-    Message,
     DependencyReplyMessage,
     DependencyRequestMessage,
-    CompilationResultMessage,
+    Message,
 )
-
 from homcc.server.cache import Cache
-from homcc.server.environment import COMPILATION_TIMEOUT, Environment, create_root_temp_folder
-from homcc.server.parsing import DEFAULT_ADDRESS, DEFAULT_LIMIT, DEFAULT_PORT, ServerConfig
-from homcc.server.docker import is_valid_docker_container, is_docker_available
-from homcc.server.schroot import is_valid_schroot_profile, is_schroot_available, get_schroot_profiles
+from homcc.server.docker import is_docker_available, is_valid_docker_container
+from homcc.server.environment import (
+    COMPILATION_TIMEOUT,
+    Environment,
+    create_root_temp_folder,
+)
+from homcc.server.parsing import (
+    DEFAULT_ADDRESS,
+    DEFAULT_LIMIT,
+    DEFAULT_PORT,
+    ServerConfig,
+)
+from homcc.server.schroot import (
+    get_schroot_profiles,
+    is_schroot_available,
+    is_valid_schroot_profile,
+)
 
 logger = logging.getLogger(__name__)
 

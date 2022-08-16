@@ -1,7 +1,8 @@
 """Tests regarding the arguments module of homcc."""
+from typing import List, Optional
+
 import pytest
 
-from typing import List, Optional
 from homcc.common.arguments import Arguments, Clang, Compiler, Gcc
 from homcc.common.errors import UnsupportedCompilerError
 
@@ -246,31 +247,6 @@ class TestArguments:
 
         assert Arguments.from_args(args).source_files == source_file_args
 
-    def test_has_debug_symbols_arg(self):
-        args = ["g++", "-g", "foo.cpp"]
-        assert Arguments.from_args(args).has_debug_symbols()
-
-        args = ["g++", "-g3", "foo.cpp"]
-        assert Arguments.from_args(args).has_debug_symbols()
-
-        args = ["g++", "-g", "3", "foo.cpp"]
-        assert Arguments.from_args(args).has_debug_symbols()
-
-        args = ["g++", "-ggdb", "foo.cpp"]
-        assert Arguments.from_args(args).has_debug_symbols()
-
-        args = ["g++", "-ggdb2", "foo.cpp"]
-        assert Arguments.from_args(args).has_debug_symbols()
-
-        args = ["g++", "-gdwarf", "foo.cpp"]
-        assert Arguments.from_args(args).has_debug_symbols()
-
-        args = ["g++", "-gdwarf-2", "foo.cpp"]
-        assert Arguments.from_args(args).has_debug_symbols()
-
-        args = ["g++", "-Iinclude", "foo.cpp"]
-        assert not Arguments.from_args(args).has_debug_symbols()
-
     def test_compiler_normalized(self):
         assert Arguments.from_args(["gcc", "foo"]).compiler_normalized() == "gcc"
         assert Arguments.from_args(["/usr/bin/gcc", "foo"]).compiler_normalized() == "gcc"
@@ -281,19 +257,19 @@ class TestArguments:
 class TestCompiler:
     """Tests the compiler class of homcc."""
 
-    def test_from_str(self):
-        assert isinstance(Compiler.from_str("gcc"), Gcc)
-        assert isinstance(Compiler.from_str("gcc-11"), Gcc)
-        assert isinstance(Compiler.from_str("g++"), Gcc)
-        assert isinstance(Compiler.from_str("g++-11"), Gcc)
-        assert isinstance(Compiler.from_str("/usr/lib/ccache/gcc-11"), Gcc)
+    def test_from_arguments(self):
+        assert isinstance(Compiler.from_arguments(Arguments("gcc", [])), Gcc)
+        assert isinstance(Compiler.from_arguments(Arguments("gcc-11", [])), Gcc)
+        assert isinstance(Compiler.from_arguments(Arguments("g++", [])), Gcc)
+        assert isinstance(Compiler.from_arguments(Arguments("g++-11", [])), Gcc)
+        assert isinstance(Compiler.from_arguments(Arguments("/usr/lib/ccache/gcc-11", [])), Gcc)
 
-        assert isinstance(Compiler.from_str("clang++"), Clang)
-        assert isinstance(Compiler.from_str("clang++-11"), Clang)
-        assert isinstance(Compiler.from_str("/usr/lib/ccache/clang-14"), Clang)
+        assert isinstance(Compiler.from_arguments(Arguments("clang++", [])), Clang)
+        assert isinstance(Compiler.from_arguments(Arguments("clang++-11", [])), Clang)
+        assert isinstance(Compiler.from_arguments(Arguments("/usr/lib/ccache/clang-14", [])), Clang)
 
         with pytest.raises(UnsupportedCompilerError):
-            Compiler.from_str("unknown++")
+            Compiler.from_arguments(Arguments("unknown++", []))
 
 
 class TestGcc:

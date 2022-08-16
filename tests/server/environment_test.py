@@ -1,12 +1,13 @@
 """Tests for the server environment."""
-from pytest_mock.plugin import MockerFixture
-import pytest
 from pathlib import Path
 
-from homcc.common.compression import NoCompression
-from homcc.server.environment import ArgumentsExecutionResult, Environment
-from homcc.server.cache import Cache
+import pytest
+from pytest_mock.plugin import MockerFixture
+
 from homcc.common.arguments import Arguments
+from homcc.common.compression import NoCompression
+from homcc.server.cache import Cache
+from homcc.server.environment import ArgumentsExecutionResult, Environment
 
 
 def create_mock_environment(instance_folder: str, mapped_cwd: str) -> Environment:
@@ -179,7 +180,7 @@ class TestServerCompilation:
         assert len(result_message.object_files) == 1
         assert result_message.object_files[0].file_name == "/home/user/cwd/this_is_a_source_file.o"
 
-    def test_debug_symbol_mappings(self, mocker: MockerFixture):
+    def test_symbol_mappings(self, mocker: MockerFixture):
         invoke_compiler_mock = mocker.patch(
             "homcc.server.environment.Environment.invoke_compiler",
         )
@@ -199,19 +200,7 @@ class TestServerCompilation:
 
         # ensure that we call the compiler with an instruction to remap the debug symbols
         passed_debug_arguments: Arguments = invoke_compiler_mock.call_args_list[0].args[0]
-        assert f"-fdebug-prefix-map={instance_path}=" in passed_debug_arguments.args
-
-        no_debug_arguments = Arguments.from_args(
-            [
-                "gcc",
-                f"{mapped_cwd}/src/foo.cpp",
-            ]
-        )
-        environment.do_compilation(no_debug_arguments)
-
-        # ensure that the flag is not passed to the compiler when not compiling with debug symbols
-        passed_no_debug_arguments: Arguments = invoke_compiler_mock.call_args_list[1].args[0]
-        assert "-fdebug-prefix-map" not in str(passed_no_debug_arguments.args)
+        assert f"-ffile-prefix-map={instance_path}=" in passed_debug_arguments.args
 
     @pytest.mark.gplusplus
     def test_compiler_exists(self):

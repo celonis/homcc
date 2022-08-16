@@ -6,28 +6,27 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
-import signal
-import sys
-import time
-
-import posix_ipc
 import random
+import signal
 import socket
 import struct
-
+import sys
+import time
 from abc import ABC, abstractmethod
 from enum import Enum, auto
 from pathlib import Path
 from typing import Dict, Iterator, List, Optional
 
+import posix_ipc
+
+from homcc.client.parsing import ConnectionType, Host
+from homcc.common.arguments import Arguments
 from homcc.common.errors import (
     ClientParsingError,
     FailedHostNameResolutionError,
     HostsExhaustedError,
     SlotsExhaustedError,
 )
-from homcc.client.parsing import ConnectionType, Host
-from homcc.common.arguments import Arguments
 from homcc.common.messages import ArgumentMessage, DependencyReplyMessage, Message
 
 logger = logging.getLogger(__name__)
@@ -215,26 +214,24 @@ class StateFile:
         char file[128];               // source_base_filename
         char host[128];               // hostname
         int slot;                     // slot
-        enum dcc_phase curr_phase;    // DistccClientPhases
+        enum dcc_phase curr_phase;    // ClientPhase
         struct dcc_task_state *next;  // undefined for state file: 0
     };
 
     DISTCC_TASK_STATE_STRUCT_FORMAT provides an (un)packing format string for the above dcc_task_state struct.
     """
 
-    # pylint: disable=invalid-name
-    # justification: highlight that this is not a regular Python Enum
-    class DISTCC_CLIENT_PHASES(int, Enum):
+    class ClientPhase(int, Enum):
         """Client compilation phases equivalent to dcc_phase."""
 
-        STARTUP = 0
-        BLOCKED = auto()
-        CONNECT = auto()
+        _STARTUP = 0  # unused
+        _BLOCKED = auto()  # unused
+        _CONNECT = auto()  # unused
         _CPP = auto()  # unused
-        SEND = auto()
+        _SEND = auto()  # unused
         COMPILE = auto()
-        RECEIVE = auto()
-        DONE = auto()
+        _RECEIVE = auto()  # unused
+        _DONE = auto()  # unused
 
     __slots__ = "pid", "source_base_filename", "hostname", "slot", "phase", "filepath"
 
@@ -250,9 +247,9 @@ class StateFile:
     DISTCC_NEXT_TASK_STATE: int = 0xFF_FF_FF_FF_FF_FF_FF_FF
     """Undefined and unused pointer address for the next dcc_task_state struct*."""
 
-    HOMCC_STATE_DIR: Path = Path.home() / ".homcc/state/"
+    HOMCC_STATE_DIR: Path = Path.home() / ".distcc" / "state"  # TODO(s.pirsch): temporarily share state dir with distcc
     """Path to the directory storing temporary homcc state files."""
-    STATE_DIR_PREFIX: str = "binstate_"
+    STATE_FILE_PREFIX: str = "binstate"
     """Prefix for for state files."""
 
     # none-constant dcc_task_state fields
@@ -264,56 +261,52 @@ class StateFile:
     """Encoded host name."""
     slot: int
     """Used host slot."""
-    phase: DISTCC_CLIENT_PHASES
+    phase: ClientPhase
     """Current compilation phase."""
 
     # additional fields
     filepath: Path  # equivalent functionality as: dcc_get_state_filename
     """Path to the state file."""
 
-    def __init__(self, source_file: str, hostname: str, slot: int, state_dir: Path = HOMCC_STATE_DIR):
+    def __init__(self, arguments: Arguments, host: Host, slot: Optional[int] = None, state_dir: Path = HOMCC_STATE_DIR):
         state_dir.mkdir(exist_ok=True, parents=True)
 
         # size_t struct_size: DISTCC_TASK_STATE_STRUCT_SIZE
         # unsigned long magic: DISTCC_STATE_MAGIC
         self.pid = os.getpid()  # unsigned long cpid
-        self.source_base_filename = Path(source_file).name.encode()  # char file[128]
+
+        if source_files := arguments.source_files:
+            self.source_base_filename = Path(source_files[0]).name.encode()  # char file[128]
+        elif output := arguments.output:
+            self.source_base_filename = output.encode()  # take output target for linking instead
+        else:
+            logger.debug("No monitoring string deducible for %s.", arguments)
+            self.source_base_filename = "".encode()
 
         if len(self.source_base_filename) > 127:
-            raise ValueError(f"Source Base Filename '{self.source_base_filename.decode()}' too long")
+            logger.warning("Trimming too long Source Base Filename '%s'", self.source_base_filename.decode())
+            self.source_base_filename = self.source_base_filename[:127]
 
-        self.hostname = hostname.encode()  # char host[128]
+        self.hostname = host.name.encode()  # char host[128]
 
         if len(self.hostname) > 127:
-            raise ValueError(f"Hostname '{self.hostname.decode()}' too long")
+            logger.warning("Trimming too long Hostname '%s'", self.hostname.decode())
+            self.hostname = self.hostname[:127]
 
-        self.slot = slot  # int slot
+        self.slot = slot or 0
+
+        # distcc uses PID instead of host and slot
+        while (filepath := state_dir / f"{self.STATE_FILE_PREFIX}_{host.id()}_{self.slot}").exists():
+            self.slot = (self.slot + 1) % host.limit
+
+        # state file path, e.g. ~/.homcc/state/binstate_homcc_tcp_remotehost_3126_16_0
+        self.filepath = filepath
+
         # enum dcc_phase curr_phase: unassigned
         # struct dcc_task_state *next: DISTCC_NEXT_TASK_STATE
 
-        # state file path, e.g. ~/.homcc/state/binstate_12345
-        self.filepath = state_dir / f"{self.STATE_DIR_PREFIX}{self.pid}"
-
-    @classmethod
-    def from_bytes(cls, buffer: bytes) -> StateFile:
-        (
-            _,  # DISTCC_TASK_STATE_STRUCT_SIZE
-            _,  # DISTCC_STATE_MAGIC
-            pid,
-            source_base_filename,
-            hostname,
-            slot,
-            phase,
-            _,  # DISTCC_NEXT_TASK_STATE
-        ) = struct.unpack(cls.DISTCC_TASK_STATE_STRUCT_FORMAT, buffer)
-
-        # trim trailing null bytes
-        state = cls(source_base_filename.rstrip(b"\x00").decode(), hostname.rstrip(b"\x00").decode(), slot)
-
-        state.pid = pid
-        state.phase = phase
-
-        return state
+        # we currently show the whole interaction as a COMPILE phase as we can not discern between sending and receiving
+        self.phase = self.ClientPhase.COMPILE
 
     def __bytes__(self) -> bytes:
         # fmt: off
@@ -332,22 +325,13 @@ class StateFile:
         )
         # fmt: on
 
-    def __eq__(self, other):
-        if isinstance(other, StateFile):
-            return (  # ignore constants: DISTCC_TASK_STATE_STRUCT_SIZE, DISTCC_STATE_MAGIC, DISTCC_NEXT_TASK_STATE
-                self.pid == other.pid
-                and self.source_base_filename == other.source_base_filename
-                and self.hostname == other.hostname
-                and self.slot == other.slot
-                and self.phase == other.phase
-            )
-        return False
-
     def __enter__(self) -> StateFile:
         try:
             self.filepath.touch(exist_ok=False)
         except FileExistsError:
-            logger.error("Could not create client state file '%s' as it already exists!", self.filepath.absolute())
+            logger.warning("Could not create client state file '%s' as it already exists!", self.filepath.absolute())
+
+        self.filepath.write_bytes(bytes(self))
 
         return self
 
@@ -355,11 +339,7 @@ class StateFile:
         try:
             self.filepath.unlink()
         except FileNotFoundError:
-            logger.error("File '%s' was already deleted!", self.filepath.absolute())
-
-    def set_phase(self, phase: DISTCC_CLIENT_PHASES):
-        self.phase = phase
-        self.filepath.write_bytes(bytes(self))
+            logger.warning("File '%s' was already deleted!", self.filepath.absolute())
 
 
 class TCPClient:

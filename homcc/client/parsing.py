@@ -5,9 +5,8 @@ import logging
 import os
 import re
 import sys
-
 from abc import ABC, abstractmethod
-from argparse import ArgumentParser, Action, RawTextHelpFormatter
+from argparse import Action, ArgumentParser, RawTextHelpFormatter
 from configparser import Error, SectionProxy
 from dataclasses import dataclass
 from enum import Enum
@@ -17,9 +16,9 @@ from typing import Any, ClassVar, Dict, List, Optional, Tuple, Union
 from homcc import client
 from homcc.common.arguments import Arguments
 from homcc.common.compression import Compression
+from homcc.common.errors import HostParsingError, NoHostsFoundError
 from homcc.common.logging import LogLevel
 from homcc.common.parsing import HOMCC_CONFIG_FILENAME, default_locations, parse_configs
-from homcc.common.errors import HostParsingError, NoHostsFoundError
 
 logger = logging.getLogger(__name__)
 
@@ -290,14 +289,14 @@ class ClientConfig:
 
     def __str__(self):
         return (
-            f'Configuration (from [{", ".join(self.files)}]):\n'
-            f"\tCompiler:\t{self.compiler}\n"
-            f"\tCompression:\t{self.compression}\n"
+            f"Configuration (from [{', '.join(self.files)}]):\n"
+            f"\tcompiler:\t\t{self.compiler}\n"
+            f"\tcompression:\t\t{self.compression}\n"
             f"\tschroot_profile:\t{self.schroot_profile}\n"
             f"\tdocker_container:\t{self.docker_container}\n"
-            f"\tTimeout:\t{self.timeout}s\n"
-            f"\tLog-Level:\t{self.log_level.name}\n"
-            f"\tVerbosity:\t{str(self.verbose)}\n"
+            f"\ttimeout:\t\t{self.timeout}\n"
+            f"\tlog_level:\t\t{self.log_level.name}\n"
+            f"\tverbose:\t\t{str(self.verbose)}\n"
         )
 
     def set_verbose(self):
@@ -399,7 +398,7 @@ def parse_cli_args(args: List[str]) -> Tuple[Dict[str, Any], Arguments]:
         type=str,
         metavar="[COMPILER] ARGUMENTS ...",
         help="COMPILER, if not specified explicitly, is either read from the config file or defaults to "
-        f'"{Arguments.DEFAULT_COMPILER}"\n'
+        f"'{Arguments.DEFAULT_COMPILER}'\n"
         "dependant on remote execution, the remaining ARGUMENTS may be altered before being forwarded to the COMPILER",
     )
 
@@ -468,7 +467,7 @@ def parse_host(host: str) -> Host:
         connection_type = ConnectionType.TCP
 
     else:
-        raise HostParsingError(f'Host "{host}" could not be parsed correctly, please provide it in the correct format!')
+        raise HostParsingError(f"Host '{host}' could not be parsed correctly, please provide it in the correct format!")
 
     # extract remaining limit info: HOST_FORMAT/LIMIT
     if (host_limit_match := re.match(r"^(\S+)/(\d+)$", host)) is not None:
@@ -511,7 +510,7 @@ def load_hosts(hosts_file_locations: Optional[List[Path]] = None) -> Tuple[str, 
     for hosts_file_location in hosts_file_locations:
         if hosts_file_location.exists():
             if hosts_file_location.stat().st_size == 0:
-                logger.warning('Skipping empty hosts file "%s"!', hosts_file_location)
+                logger.warning("Skipping empty hosts file '%s'!", hosts_file_location)
                 continue
             return str(hosts_file_location), filtered_lines(hosts_file_location.read_text(encoding="utf-8"))
 
