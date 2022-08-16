@@ -170,7 +170,7 @@ def main():
     )
 
     # force local compilation on specific conditions
-    if compiler_arguments.is_linking_only():  # TODO(s.pirsch): this should probably be removed!
+    if compiler_arguments.is_linking_only():
         logger.debug("Linking [%s] to %s", ", ".join(compiler_arguments.object_files), compiler_arguments.output)
         sys.exit(compile_locally(compiler_arguments, localhost))
 
