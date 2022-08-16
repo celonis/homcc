@@ -205,7 +205,7 @@ def find_dependencies(arguments: Arguments) -> Set[str]:
     arguments, filename = arguments.dependency_finding()
     try:
         # execute preprocessor command, e.g.: "g++ foo.cpp -M -MT $(homcc)"
-        result: ArgumentsExecutionResult = arguments.execute(check=True)
+        result: ArgumentsExecutionResult = arguments.execute(check=True, output=False)
     except subprocess.CalledProcessError as error:
         logger.error("Preprocessor error:\n%s", error.stderr)
         sys.exit(error.returncode)

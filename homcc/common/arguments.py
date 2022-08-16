@@ -149,7 +149,7 @@ class Arguments:
             if cls.is_compiler_arg(arg):
                 return cls(arg, [])
             else:
-                raise UnsupportedCompilerError("Specifiying a compiler is necessary")
+                raise UnsupportedCompilerError("Specifying a compiler is necessary")
 
         # compiler with args, e.g. ["g++", "foo.cpp", "-c"]
         return cls(args[0], args[1:])
