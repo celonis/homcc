@@ -5,9 +5,8 @@ import logging
 import os
 import re
 import sys
-
 from abc import ABC, abstractmethod
-from argparse import ArgumentParser, Action, RawTextHelpFormatter
+from argparse import Action, ArgumentParser, RawTextHelpFormatter
 from configparser import Error, SectionProxy
 from dataclasses import dataclass
 from enum import Enum
@@ -17,9 +16,9 @@ from typing import Any, ClassVar, Dict, List, Optional, Tuple, Union
 from homcc import client
 from homcc.common.arguments import Arguments
 from homcc.common.compression import Compression
+from homcc.common.errors import HostParsingError, NoHostsFoundError
 from homcc.common.logging import LogLevel
 from homcc.common.parsing import HOMCC_CONFIG_FILENAME, default_locations, parse_configs
-from homcc.common.errors import HostParsingError, NoHostsFoundError
 
 logger = logging.getLogger(__name__)
 

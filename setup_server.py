@@ -1,6 +1,7 @@
 """Setuptools for the homcc server - homccd."""
-from homcc import server
 from setuptools import setup
+
+from homcc import server
 
 if __name__ == "__main__":
     setup(

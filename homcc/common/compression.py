@@ -1,10 +1,11 @@
 """Compression related functionality"""
 from __future__ import annotations
-from abc import ABC, abstractmethod
-from typing import List, Optional, Type
 
 import logging
 import lzma
+from abc import ABC, abstractmethod
+from typing import List, Optional, Type
+
 import lzo
 
 logger = logging.getLogger(__name__)

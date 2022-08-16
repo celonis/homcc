@@ -1,17 +1,18 @@
 """Tests the messages module of homcc."""
+import os
+from typing import Dict, List
+
 import pytest
 
-from typing import List, Dict
-import os
+from homcc.common.compression import LZMA, NoCompression
 from homcc.common.messages import (
     ArgumentMessage,
-    DependencyRequestMessage,
-    DependencyReplyMessage,
     CompilationResultMessage,
+    DependencyReplyMessage,
+    DependencyRequestMessage,
     Message,
     ObjectFile,
 )
-from homcc.common.compression import LZMA, NoCompression
 
 
 class TestArgumentMessage:

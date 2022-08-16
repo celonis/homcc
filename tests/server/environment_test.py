@@ -1,12 +1,13 @@
 """Tests for the server environment."""
-from pytest_mock.plugin import MockerFixture
-import pytest
 from pathlib import Path
 
-from homcc.common.compression import NoCompression
-from homcc.server.environment import ArgumentsExecutionResult, Environment
-from homcc.server.cache import Cache
+import pytest
+from pytest_mock.plugin import MockerFixture
+
 from homcc.common.arguments import Arguments
+from homcc.common.compression import NoCompression
+from homcc.server.cache import Cache
+from homcc.server.environment import ArgumentsExecutionResult, Environment
 
 
 def create_mock_environment(instance_folder: str, mapped_cwd: str) -> Environment:
