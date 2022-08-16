@@ -6,28 +6,27 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
-import signal
-import sys
-import time
-
-import posix_ipc
 import random
+import signal
 import socket
 import struct
-
+import sys
+import time
 from abc import ABC, abstractmethod
 from enum import Enum, auto
 from pathlib import Path
 from typing import Dict, Iterator, List, Optional
 
+import posix_ipc
+
+from homcc.client.parsing import ConnectionType, Host
+from homcc.common.arguments import Arguments
 from homcc.common.errors import (
     ClientParsingError,
     FailedHostNameResolutionError,
     HostsExhaustedError,
     SlotsExhaustedError,
 )
-from homcc.client.parsing import ConnectionType, Host
-from homcc.common.arguments import Arguments
 from homcc.common.messages import ArgumentMessage, DependencyReplyMessage, Message
 
 logger = logging.getLogger(__name__)

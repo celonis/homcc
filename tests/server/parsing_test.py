@@ -1,10 +1,9 @@
 """ Tests for client/compilation.py"""
-import pytest
-
 import os
-
 from pathlib import Path
 from typing import List
+
+import pytest
 from pytest import CaptureFixture
 
 from homcc import server
@@ -12,9 +11,9 @@ from homcc.common.parsing import HOMCC_CONFIG_FILENAME
 from homcc.server.parsing import (
     SCHROOT_CONF_FILENAME,
     ServerConfig,
+    load_schroot_profiles,
     parse_cli_args,
     parse_config,
-    load_schroot_profiles,
 )
 
 

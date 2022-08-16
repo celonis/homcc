@@ -1,18 +1,22 @@
 """ Tests for client/client.py"""
 
-import pytest
-
 import os
-import posix_ipc
 import threading
 import time
-
 from pathlib import Path
 from typing import Iterator, List
 
-from homcc.client.client import HostSelector, LocalHostSemaphore, RemoteHostSemaphore, StateFile
-from homcc.common.errors import HostsExhaustedError, SlotsExhaustedError
+import posix_ipc
+import pytest
+
+from homcc.client.client import (
+    HostSelector,
+    LocalHostSemaphore,
+    RemoteHostSemaphore,
+    StateFile,
+)
 from homcc.client.parsing import ConnectionType, Host
+from homcc.common.errors import HostsExhaustedError, SlotsExhaustedError
 
 
 class TestHostSelector:

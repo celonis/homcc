@@ -1,6 +1,5 @@
 """shared common functionality regarding hashes"""
 import hashlib
-
 from pathlib import Path
 
 

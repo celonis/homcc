@@ -1,14 +1,14 @@
 """Creation and parsing for messages transferred between the client and the server."""
 from __future__ import annotations
 
-from typing import List, Dict, Tuple, Optional
-from abc import ABC
-from enum import Enum, auto
-from dataclasses import dataclass
 import json
+from abc import ABC
+from dataclasses import dataclass
+from enum import Enum, auto
+from typing import Dict, List, Optional, Tuple
 
 from homcc.common.arguments import ArgumentsExecutionResult
-from homcc.common.compression import Compression, NoCompression, CompressedBytes
+from homcc.common.compression import CompressedBytes, Compression, NoCompression
 
 
 class MessageType(Enum):

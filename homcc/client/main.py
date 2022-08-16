@@ -6,7 +6,6 @@ import asyncio
 import logging
 import os
 import sys
-
 from typing import List, Optional
 
 sys.path.append(os.path.join(os.path.dirname(__file__), "../.."))
@@ -18,11 +17,6 @@ from homcc.client.compilation import (  # pylint: disable=wrong-import-position
     compile_remotely,
     scan_includes,
 )
-from homcc.common.errors import (  # pylint: disable=wrong-import-position
-    HostParsingError,
-    RecoverableClientError,
-    RemoteCompilationError,
-)
 from homcc.client.parsing import (  # pylint: disable=wrong-import-position
     ClientConfig,
     Host,
@@ -30,6 +24,11 @@ from homcc.client.parsing import (  # pylint: disable=wrong-import-position
     load_hosts,
     parse_cli_args,
     parse_config,
+)
+from homcc.common.errors import (  # pylint: disable=wrong-import-position
+    HostParsingError,
+    RecoverableClientError,
+    RemoteCompilationError,
 )
 from homcc.common.logging import (  # pylint: disable=wrong-import-position
     Formatter,

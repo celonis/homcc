@@ -1,6 +1,7 @@
 """Setuptools for the homcc client - homcc."""
-from homcc import client
 from setuptools import setup
+
+from homcc import client
 
 if __name__ == "__main__":
     setup(
