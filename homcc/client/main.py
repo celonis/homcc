@@ -38,6 +38,7 @@ from homcc.common.logging import (  # pylint: disable=wrong-import-position
     LoggingConfig,
     setup_logging,
 )
+from homcc.common.arguments import Arguments  # pylint: disable=wrong-import-position
 
 logger: logging.Logger = logging.getLogger(__name__)
 
@@ -59,7 +60,7 @@ def main():
         sys.exit(os.EX_USAGE)
 
     # load and parse arguments and configuration information
-    homcc_args_dict, compiler_arguments = parse_cli_args(sys.argv[1:])
+    homcc_args_dict, compiler_or_argument, compiler_args = parse_cli_args(sys.argv[1:])
 
     # prevent config loading and parsing if --no-config was specified
     homcc_config: ClientConfig = ClientConfig.empty() if homcc_args_dict["no_config"] else parse_config()
@@ -89,11 +90,9 @@ def main():
 
     setup_logging(logging_config)
 
+    compiler_arguments: Arguments = Arguments.from_cli(compiler_or_argument, compiler_args, homcc_config.compiler)
     # COMPILER; default: "cc"
-    if (compiler := compiler_arguments.compiler) is not None:
-        homcc_config.compiler = compiler
-    else:
-        compiler_arguments.compiler = homcc_config.compiler
+    homcc_config.compiler = compiler_arguments.compiler
 
     # SCAN-INCLUDES; and exit
     if homcc_args_dict["scan_includes"]:

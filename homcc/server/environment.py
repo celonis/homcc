@@ -7,7 +7,7 @@ import logging
 from pathlib import Path
 from typing import Dict, List, Optional
 
-from homcc.common.arguments import Arguments, ArgumentsExecutionResult, Compiler
+from homcc.common.arguments import Arguments, ArgumentsExecutionResult
 from homcc.common.compression import Compression
 from homcc.common.messages import CompilationResultMessage, ObjectFile
 from homcc.server.cache import Cache
@@ -129,11 +129,7 @@ class Environment:
     @staticmethod
     def compiler_supports_target(arguments: Arguments, target: str) -> bool:
         """Returns true if the compiler supports cross-compiling for the given target."""
-        compiler: Optional[Compiler] = arguments.compiler_object()
-
-        if compiler is None:
-            return False
-
+        compiler = arguments.compiler_object()
         return compiler.supports_target(target)
 
     def do_compilation(self, arguments: Arguments) -> CompilationResultMessage:
