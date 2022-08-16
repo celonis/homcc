@@ -40,7 +40,7 @@ class Arguments:
     """
 
     # if the compiler is neither specified by the callee nor defined in the config file use this as fallback
-    DEFAULT_COMPILER: str = "cc"
+    DEFAULT_COMPILER: str = "gcc"
 
     NO_LINKING_ARG: str = "-c"
 

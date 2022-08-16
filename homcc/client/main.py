@@ -90,7 +90,7 @@ def main():
     setup_logging(logging_config)
 
     compiler_arguments: Arguments = Arguments.from_cli(compiler_or_argument, compiler_args, homcc_config.compiler)
-    # COMPILER; default: "cc"
+    # COMPILER; default: "gcc"
     homcc_config.compiler = compiler_arguments.compiler
 
     # SCAN-INCLUDES; and exit
