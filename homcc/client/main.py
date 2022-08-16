@@ -25,6 +25,7 @@ from homcc.client.parsing import (  # pylint: disable=wrong-import-position
     parse_cli_args,
     parse_config,
 )
+from homcc.common.arguments import Arguments  # pylint: disable=wrong-import-position
 from homcc.common.errors import (  # pylint: disable=wrong-import-position
     HostParsingError,
     RecoverableClientError,
@@ -37,7 +38,6 @@ from homcc.common.logging import (  # pylint: disable=wrong-import-position
     LoggingConfig,
     setup_logging,
 )
-from homcc.common.arguments import Arguments  # pylint: disable=wrong-import-position
 
 logger: logging.Logger = logging.getLogger(__name__)
 
