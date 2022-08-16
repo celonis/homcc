@@ -1,9 +1,8 @@
 """Logic for the homcc server to interact with schroot."""
 import logging
+import re
 import shutil
 import subprocess
-import re
-
 from typing import List
 
 logger = logging.getLogger(__name__)

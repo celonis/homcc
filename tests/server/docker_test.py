@@ -1,7 +1,7 @@
 """Test module for the docker interaction on the server side."""
 import subprocess
-import pytest
 
+import pytest
 from pytest_mock import MockerFixture
 
 from homcc.server.docker import is_docker_available, is_valid_docker_container

@@ -1,7 +1,11 @@
 """Test module for the docker interaction on the server side."""
 import pytest
 
-from homcc.server.schroot import get_schroot_profiles, is_schroot_available, is_valid_schroot_profile
+from homcc.server.schroot import (
+    get_schroot_profiles,
+    is_schroot_available,
+    is_valid_schroot_profile,
+)
 
 
 class TestSchrootInteraction:
