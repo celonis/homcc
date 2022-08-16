@@ -5,7 +5,6 @@ import logging
 import os
 import re
 import sys
-
 from argparse import Action, ArgumentParser, ArgumentTypeError, RawTextHelpFormatter
 from configparser import ConfigParser, Error, SectionProxy
 from dataclasses import dataclass
@@ -159,7 +158,7 @@ class ServerConfig:
             f"\tlimit:\t{self.limit}\n"
             f"\tport:\t{self.port}\n"
             f"\taddress:\t{self.address}\n"
-            f"\tlog_level:\t{self.log_level}\n"
+            f"\tlog_level:\t{self.log_level.name}\n"
             f"\tverbose:\t{str(self.verbose)}\n"
         )
 

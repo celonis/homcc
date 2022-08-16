@@ -1,10 +1,10 @@
 """Module containing methods to manage the server environment, mostly file and path manipulation."""
-from tempfile import TemporaryDirectory
-import uuid
+import logging
 import os
 import shutil
-import logging
+import uuid
 from pathlib import Path
+from tempfile import TemporaryDirectory
 from typing import Dict, List, Optional
 
 from homcc.common.arguments import Arguments, ArgumentsExecutionResult
@@ -175,14 +175,14 @@ class Environment:
 
         if self.schroot_profile is not None:
             result = arguments.schroot_execute(
-                profile=self.schroot_profile, cwd=self.mapped_cwd, timeout=COMPILATION_TIMEOUT
+                profile=self.schroot_profile, cwd=self.mapped_cwd, output=False, timeout=COMPILATION_TIMEOUT
             )
         elif self.docker_container is not None:
             result = arguments.docker_execute(
-                container=self.docker_container, cwd=self.mapped_cwd, timeout=COMPILATION_TIMEOUT
+                container=self.docker_container, cwd=self.mapped_cwd, output=False, timeout=COMPILATION_TIMEOUT
             )
         else:
-            result = arguments.execute(cwd=self.mapped_cwd, timeout=COMPILATION_TIMEOUT)
+            result = arguments.execute(cwd=self.mapped_cwd, output=False, timeout=COMPILATION_TIMEOUT)
 
         if result.stdout:
             logger.debug("Compiler gave output:\n'%s'", result.stdout)

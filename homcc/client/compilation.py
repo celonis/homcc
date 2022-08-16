@@ -6,34 +6,34 @@ import logging
 import os
 import subprocess
 import sys
-
 from pathlib import Path
-from typing import Dict, Optional, List, Set, Tuple
+from typing import Dict, List, Optional, Set, Tuple
 
 from homcc.client.client import (
     HostSelector,
-    RemoteHostSemaphore,
     LocalHostSemaphore,
+    RemoteHostSemaphore,
+    StateFile,
     TCPClient,
-)
-from homcc.common.errors import (
-    FailedHostNameResolutionError,
-    HostsExhaustedError,
-    RemoteCompilationError,
-    RemoteCompilationTimeoutError,
-    PreprocessorError,
-    TargetInferationError,
-    UnexpectedMessageTypeError,
-    SlotsExhaustedError,
 )
 from homcc.client.parsing import ClientConfig, Host
 from homcc.common.arguments import Arguments, ArgumentsExecutionResult
+from homcc.common.errors import (
+    FailedHostNameResolutionError,
+    HostsExhaustedError,
+    PreprocessorError,
+    RemoteCompilationError,
+    RemoteCompilationTimeoutError,
+    SlotsExhaustedError,
+    TargetInferationError,
+    UnexpectedMessageTypeError,
+)
 from homcc.common.hashing import hash_file_with_path
 from homcc.common.messages import (
-    Message,
     CompilationResultMessage,
     ConnectionRefusedMessage,
     DependencyRequestMessage,
+    Message,
     ObjectFile,
 )
 
@@ -62,7 +62,7 @@ async def compile_remotely(arguments: Arguments, hosts: List[Host], config: Clie
         host.compression = host.compression or config.compression
 
         try:
-            with RemoteHostSemaphore(host):
+            with RemoteHostSemaphore(host), StateFile(arguments, host):
                 return await asyncio.wait_for(
                     compile_remotely_at(arguments, host, schroot_profile, docker_container), timeout=timeout
                 )
@@ -139,7 +139,7 @@ async def compile_remotely_at(
 
     # extract and use compilation result if possible
     if not isinstance(host_response, CompilationResultMessage):
-        raise UnexpectedMessageTypeError(f'Received message of unexpected type "{host_response.message_type}"!')
+        raise UnexpectedMessageTypeError(f"Received message of unexpected type '{host_response.message_type}'!")
 
     host_result: ArgumentsExecutionResult = host_response.get_compilation_result()
 
@@ -179,7 +179,7 @@ async def compile_remotely_at(
 def compile_locally(arguments: Arguments, localhost: Host) -> int:
     """execute local compilation"""
 
-    with LocalHostSemaphore(localhost):
+    with LocalHostSemaphore(localhost), StateFile(arguments, localhost):
         try:
             # execute compile command, e.g.: "g++ foo.cpp -o foo"
             result: ArgumentsExecutionResult = arguments.execute(check=True)

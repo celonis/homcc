@@ -1,9 +1,8 @@
 """Caching module of the homcc server."""
 import logging
-
 from pathlib import Path
-from typing import Dict
 from threading import Lock
+from typing import Dict
 
 logger = logging.getLogger(__name__)
 

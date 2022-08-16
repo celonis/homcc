@@ -1,7 +1,7 @@
 """Test module for the server cache."""
 
-from tempfile import TemporaryDirectory
 from pathlib import Path
+from tempfile import TemporaryDirectory
 
 from homcc.server.cache import Cache
 

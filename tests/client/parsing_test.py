@@ -1,26 +1,25 @@
 """ Tests for client/parsing.py"""
-import pytest
-
 import os
 import subprocess
-
 from pathlib import Path
-from pytest import CaptureFixture
-from pytest_mock.plugin import MockerFixture
 from typing import List
 
+import pytest
+from pytest import CaptureFixture
+from pytest_mock.plugin import MockerFixture
+
 from homcc import client
-from homcc.common.errors import HostParsingError
 from homcc.client.parsing import (
     HOMCC_HOSTS_ENV_VAR,
     HOMCC_HOSTS_FILENAME,
     ClientConfig,
     ConnectionType,
     Host,
-    parse_cli_args,
     load_hosts,
+    parse_cli_args,
     parse_config,
 )
+from homcc.common.errors import HostParsingError
 from homcc.common.parsing import HOMCC_CONFIG_FILENAME
 
 

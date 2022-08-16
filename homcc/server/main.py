@@ -4,12 +4,14 @@ import logging
 import os
 import signal
 import sys
-
 from typing import Any, Dict, List
 
 sys.path.append(os.path.join(os.path.dirname(__file__), "../.."))
 
 from homcc import server  # pylint: disable=wrong-import-position
+from homcc.common.errors import (  # pylint: disable=wrong-import-position
+    ServerInitializationError,
+)
 from homcc.common.logging import (  # pylint: disable=wrong-import-position
     Formatter,
     FormatterConfig,
@@ -20,17 +22,14 @@ from homcc.common.logging import (  # pylint: disable=wrong-import-position
 )
 from homcc.server.parsing import (  # pylint: disable=wrong-import-position
     ServerConfig,
+    load_schroot_profiles,
     parse_cli_args,
     parse_config,
-    load_schroot_profiles,
 )
 from homcc.server.server import (  # pylint: disable=wrong-import-position
     start_server,
     stop_server,
 )
-
-from homcc.common.errors import ServerInitializationError  # pylint: disable=wrong-import-position
-
 
 logger: logging.Logger = logging.getLogger(__name__)
 
