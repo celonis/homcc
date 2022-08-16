@@ -13,6 +13,7 @@ from homcc.client.client import (
     HostSelector,
     LocalHostSemaphore,
     RemoteHostSemaphore,
+    StateFile,
     TCPClient,
 )
 from homcc.client.parsing import ClientConfig, Host
@@ -61,7 +62,7 @@ async def compile_remotely(arguments: Arguments, hosts: List[Host], config: Clie
         host.compression = host.compression or config.compression
 
         try:
-            with RemoteHostSemaphore(host):
+            with RemoteHostSemaphore(host), StateFile(arguments, host):
                 return await asyncio.wait_for(
                     compile_remotely_at(arguments, host, schroot_profile, docker_container), timeout=timeout
                 )
@@ -138,7 +139,7 @@ async def compile_remotely_at(
 
     # extract and use compilation result if possible
     if not isinstance(host_response, CompilationResultMessage):
-        raise UnexpectedMessageTypeError(f'Received message of unexpected type "{host_response.message_type}"!')
+        raise UnexpectedMessageTypeError(f"Received message of unexpected type '{host_response.message_type}'!")
 
     host_result: ArgumentsExecutionResult = host_response.get_compilation_result()
 
@@ -178,7 +179,7 @@ async def compile_remotely_at(
 def compile_locally(arguments: Arguments, localhost: Host) -> int:
     """execute local compilation"""
 
-    with LocalHostSemaphore(localhost):
+    with LocalHostSemaphore(localhost), StateFile(arguments, localhost):
         try:
             # execute compile command, e.g.: "g++ foo.cpp -o foo"
             result: ArgumentsExecutionResult = arguments.execute(check=True)
