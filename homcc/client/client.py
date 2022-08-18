@@ -19,7 +19,7 @@ from typing import Dict, Iterator, List, Optional
 
 import posix_ipc
 
-from homcc.client.parsing import ConnectionType, Host
+from homcc.client.host import ConnectionType, Host
 from homcc.common.arguments import Arguments
 from homcc.common.errors import (
     ClientParsingError,
@@ -114,9 +114,8 @@ class HostSemaphore(ABC):
         pass
 
     def __exit__(self, *exc):
-        logger.debug("Exiting semaphore '%s' with value '%i'", self._semaphore.name, self._semaphore.value)
-
         if self._semaphore is not None:
+            logger.debug("Exiting semaphore '%s' with value '%i'", self._semaphore.name, self._semaphore.value)
             self._semaphore.__exit__(*exc)  # releases the semaphore
             self._semaphore = self._semaphore.close()  # closes and sets the semaphore to None
 

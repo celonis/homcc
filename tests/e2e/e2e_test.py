@@ -2,11 +2,12 @@
 from __future__ import annotations
 
 import os
+import re
 import subprocess
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, Iterator, List, Optional
 
 import pytest
 
@@ -44,11 +45,11 @@ class TestEndToEnd:
             if self.schroot_profile is not None and self.docker_container is not None:
                 raise NotImplementedError("schroot profile and docker container are provided simultaneously")
 
-        def to_list(self) -> List[str]:
+        def __iter__(self) -> Iterator[str]:
             compression = (
                 f",{self.compression}" if self.compression is not isinstance(self.compression, NoCompression) else ""
             )
-            host_arg = f"--host={TestEndToEnd.ADDRESS}:{self.tcp_port}/1{compression}"
+            host_arg = f"--host={TestEndToEnd.ADDRESS}:{self.tcp_port}/1{compression}"  # explicit host limit: 1
 
             sandbox_arg: str = "--no-sandbox"
 
@@ -57,21 +58,21 @@ class TestEndToEnd:
             elif self.docker_container is not None:
                 sandbox_arg = f"--docker-container={self.docker_container}"
 
-            return [
+            yield from (
                 "./homcc/client/main.py",
                 "--no-config",  # disable external configuration
                 "--verbose",  # required for assertions on stdout
                 host_arg,
                 sandbox_arg,
                 self.compiler,
-            ]
+            )
 
     class ClientProcess:
         """Client subprocess wrapper class for specified arguments."""
 
         def __init__(self, basic_arguments: TestEndToEnd.BasicClientArguments, args: List[str]):
             self.process: subprocess.Popen = subprocess.Popen(  # pylint: disable=consider-using-with
-                basic_arguments.to_list() + args,
+                list(basic_arguments) + args,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
                 encoding="utf-8",
@@ -113,7 +114,7 @@ class TestEndToEnd:
         time.sleep(0.5)  # wait in order to reduce the chance of trying to connect to an unavailable server
         try:
             return subprocess.run(
-                basic_arguments.to_list() + args,
+                list(basic_arguments) + args,
                 check=True,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
@@ -257,7 +258,7 @@ class TestEndToEnd:
     def test_end_to_end_client_recursive(self, unused_tcp_port: int):
         with pytest.raises(subprocess.CalledProcessError) as err:
             subprocess.run(  # client receiving itself as compiler arg
-                self.BasicClientArguments("./homcc/client/main.py", unused_tcp_port).to_list(),
+                list(self.BasicClientArguments("./homcc/client/main.py", unused_tcp_port)),
                 check=True,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
@@ -274,7 +275,7 @@ class TestEndToEnd:
 
         with pytest.raises(subprocess.CalledProcessError) as err:
             subprocess.run(  # client receiving multiple sandbox options
-                self.BasicClientArguments("g++", unused_tcp_port, schroot_profile="foo").to_list(),
+                list(self.BasicClientArguments("g++", unused_tcp_port, schroot_profile="foo")),
                 check=True,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
@@ -286,6 +287,13 @@ class TestEndToEnd:
         assert "Can not specify a schroot profile and a docker container to be used simultaneously." in err.value.stdout
 
     # g++ tests
+    @pytest.mark.skip
+    @pytest.mark.gplusplus
+    def test_gplusplus_version(self):
+        result: subprocess.CompletedProcess = self.run_client(self.BasicClientArguments("g++", 3126), ["--version"])
+        assert result.returncode == os.EX_OK
+        assert re.match(r"g\+\+ \(.*\) \d+\.\d+\.\d+", result.stdout) is not None  # e.g. g++ (GCC) 1.0.0
+
     @pytest.mark.gplusplus
     @pytest.mark.timeout(TIMEOUT)
     def test_end_to_end_gplusplus(self, unused_tcp_port: int):
@@ -373,6 +381,13 @@ class TestEndToEnd:
         )
 
     # clang++ tests
+    @pytest.mark.skip
+    @pytest.mark.clangplusplus
+    def test_clangplusplus_version(self):
+        result: subprocess.CompletedProcess = self.run_client(self.BasicClientArguments("clang++", 3126), ["--version"])
+        assert result.returncode == os.EX_OK
+        assert re.match(r"clang version \d+\.\d+\.\d+", result.stdout) is not None  # e.g. clang version 1.0.0
+
     @pytest.mark.clangplusplus
     @pytest.mark.timeout(TIMEOUT)
     def test_end_to_end_clangplusplus(self, unused_tcp_port: int):

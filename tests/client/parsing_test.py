@@ -9,15 +9,15 @@ from pytest import CaptureFixture
 from pytest_mock.plugin import MockerFixture
 
 from homcc import client
+from homcc.client.config import parse_config
+from homcc.client.host import ConnectionType
 from homcc.client.parsing import (
     HOMCC_HOSTS_ENV_VAR,
     HOMCC_HOSTS_FILENAME,
     ClientConfig,
-    ConnectionType,
     Host,
     load_hosts,
     parse_cli_args,
-    parse_config,
 )
 from homcc.common.errors import HostParsingError
 from homcc.common.parsing import HOMCC_CONFIG_FILENAME

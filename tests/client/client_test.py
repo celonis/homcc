@@ -15,7 +15,7 @@ from homcc.client.client import (
     RemoteHostSemaphore,
     StateFile,
 )
-from homcc.client.parsing import ConnectionType, Host
+from homcc.client.host import ConnectionType, Host
 from homcc.common.errors import HostsExhaustedError, SlotsExhaustedError
 
 

@@ -9,7 +9,7 @@ from argparse import Action, ArgumentParser, ArgumentTypeError, RawTextHelpForma
 from configparser import ConfigParser, Error, SectionProxy
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, ClassVar, Dict, List, Optional, Union
+from typing import Any, ClassVar, Dict, Iterator, List, Optional, Union
 
 from homcc import server
 from homcc.common.logging import LogLevel
@@ -74,14 +74,14 @@ class ServerConfig:
         HOMCCD_VERBOSE_ENV_VAR: ClassVar[str] = "HOMCCD_VERBOSE"
 
         @classmethod
-        def to_list(cls) -> List[str]:
-            return [
+        def __iter__(cls) -> Iterator[str]:
+            yield from (
                 cls.HOMCCD_LIMIT_ENV_VAR,
                 cls.HOMCCD_PORT_ENV_VAR,
                 cls.HOMCCD_ADDRESS_ENV_VAR,
                 cls.HOMCCD_LOG_LEVEL_ENV_VAR,
                 cls.HOMCCD_VERBOSE_ENV_VAR,
-            ]
+            )
 
         @classmethod
         def get_limit(cls) -> Optional[int]:
