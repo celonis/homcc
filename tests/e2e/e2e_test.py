@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import os
-import re
 import subprocess
 import sys
 import time
@@ -255,6 +254,7 @@ class TestEndToEnd:
         Path(self.OUTPUT).unlink(missing_ok=True)
 
     # client failures
+    @pytest.mark.skip  # TODO: mock symlink to homcc
     @pytest.mark.timeout(TIMEOUT)
     def test_end_to_end_client_recursive(self, unused_tcp_port: int):
         with pytest.raises(subprocess.CalledProcessError) as err:
@@ -288,13 +288,6 @@ class TestEndToEnd:
         assert "Can not specify a schroot profile and a docker container to be used simultaneously." in err.value.stdout
 
     # g++ tests
-    @pytest.mark.skip
-    @pytest.mark.gplusplus
-    def test_gplusplus_version(self):
-        result: subprocess.CompletedProcess = self.run_client(self.BasicClientArguments("g++", 3126), ["--version"])
-        assert result.returncode == os.EX_OK
-        assert re.match(r"g\+\+ \(.*\) \d+\.\d+\.\d+", result.stdout) is not None  # e.g. g++ (GCC) 1.0.0
-
     @pytest.mark.gplusplus
     @pytest.mark.timeout(TIMEOUT)
     def test_end_to_end_gplusplus(self, unused_tcp_port: int):
@@ -382,13 +375,6 @@ class TestEndToEnd:
         )
 
     # clang++ tests
-    @pytest.mark.skip
-    @pytest.mark.clangplusplus
-    def test_clangplusplus_version(self):
-        result: subprocess.CompletedProcess = self.run_client(self.BasicClientArguments("clang++", 3126), ["--version"])
-        assert result.returncode == os.EX_OK
-        assert re.match(r"clang version \d+\.\d+\.\d+", result.stdout) is not None  # e.g. clang version 1.0.0
-
     @pytest.mark.clangplusplus
     @pytest.mark.timeout(TIMEOUT)
     def test_end_to_end_clangplusplus(self, unused_tcp_port: int):

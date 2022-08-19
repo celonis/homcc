@@ -37,7 +37,7 @@ class TestCLI:
 
     def test_version(self, capfd: CaptureFixture):
         with pytest.raises(SystemExit) as sys_exit:
-            parse_cli_args(["--version"])
+            parse_cli_args(["./homcc/client/main.py", "--version"])
 
         cap = capfd.readouterr()
 
@@ -47,7 +47,7 @@ class TestCLI:
 
     def test_show_hosts(self, capfd: CaptureFixture):
         with pytest.raises(SystemExit) as sys_exit:
-            parse_cli_args(["--show-hosts"])
+            parse_cli_args(["./homcc/client/main.py", "--show-hosts"])
 
         cap = capfd.readouterr()
 
@@ -59,7 +59,7 @@ class TestCLI:
 
     def test_show_concurrency_level(self, capfd: CaptureFixture):
         with pytest.raises(SystemExit) as sys_exit:
-            parse_cli_args(["-j"])
+            parse_cli_args(["./homcc/client/main.py", "-j"])
 
         cap = capfd.readouterr()
 

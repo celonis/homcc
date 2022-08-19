@@ -102,7 +102,7 @@ class ShowEnvironmentVariables(ShowAndExitAction):
         sys.exit(os.EX_OK)
 
 
-def parse_cli_args(args: List[str]) -> Tuple[Dict[str, Any], str, List[str]]:
+def parse_cli_args(cli_args: List[str]) -> Tuple[Dict[str, Any], Arguments]:
     parser: ArgumentParser = ArgumentParser(
         description="homcc - Home-Office friendly distcc replacement",
         allow_abbrev=False,
@@ -192,34 +192,38 @@ def parse_cli_args(args: List[str]) -> Tuple[Dict[str, Any], str, List[str]]:
         help="TIMEOUT in seconds to wait for a response from the remote compilation server",
     )
 
-    # capturing all remaining (compiler) arguments via nargs=argparse.REMAINDER and argparse.parse_args() is sadly not
-    # working as intended, so we use the dummy "COMPILER_OR_ARGUMENT" argument for the automatically generated user-
-    # facing strings instead and handle the remaining, unknown arguments separately
+    # this argument will only be used to automatically generate user-facing strings
     parser.add_argument(
-        "COMPILER_OR_ARGUMENT",
+        "COMPILER_ARGUMENTS",
         type=str,
-        metavar="[COMPILER] ARGUMENTS ...",
-        help="COMPILER, if not specified explicitly, is either read from the config file or defaults to "
-        f"'{Arguments.DEFAULT_COMPILER}'\n"
-        "dependant on remote execution, the remaining ARGUMENTS may be altered before being forwarded to the COMPILER",
+        metavar="COMPILER ARGUMENTS ...",
+        help="COMPILER which should be used for local and remote compilation, dependant on the remote configuration, "
+        "the COMPILER might be adapted to match the target architecture and the remaining ARGUMENTS may be altered "
+        "before being forwarded to and executed by the actual COMPILER",
     )
 
-    # known args (used for homcc), unknown args (used as and forwarded to the compiler)
-    homcc_args_namespace, compiler_args = parser.parse_known_args(args)
-    homcc_args_dict = vars(homcc_args_namespace)
+    # split cli_args in order to respectively use them for homcc client or the specified compiler
+    for i, arg in enumerate(cli_args):
+        if Arguments.is_compiler_arg(arg):
+            homcc_args, compiler_args = cli_args[:i], cli_args[i:]
+            break
+    else:
+        homcc_args, compiler_args = cli_args, []  # command without a compiler
 
-    # remove args that are already implicitly handled via their actions
-    for key in ("show_hosts", "show_concurrency", "show_variables"):
+    homcc_args_dict = vars(parser.parse_args(homcc_args))
+
+    # remove args that are already implicitly handled via their actions or are compiler specific arguments
+    for key in ("COMPILER_ARGUMENTS", "show_hosts", "show_concurrency", "show_variables"):
         homcc_args_dict.pop(key)
 
-    compiler_or_argument: str = homcc_args_dict.pop("COMPILER_OR_ARGUMENT")  # either compiler or very first argument
+    compiler_arguments: Arguments = Arguments.from_args(compiler_args)
 
-    return homcc_args_dict, compiler_or_argument, compiler_args
+    return homcc_args_dict, compiler_arguments
 
 
 def setup_client(cli_args: List[str]) -> Tuple[ClientConfig, Arguments, Host, List[Host]]:
     # load and parse arguments and configuration information
-    homcc_args_dict, compiler_or_argument, compiler_args = parse_cli_args(cli_args[1:])
+    homcc_args_dict, compiler_arguments = parse_cli_args(cli_args)
 
     # prevent config loading and parsing if --no-config was specified
     homcc_config: ClientConfig = ClientConfig.empty() if homcc_args_dict.pop("no_config", False) else parse_config()
@@ -250,7 +254,6 @@ def setup_client(cli_args: List[str]) -> Tuple[ClientConfig, Arguments, Host, Li
 
     setup_logging(logging_config)
 
-    compiler_arguments: Arguments = Arguments.from_cli(compiler_or_argument, compiler_args, homcc_config.compiler)
     # COMPILER; default: "gcc"
     homcc_config.compiler = compiler_arguments.compiler
 

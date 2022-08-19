@@ -46,8 +46,7 @@ def main():
         logger.debug("Linking [%s] to %s", ", ".join(compiler_arguments.object_files), compiler_arguments.output)
         sys.exit(compile_locally(compiler_arguments, localhost))
 
-    if not compiler_arguments.is_sendable():
-        logger.info("Arguments %s are not sendable", compiler_arguments)
+    if not compiler_arguments.is_sendable():  # logging detailed info is done during sendability check
         sys.exit(compile_locally(compiler_arguments, localhost))
 
     # try to compile remotely

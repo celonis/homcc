@@ -50,15 +50,6 @@ class TestArguments:
         args: List[str] = ["g++", "foo.cpp", "-O0", "-Iexample/include/"]
         assert Arguments.from_args(args) == args
 
-    def test_from_cli(self):
-        specified_compiler_cli_args: List[str] = ["g++", "foo.cpp", "-O0", "-Iexample/include/"]
-        arguments = Arguments.from_cli(specified_compiler_cli_args[0], specified_compiler_cli_args[1:], "gcc")
-        assert arguments == specified_compiler_cli_args
-
-        unspecified_compiler_cli_args: List[str] = specified_compiler_cli_args[1:]
-        arguments = Arguments.from_cli(unspecified_compiler_cli_args[0], unspecified_compiler_cli_args[1:], "gcc")
-        assert arguments == Arguments("gcc", unspecified_compiler_cli_args)
-
     def test_is_sendable(self):
         args: List[str] = ["g++", "foo.cpp", "-O0", "-Iexample/include/"]
         assert Arguments.from_args(args).is_sendable()

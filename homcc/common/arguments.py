@@ -120,7 +120,7 @@ class Arguments:
             return self.compiler == other[0] and self.args == other[1:]
         return False
 
-    def __iter__(self) -> Iterator:
+    def __iter__(self) -> Iterator[str]:
         yield self.compiler
         yield from self.args
 
@@ -159,16 +159,6 @@ class Arguments:
         """construct arguments from an args string"""
         return Arguments.from_args(args_str.split())
 
-    @classmethod
-    def from_cli(cls, compiler_or_argument: str, args: List[str], fallback_compiler: str) -> Arguments:
-        """construct Arguments from args given via the CLI"""
-        # explicit compiler argument, e.g.: "homcc [OPTIONAL ARGUMENTS] g++ -c foo.cpp"
-        if cls.is_compiler_arg(compiler_or_argument):
-            return cls(compiler_or_argument, args)
-
-        # missing compiler argument, e.g.: "homcc [OPTIONAL ARGUMENTS] -c foo.cpp"
-        return cls(fallback_compiler, [compiler_or_argument] + args)
-
     @staticmethod
     def is_source_file_arg(arg: str) -> bool:
         """check whether an argument looks like a source file"""
@@ -189,13 +179,17 @@ class Arguments:
 
     @staticmethod
     def is_compiler_arg(arg: str) -> bool:
-        """check whether an argument looks like a compiler"""
+        """check whether an argument is a valid compiler"""
         if not arg.startswith("-") and not Arguments.is_source_file_arg(arg) and not Arguments.is_object_file_arg(arg):
-            logger.debug("%s is used as compiler", arg)
+            if Compiler.is_supported_compiler(arg):
+                logger.debug("%s is used as compiler", arg)
 
-            if not Arguments.is_executable_arg(arg):
-                logger.warning("Specified compiler '%s' is not an executable", arg)
-            return True
+                if not Arguments.is_executable_arg(arg):
+                    # none-executable compilers on the client might still be executable on the remote server
+                    logger.warning("Specified compiler '%s' is not an executable", arg)
+
+                return True
+
         return False
 
     @staticmethod
@@ -600,6 +594,11 @@ class Compiler(ABC):
                 return compiler(arguments.compiler)  # type: ignore[arg-type]
 
         raise UnsupportedCompilerError(f"Compiler '{arguments.compiler}' is not supported.")
+
+    @staticmethod
+    def is_supported_compiler(compiler_str: str) -> bool:
+        # pylint: disable=invalid-name
+        return any(CompilerType.is_matching_str(compiler_str) for CompilerType in Compiler.available_compilers())
 
     @staticmethod
     @abstractmethod
