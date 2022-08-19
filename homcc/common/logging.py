@@ -152,7 +152,7 @@ class LoggingConfig:
     formatter: Formatter
     config: FormatterConfig
     destination: FormatterDestination
-    level: int = logging.INFO  # use logging.INFO as default instead of the usual logging.WARNING
+    level: int
     filename: Optional[str] = None
 
     def set_verbose(self):

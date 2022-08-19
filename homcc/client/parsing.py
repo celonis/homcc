@@ -60,11 +60,11 @@ class ShowHosts(ShowAndExitAction):
             _, hosts = load_hosts()
 
         except NoHostsFoundError:
-            print("Failed to get hosts list")
+            sys.stderr.write("Failed to get hosts list\n")
             sys.exit(os.EX_NOINPUT)
 
         for host in hosts:
-            print(host)
+            sys.stdout.write(f"{host}\n")
 
         sys.exit(os.EX_OK)
 
@@ -77,14 +77,14 @@ class ShowConcurrencyLevel(ShowAndExitAction):
             _, hosts = load_hosts()
 
         except NoHostsFoundError:
-            print("Failed to get hosts list")
+            sys.stderr.write("Failed to get hosts list\n")
             sys.exit(os.EX_NOINPUT)
 
         concurrency_level: int = 0
         for host in hosts:
             concurrency_level += Host.from_str(host).limit or 0
 
-        print(concurrency_level)
+        sys.stdout.write(f"{concurrency_level}\n")
         sys.exit(os.EX_OK)
 
 
@@ -93,11 +93,11 @@ class ShowEnvironmentVariables(ShowAndExitAction):
 
     def __call__(self, *_):
         if (homcc_hosts_env_var := os.getenv(HOMCC_HOSTS_ENV_VAR)) is not None:
-            print(f"{HOMCC_HOSTS_ENV_VAR}: {homcc_hosts_env_var}")
+            sys.stdout.write(f"{HOMCC_HOSTS_ENV_VAR}: {homcc_hosts_env_var}\n")
 
         for config_env_var in iter(ClientConfig.EnvironmentVariables):
             if (config := os.getenv(config_env_var)) is not None:
-                print(f"{config_env_var}: {config}")
+                sys.stdout.write(f"{config_env_var}: {config}\n")
 
         sys.exit(os.EX_OK)
 
@@ -116,10 +116,11 @@ def parse_cli_args(args: List[str]) -> Tuple[Dict[str, Any], str, List[str]]:
     show_and_exit.add_argument("--show-hosts", action=ShowHosts)
     show_and_exit.add_argument("-j", "--show-concurrency", action=ShowConcurrencyLevel)
     show_and_exit.add_argument("--show-variables", action=ShowEnvironmentVariables)
+    # TODO: FIX!!! and merge with ShowVariables
     show_and_exit.add_argument(
-        "--show-info",
-        action="store_true",
-        # nargs=0,
+        "--DEBUG",
+        # action="store_true",
+        nargs=1,
         help="show all relevant info regarding configuration and execution of homcc, and exit",
     )
 
@@ -207,28 +208,33 @@ def parse_cli_args(args: List[str]) -> Tuple[Dict[str, Any], str, List[str]]:
     homcc_args_namespace, compiler_args = parser.parse_known_args(args)
     homcc_args_dict = vars(homcc_args_namespace)
 
+    # remove args that are already implicitly handled via their actions
+    for key in ("show_hosts", "show_concurrency", "show_variables"):
+        homcc_args_dict.pop(key)
+
     compiler_or_argument: str = homcc_args_dict.pop("COMPILER_OR_ARGUMENT")  # either compiler or very first argument
 
     return homcc_args_dict, compiler_or_argument, compiler_args
 
 
-def setup_client(cli_args: List[str]) -> Tuple[ClientConfig, Arguments, List[Host]]:
+def setup_client(cli_args: List[str]) -> Tuple[ClientConfig, Arguments, Host, List[Host]]:
     # load and parse arguments and configuration information
     homcc_args_dict, compiler_or_argument, compiler_args = parse_cli_args(cli_args[1:])
 
     # prevent config loading and parsing if --no-config was specified
-    homcc_config: ClientConfig = ClientConfig.empty() if homcc_args_dict["no_config"] else parse_config()
+    homcc_config: ClientConfig = ClientConfig.empty() if homcc_args_dict.pop("no_config", False) else parse_config()
     logging_config: LoggingConfig = LoggingConfig(
         config=FormatterConfig.COLORED,
         formatter=Formatter.CLIENT,
         destination=FormatterDestination.STREAM,
+        level=LogLevel.INFO,
     )
 
     # LOG_LEVEL and VERBOSITY
-    log_level: str = homcc_args_dict["log_level"]
+    log_level: Optional[str] = homcc_args_dict.pop("log_level", None)
 
     # verbosity implies debug mode
-    if homcc_args_dict["verbose"] or homcc_config.verbose:
+    if homcc_args_dict.pop("verbose", False) or homcc_config.verbose:
         logging_config.set_verbose()
         homcc_config.set_verbose()
     elif log_level == "DEBUG" or homcc_config.log_level == LogLevel.DEBUG:
@@ -249,19 +255,19 @@ def setup_client(cli_args: List[str]) -> Tuple[ClientConfig, Arguments, List[Hos
     homcc_config.compiler = compiler_arguments.compiler
 
     # SCAN-INCLUDES; and exit
-    if homcc_args_dict["scan_includes"]:
+    if homcc_args_dict.pop("scan_includes", False):
         for include in scan_includes(compiler_arguments):
-            print(include)
+            sys.stdout.write(f"{include}\n")
 
         sys.exit(os.EX_OK)
 
     # HOST; get singular host from cli parameter or load hosts from $HOMCC_HOSTS env var or hosts file
-    hosts: List[Host] = []
+    remote_hosts: List[Host] = []
     hosts_file: Optional[str] = None
     localhost: Host = Host.default_localhost()
 
-    if (host_str := homcc_args_dict["host"]) is not None:
-        hosts = [Host.from_str(host_str)]
+    if (host_str := homcc_args_dict.pop("host", None)) is not None:
+        remote_hosts = [Host.from_str(host_str)]
     else:
         hosts_file, hosts_str = load_hosts()
         has_local: bool = False
@@ -279,35 +285,36 @@ def setup_client(cli_args: List[str]) -> Tuple[ClientConfig, Arguments, List[Hos
 
                 has_local = True
                 localhost = host
-
-            hosts.append(host)
+            else:
+                remote_hosts.append(host)
 
         # if no explicit localhost/LIMIT host is provided, add DEFAULT_LOCALHOST host which will limit the amount of
         # locally running compilation jobs
         if not has_local:
-            hosts.append(localhost)
+            remote_hosts.append(localhost)
 
-    # SHOW-INFO; and exit
-    if homcc_args_dict["show_info"]:
-        print(
-            f"homcc {client.__version__}"  # homcc version
+    # TODO: PRINT DEBUG INFO
+    if homcc_args_dict.pop("DEBUG", False):
+        hosts_from: str = hosts_file or f"--host={host_str}"
+        all_hosts: str = "\n\t".join(str(host) for host in [localhost] + remote_hosts)
+        sys.stdout.write(
             f"{sys.argv[0]} - {client.__version__}\n"  # homcc location and version
             f"Caller:\t{sys.executable}\n"  # homcc caller
             f"{homcc_config}"  # config info
-            "Hosts (from [%s]):\n\t%s",  # hosts info
-            hosts_file or f"--host={host_str}",
-            "\n\t".join(str(host) for host in hosts),
+            f"Hosts (from [{hosts_from}]):\n\t{all_hosts}\n"  # hosts info
         )
 
     # SCHROOT_PROFILE; DOCKER_CONTAINER; if --no-sandbox is specified do not use any specified sandbox configurations
-    if homcc_args_dict["no_sandbox"]:
+    if homcc_args_dict.pop("no_sandbox", False):
+        homcc_args_dict.pop("schroot_profile")
         homcc_config.schroot_profile = None
+        homcc_args_dict.pop("docker_container")
         homcc_config.docker_container = None
     else:
-        if (schroot_profile := homcc_args_dict["schroot_profile"]) is not None:
+        if (schroot_profile := homcc_args_dict.pop("schroot_profile", None)) is not None:
             homcc_config.schroot_profile = schroot_profile
 
-        if (docker_container := homcc_args_dict["docker_container"]) is not None:
+        if (docker_container := homcc_args_dict.pop("docker_container", None)) is not None:
             homcc_config.docker_container = docker_container
 
         if homcc_config.schroot_profile is not None and homcc_config.docker_container is not None:
@@ -318,10 +325,15 @@ def setup_client(cli_args: List[str]) -> Tuple[ClientConfig, Arguments, List[Hos
             sys.exit(os.EX_USAGE)
 
     # TIMEOUT
-    if (timeout := homcc_args_dict["timeout"]) is not None:
+    if (timeout := homcc_args_dict.pop("timeout", None)) is not None:
         homcc_config.timeout = timeout
 
-    return homcc_config, compiler_arguments, hosts
+    # verify that all homcc cli args were handled
+    if homcc_args_dict:
+        logger.error("Unhandled arguments: %s", homcc_args_dict)
+        sys.exit(os.EX_SOFTWARE)
+
+    return homcc_config, compiler_arguments, localhost, remote_hosts
 
 
 def load_hosts(hosts_file_locations: Optional[List[Path]] = None) -> Tuple[str, List[str]]:

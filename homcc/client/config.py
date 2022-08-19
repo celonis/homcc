@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import os
 import re
+import sys
 from configparser import Error, SectionProxy
 from dataclasses import dataclass
 from pathlib import Path
@@ -159,7 +160,7 @@ def parse_config(filenames: List[Path] = None) -> ClientConfig:
     try:
         files, cfg = parse_configs(filenames or default_locations(HOMCC_CONFIG_FILENAME))
     except Error as err:
-        print(f"{err}; using default configuration instead")
+        sys.stderr.write(f"{err}; using default configuration instead\n")
         return ClientConfig.empty()
 
     if HOMCC_CLIENT_CONFIG_SECTION not in cfg.sections():

@@ -4,7 +4,7 @@ import logging
 import os
 import signal
 import sys
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 sys.path.append(os.path.join(os.path.dirname(__file__), "../.."))
 
@@ -44,10 +44,11 @@ def main():
         config=FormatterConfig.COLORED,
         formatter=Formatter.SERVER,
         destination=FormatterDestination.STREAM,
+        level=LogLevel.INFO,
     )
 
     # LOG_LEVEL and VERBOSITY
-    log_level: str = homccd_args_dict["log_level"]
+    log_level: Optional[str] = homccd_args_dict["log_level"]
 
     # verbosity implies debug mode
     if (

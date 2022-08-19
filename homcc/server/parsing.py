@@ -38,7 +38,7 @@ class ShowVersion(Action):
         super().__init__(nargs=0, help=self.__doc__, **kwargs)
 
     def __call__(self, *_):
-        print(f"homccd {server.__version__}")
+        sys.stdout.write(f"homccd {server.__version__}\n")
         sys.exit(os.EX_OK)
 
 
@@ -52,10 +52,10 @@ class ShowProfiles(Action):
         profiles: List[str] = load_schroot_profiles()
 
         if not profiles:
-            print("No chroots found. Run 'schroot -l' to verify their existence.")
+            sys.stderr.write("No chroots found. Run 'schroot -l' to verify their existence.\n")
 
         for profile in profiles:
-            print(profile)
+            sys.stdout.write(f"{profile}\n")
 
         sys.exit(os.EX_OK)
 
@@ -244,7 +244,7 @@ def parse_config(filenames: List[Path] = None) -> ServerConfig:
     try:
         files, cfg = parse_configs(filenames or default_locations(HOMCC_CONFIG_FILENAME))
     except Error as err:
-        print(f"{err}; using default configuration instead")
+        sys.stderr.write(f"{err}; using default configuration instead\n")
         return ServerConfig(files=[])
 
     if HOMCC_SERVER_CONFIG_SECTION not in cfg.sections():

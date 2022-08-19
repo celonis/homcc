@@ -13,7 +13,6 @@ from homcc.client.compilation import (  # pylint: disable=wrong-import-position
     compile_locally,
     compile_remotely,
 )
-from homcc.client.host import Host  # pylint: disable=wrong-import-position
 from homcc.client.parsing import setup_client  # pylint: disable=wrong-import-position
 from homcc.common.errors import (  # pylint: disable=wrong-import-position
     RecoverableClientError,
@@ -36,25 +35,24 @@ def is_recursively_invoked() -> bool:
 def main():
     # cancel execution if recursive call is detected
     if is_recursively_invoked():
-        print(f"{sys.argv[0]} seems to have been invoked recursively!", file=sys.stderr)
+        sys.stderr.write(f"{sys.argv[0]} seems to have been invoked recursively!\n")
         sys.exit(os.EX_USAGE)
 
-    # TODO: comment
-    homcc_config, compiler_arguments, hosts = setup_client(sys.argv)
+    # client setup involves retrieval of hosts parsing of cli args, resulting in config and logging setup
+    homcc_config, compiler_arguments, localhost, remote_hosts = setup_client(sys.argv)
 
-    # force local compilation on specific conditions
-    localhost: Host = hosts[0]
-
+    # force local execution on specific conditions
     if compiler_arguments.is_linking_only():
         logger.debug("Linking [%s] to %s", ", ".join(compiler_arguments.object_files), compiler_arguments.output)
         sys.exit(compile_locally(compiler_arguments, localhost))
 
     if not compiler_arguments.is_sendable():
+        logger.info("Arguments %s are not sendable", compiler_arguments)
         sys.exit(compile_locally(compiler_arguments, localhost))
 
     # try to compile remotely
     try:
-        sys.exit(asyncio.run(compile_remotely(compiler_arguments, hosts, homcc_config)))
+        sys.exit(asyncio.run(compile_remotely(compiler_arguments, remote_hosts, homcc_config)))
 
     # exit on unrecoverable errors
     except RemoteCompilationError as error:
