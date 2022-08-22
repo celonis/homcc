@@ -124,10 +124,6 @@ Additionally, `HOMCC` provides sandboxed compiler execution for remote compilati
   ```
 - \[Optional] Sandboxed execution:
   - `schroot`: Set up your `schroot` environments at `/etc/schroot/schroot.conf` or in the `/etc/schroot/chroot.d/` directory and mount the `/tmp/` directory to enable sandboxed compiler execution.
-  Currently, in order for these changes to apply, you have to restart `homccd`:
-    ```sh
-    $ sudo systemctl restart homccd.service
-    ```
   - `docker`:
     - Make sure that the docker containers that you want to compile in have mounted the host's `/tmp` directory to `/tmp` (this is necessary to access cached dependencies):
       ```sh
@@ -306,11 +302,11 @@ Additionally, `HOMCC` provides sandboxed compiler execution for remote compilati
   ```
 
 ### `docker` testing setup
-- Create a docker container with a working `gcc` compiler, the easiest image to get is probably the official `gcc` docker image:
+- Create a docker container with a working `gcc` compiler, the easiest image to get is probably the official `ubuntu` docker image:
   ```sh
-  docker run -dit --name gcc -v /tmp:/tmp gcc:bullseye
+  docker run -dit --name gcc -v /tmp:/tmp ubuntu:jammy
   ```
-- Execute all tests (including the docker tests by specifying `--rundocker=gcc`) and perform test coverage:
+- Execute all tests (including the docker tests by specifying `--rundocker=jammy`) and perform test coverage:
   ```sh
-  $ pytest -v -rfEs --cov=homcc --rundocker=gcc
+  $ pytest -v -rfEs --cov=homcc --rundocker=jammy
   ```
