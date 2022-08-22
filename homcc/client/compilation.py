@@ -182,7 +182,7 @@ def compile_locally(arguments: Arguments, localhost: Host) -> int:
     with LocalHostSemaphore(localhost), StateFile(arguments, localhost):
         try:
             # execute compile command, e.g.: "g++ foo.cpp -o foo"
-            result: ArgumentsExecutionResult = arguments.execute(check=True)
+            result: ArgumentsExecutionResult = arguments.execute(check=True, output=True)
         except subprocess.CalledProcessError as error:
             logger.error("Compiler error:\n%s", error.stderr)
             return error.returncode
@@ -258,7 +258,7 @@ def link_object_files(arguments: Arguments, object_files: List[ObjectFile]) -> i
 
     try:
         # execute linking command, e.g.: "g++ foo.o bar.o -ofoobar"
-        result: ArgumentsExecutionResult = arguments.execute(check=True)
+        result: ArgumentsExecutionResult = arguments.execute(check=True, output=True)
     except subprocess.CalledProcessError as error:
         logger.error("Linker error:\n%s", error.stderr)
         return error.returncode

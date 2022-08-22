@@ -52,12 +52,12 @@ class TestArguments:
 
     def test_from_cli(self):
         specified_compiler_cli_args: List[str] = ["g++", "foo.cpp", "-O0", "-Iexample/include/"]
-        arguments = Arguments.from_cli(specified_compiler_cli_args[0], specified_compiler_cli_args[1:])
+        arguments = Arguments.from_cli(specified_compiler_cli_args[0], specified_compiler_cli_args[1:], "gcc")
         assert arguments == specified_compiler_cli_args
 
         unspecified_compiler_cli_args: List[str] = specified_compiler_cli_args[1:]
-        arguments = Arguments.from_cli(unspecified_compiler_cli_args[0], unspecified_compiler_cli_args[1:])
-        assert arguments == Arguments(None, unspecified_compiler_cli_args)
+        arguments = Arguments.from_cli(unspecified_compiler_cli_args[0], unspecified_compiler_cli_args[1:], "gcc")
+        assert arguments == Arguments("gcc", unspecified_compiler_cli_args)
 
     def test_is_sendable(self):
         args: List[str] = ["g++", "foo.cpp", "-O0", "-Iexample/include/"]
@@ -225,10 +225,8 @@ class TestArguments:
 
     def test_single_source_file_args(self):
         single_source_file_args: List[str] = ["some/relative/path.c"]
-        args: List[str] = ["g++", "-O3"] + single_source_file_args
-
-        assert Arguments.from_args(single_source_file_args).source_files == single_source_file_args
-        assert Arguments.from_args(args).source_files == single_source_file_args
+        assert Arguments.from_args(["g++"] + single_source_file_args).source_files == single_source_file_args
+        assert Arguments.from_args(["g++", "-O3"] + single_source_file_args).source_files == single_source_file_args
 
     def test_multiple_source_file_args_with_output(self):
         source_file_args: List[str] = [

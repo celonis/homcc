@@ -7,7 +7,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import Dict, List, Optional
 
-from homcc.common.arguments import Arguments, ArgumentsExecutionResult, Compiler
+from homcc.common.arguments import Arguments, ArgumentsExecutionResult
 from homcc.common.compression import Compression
 from homcc.common.messages import CompilationResultMessage, ObjectFile
 from homcc.server.cache import Cache
@@ -129,11 +129,7 @@ class Environment:
     @staticmethod
     def compiler_supports_target(arguments: Arguments, target: str) -> bool:
         """Returns true if the compiler supports cross-compiling for the given target."""
-        compiler: Optional[Compiler] = arguments.compiler_object()
-
-        if compiler is None:
-            return False
-
+        compiler = arguments.compiler_object()
         return compiler.supports_target(target)
 
     def do_compilation(self, arguments: Arguments) -> CompilationResultMessage:
@@ -179,14 +175,14 @@ class Environment:
 
         if self.schroot_profile is not None:
             result = arguments.schroot_execute(
-                profile=self.schroot_profile, cwd=self.mapped_cwd, output=False, timeout=COMPILATION_TIMEOUT
+                profile=self.schroot_profile, cwd=self.mapped_cwd, timeout=COMPILATION_TIMEOUT
             )
         elif self.docker_container is not None:
             result = arguments.docker_execute(
-                container=self.docker_container, cwd=self.mapped_cwd, output=False, timeout=COMPILATION_TIMEOUT
+                container=self.docker_container, cwd=self.mapped_cwd, timeout=COMPILATION_TIMEOUT
             )
         else:
-            result = arguments.execute(cwd=self.mapped_cwd, output=False, timeout=COMPILATION_TIMEOUT)
+            result = arguments.execute(cwd=self.mapped_cwd, timeout=COMPILATION_TIMEOUT)
 
         if result.stdout:
             logger.debug("Compiler gave output:\n'%s'", result.stdout)
