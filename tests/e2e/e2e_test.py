@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import os
+import stat
 import subprocess
 import sys
 import time
@@ -254,19 +255,26 @@ class TestEndToEnd:
         Path(self.OUTPUT).unlink(missing_ok=True)
 
     # client failures
-    @pytest.mark.skip  # TODO: mock symlink to homcc
     @pytest.mark.timeout(TIMEOUT)
     def test_end_to_end_client_recursive(self, unused_tcp_port: int):
+        # symlink clang-homcc to homcc and make it executable in order for it to be viewed as a "regular" clang compiler
+        homcc_shadow_compiler: Path = Path.cwd() / "homcc/client/clang-homcc"
+        homcc_shadow_compiler.symlink_to(Path.cwd() / "homcc/client/main.py")
+        assert homcc_shadow_compiler.exists()
+        homcc_shadow_compiler.chmod(homcc_shadow_compiler.stat().st_mode | stat.S_IEXEC)
+
         with pytest.raises(subprocess.CalledProcessError) as err:
             subprocess.run(  # client receiving itself as compiler arg
-                list(self.BasicClientArguments("./homcc/client/main.py", unused_tcp_port)),
+                list(self.BasicClientArguments(str(homcc_shadow_compiler), unused_tcp_port)),
                 check=True,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
                 encoding="utf-8",
             )
 
-        # assert err.value.returncode == os.EX_USAGE
+        homcc_shadow_compiler.unlink(missing_ok=False)
+
+        assert err.value.returncode == os.EX_USAGE
         assert "seems to have been invoked recursively!" in err.value.stdout
 
     @pytest.mark.timeout(TIMEOUT)
@@ -374,6 +382,31 @@ class TestEndToEnd:
             additional_args=["-fPIC"],
         )
 
+    @pytest.mark.gplusplus
+    @pytest.mark.timeout(TIMEOUT)
+    def test_print_compilation_stages_gplusplus(self):
+        # homcc --no-config g++ -v
+        homcc_result: subprocess.CompletedProcess = subprocess.run(
+            ["./homcc/client/main.py", "--no-config", "g++", "-v"],
+            check=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            encoding="utf-8",
+        )
+
+        # g++ -v
+        gplusplus_result: subprocess.CompletedProcess = subprocess.run(
+            ["g++", "-v"],
+            check=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            encoding="utf-8",
+        )
+
+        assert homcc_result.returncode == os.EX_OK
+        assert gplusplus_result.returncode == os.EX_OK
+        assert homcc_result.stdout == gplusplus_result.stdout
+
     # clang++ tests
     @pytest.mark.clangplusplus
     @pytest.mark.timeout(TIMEOUT)
@@ -399,3 +432,28 @@ class TestEndToEnd:
     @pytest.mark.timeout(TIMEOUT)
     def test_end_to_end_clangplusplus_shared_host_slot(self, unused_tcp_port: int):
         self.cpp_end_to_end_multiple_clients_shared_host(self.BasicClientArguments("clang++", unused_tcp_port))
+
+    @pytest.mark.clangplusplus
+    @pytest.mark.timeout(TIMEOUT)
+    def test_print_compilation_stages_clangplusplus(self):
+        # homcc --no-config clang++ -v
+        homcc_result: subprocess.CompletedProcess = subprocess.run(
+            ["./homcc/client/main.py", "--no-config", "clang++", "-v"],
+            check=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            encoding="utf-8",
+        )
+
+        # clang++ -v
+        clangplusplus_result: subprocess.CompletedProcess = subprocess.run(
+            ["clang++", "-v"],
+            check=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            encoding="utf-8",
+        )
+
+        assert homcc_result.returncode == os.EX_OK
+        assert clangplusplus_result.returncode == os.EX_OK
+        assert homcc_result.stdout == clangplusplus_result.stdout

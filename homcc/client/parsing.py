@@ -267,6 +267,9 @@ def setup_client(cli_args: List[str]) -> Tuple[ClientConfig, Arguments, Host, Li
     # HOST; get singular host from cli parameter or load hosts from $HOMCC_HOSTS env var or hosts file
     remote_hosts: List[Host] = []
     hosts_file: Optional[str] = None
+
+    # use the default localhost if no localhost is provided by the user explicitly
+    # this dedicated host will limit the amount of locally running compilation jobs
     localhost: Host = Host.default_localhost()
 
     if (host_str := homcc_args_dict.pop("host", None)) is not None:
@@ -284,17 +287,12 @@ def setup_client(cli_args: List[str]) -> Tuple[ClientConfig, Arguments, Host, Li
 
             if host.is_local():
                 if has_local:
-                    logger.warning("Multiple localhost hosts provided!")
+                    logger.warning("Multiple localhosts provided, using %s", localhost)
 
                 has_local = True
                 localhost = host
             else:
                 remote_hosts.append(host)
-
-        # if no explicit localhost/LIMIT host is provided, add DEFAULT_LOCALHOST host which will limit the amount of
-        # locally running compilation jobs
-        if not has_local:
-            remote_hosts.append(localhost)
 
     # TODO: PRINT DEBUG INFO
     if homcc_args_dict.pop("DEBUG", False):
