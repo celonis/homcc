@@ -307,7 +307,7 @@ class ClientConfig:
         self.log_level = LogLevel.DEBUG
 
 
-def parse_cli_args(args: List[str]) -> Tuple[Dict[str, Any], Arguments]:
+def parse_cli_args(args: List[str]) -> Tuple[Dict[str, Any], str, List[str]]:
     parser: ArgumentParser = ArgumentParser(
         description="homcc - Home-Office friendly distcc replacement",
         allow_abbrev=False,
@@ -407,9 +407,8 @@ def parse_cli_args(args: List[str]) -> Tuple[Dict[str, Any], Arguments]:
     homcc_args_dict = vars(homcc_args_namespace)
 
     compiler_or_argument: str = homcc_args_dict.pop("COMPILER_OR_ARGUMENT")  # either compiler or very first argument
-    compiler_arguments: Arguments = Arguments.from_cli(compiler_or_argument, compiler_args)
 
-    return homcc_args_dict, compiler_arguments
+    return homcc_args_dict, compiler_or_argument, compiler_args
 
 
 def parse_host(host: str) -> Host:

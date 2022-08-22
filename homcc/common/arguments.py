@@ -40,7 +40,7 @@ class Arguments:
     """
 
     # if the compiler is neither specified by the callee nor defined in the config file use this as fallback
-    DEFAULT_COMPILER: str = "cc"
+    DEFAULT_COMPILER: str = "gcc"
 
     NO_LINKING_ARG: str = "-c"
 
@@ -109,8 +109,8 @@ class Arguments:
         # debug
         DEBUG_ARG_PREFIX: str = "-dr"
 
-    def __init__(self, compiler: Optional[str], args: List[str]):
-        self._compiler: Optional[str] = compiler
+    def __init__(self, compiler: str, args: List[str]):
+        self._compiler: str = compiler
         self._args: List[str] = args
 
     def __eq__(self, other: Any) -> bool:
@@ -146,7 +146,10 @@ class Arguments:
         # singular arg, e.g. ["g++"] or ["foo.cpp"]
         if len(args) == 1:
             arg: str = args[0]
-            return cls(arg, []) if cls.is_compiler_arg(arg) else cls(None, [arg])
+            if cls.is_compiler_arg(arg):
+                return cls(arg, [])
+            else:
+                raise UnsupportedCompilerError("Specifying a compiler is necessary")
 
         # compiler with args, e.g. ["g++", "foo.cpp", "-c"]
         return cls(args[0], args[1:])
@@ -157,14 +160,14 @@ class Arguments:
         return Arguments.from_args(args_str.split())
 
     @classmethod
-    def from_cli(cls, compiler_or_argument: str, args: List[str]) -> Arguments:
+    def from_cli(cls, compiler_or_argument: str, args: List[str], fallback_compiler: str) -> Arguments:
         """construct Arguments from args given via the CLI"""
         # explicit compiler argument, e.g.: "homcc [OPTIONAL ARGUMENTS] g++ -c foo.cpp"
         if cls.is_compiler_arg(compiler_or_argument):
             return cls(compiler_or_argument, args)
 
         # missing compiler argument, e.g.: "homcc [OPTIONAL ARGUMENTS] -c foo.cpp"
-        return cls(None, [compiler_or_argument] + args)
+        return cls(fallback_compiler, [compiler_or_argument] + args)
 
     @staticmethod
     def is_source_file_arg(arg: str) -> bool:
@@ -287,8 +290,8 @@ class Arguments:
         return self
 
     @property
-    def compiler(self) -> Optional[str]:
-        """if present, return the specified compiler"""
+    def compiler(self) -> str:
+        """return the specified compiler"""
         return self._compiler
 
     @compiler.setter
@@ -297,16 +300,10 @@ class Arguments:
 
     def compiler_normalized(self) -> str:
         """normalize the compiler (remove path, keep just executable if a path is provided as compiler)"""
-        if self.compiler is None:
-            raise UnsupportedCompilerError
-
         return Path(self.compiler).name
 
     def compiler_object(self) -> Compiler:
-        """if present, return a new specified compiler object"""
-        if self.compiler is None:
-            raise UnsupportedCompilerError
-
+        """return a new compiler object"""
         return Compiler.from_arguments(self)
 
     @cached_property
@@ -454,10 +451,7 @@ class Arguments:
 
     def add_target(self, target: str) -> Arguments:
         """returns a copy of arguments where the specified target is added (for cross compilation)"""
-        if (compiler := self.compiler_object()) is not None:
-            return compiler.add_target_to_arguments(self, target)
-
-        raise UnsupportedCompilerError("Could not add target to compilation call as no compiler was given.")
+        return self.compiler_object().add_target_to_arguments(self, target)
 
     def map(self, instance_path: str, mapped_cwd: str) -> Arguments:
         """modify and return arguments by mapping relevant paths"""
@@ -547,7 +541,7 @@ class Arguments:
         args: List[str],
         check: bool = False,
         cwd: Path = Path.cwd(),
-        output: bool = True,
+        output: bool = False,
         timeout: Optional[float] = None,
     ) -> ArgumentsExecutionResult:
         logger.debug("Executing: [%s]", " ".join(args))
@@ -600,7 +594,7 @@ class Compiler(ABC):
         normalized_compiler = arguments.compiler_normalized()
         for compiler in Compiler.available_compilers():
             if compiler.is_matching_str(normalized_compiler):
-                return compiler(arguments.compiler)  # type: ignore[arg-type]
+                return compiler(arguments.compiler)
 
         raise UnsupportedCompilerError(f"Compiler '{arguments.compiler}' is not supported.")
 
@@ -648,7 +642,7 @@ class Clang(Compiler):
         clang_arguments = Arguments(self.compiler_str, ["--version"])
 
         try:
-            result = clang_arguments.execute(check=True, output=False)
+            result = clang_arguments.execute(check=True)
         except subprocess.CalledProcessError as err:
             logger.error(
                 "Could not get target triple for compiler '%s', executed '%s'. %s",
@@ -664,9 +658,6 @@ class Clang(Compiler):
         raise TargetInferationError("Could not infer target triple for clang. Nothing matches the regex.")
 
     def add_target_to_arguments(self, arguments: Arguments, target: str) -> Arguments:
-        if arguments.compiler is None:
-            raise UnsupportedCompilerError
-
         for arg in arguments.args:
             if arg.startswith("--target=") or arg == "-target":
                 logger.info(
@@ -693,7 +684,7 @@ class Gcc(Compiler):
         gcc_arguments = Arguments(self.compiler_str, ["-dumpmachine"])
 
         try:
-            result = gcc_arguments.execute(check=True, output=False)
+            result = gcc_arguments.execute(check=True)
         except subprocess.CalledProcessError as err:
             logger.error(
                 "Could not get target triple for compiler '%s', executed '%s'. %s",
@@ -706,9 +697,6 @@ class Gcc(Compiler):
         return result.stdout.strip()
 
     def add_target_to_arguments(self, arguments: Arguments, target: str) -> Arguments:
-        if arguments.compiler is None:
-            raise UnsupportedCompilerError
-
         if target in arguments.compiler:
             logger.info(
                 "Not adding target '%s' to compiler '%s', as target is already specified.", target, arguments.compiler
