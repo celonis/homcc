@@ -15,10 +15,6 @@ class TargetInferationError(RecoverableClientError):
     """Exception for errors during infering the compilation target triple."""
 
 
-class RemoteCompilationTimeoutError(RecoverableClientError):
-    """Exception for a timed out compilation request"""
-
-
 class ClientParsingError(RecoverableClientError):
     """Exception for failing to parse message from the server"""
 
@@ -27,7 +23,7 @@ class UnexpectedMessageTypeError(RecoverableClientError):
     """Exception for receiving a message with an unexpected type"""
 
 
-class HostsExhaustedError(RecoverableClientError):
+class RemoteHostsFailure(RecoverableClientError):
     """Error class to indicate that the compilation request was refused by all hosts"""
 
 

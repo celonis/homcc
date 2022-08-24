@@ -253,15 +253,17 @@ class TestEndToEnd:
         Path("main.cpp.o.d").unlink(missing_ok=True)
         Path("foo.o").unlink(missing_ok=True)
         Path(self.OUTPUT).unlink(missing_ok=True)
+        Path("./homcc/client/clang-homcc").unlink(missing_ok=True)
 
     # client failures
     @pytest.mark.timeout(TIMEOUT)
     def test_end_to_end_client_recursive(self, unused_tcp_port: int):
         # symlink clang-homcc to homcc and make it executable in order for it to be viewed as a "regular" clang compiler
+        # the shadow compiler needs to be in the same folder as the original script in order for imports to work
         homcc_shadow_compiler: Path = Path.cwd() / "homcc/client/clang-homcc"
         homcc_shadow_compiler.symlink_to(Path.cwd() / "homcc/client/main.py")
-        assert homcc_shadow_compiler.exists()
         homcc_shadow_compiler.chmod(homcc_shadow_compiler.stat().st_mode | stat.S_IEXEC)
+        assert homcc_shadow_compiler.exists()
 
         with pytest.raises(subprocess.CalledProcessError) as err:
             subprocess.run(  # client receiving itself as compiler arg
@@ -272,9 +274,6 @@ class TestEndToEnd:
                 encoding="utf-8",
             )
 
-        homcc_shadow_compiler.unlink(missing_ok=False)
-
-        assert err.value.returncode == os.EX_USAGE
         assert "seems to have been invoked recursively!" in err.value.stdout
 
     @pytest.mark.timeout(TIMEOUT)
@@ -385,9 +384,9 @@ class TestEndToEnd:
     @pytest.mark.gplusplus
     @pytest.mark.timeout(TIMEOUT)
     def test_print_compilation_stages_gplusplus(self):
-        # homcc --no-config g++ -v
+        # homcc --verbose g++ -v; even with explicit verbose enabled, logging should not interfere
         homcc_result: subprocess.CompletedProcess = subprocess.run(
-            ["./homcc/client/main.py", "--no-config", "g++", "-v"],
+            ["./homcc/client/main.py", "--verbose", "--host=127.0.0.1/1", "g++", "-v"],
             check=True,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,

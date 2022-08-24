@@ -24,7 +24,7 @@ from homcc.common.arguments import Arguments
 from homcc.common.errors import (
     ClientParsingError,
     FailedHostNameResolutionError,
-    HostsExhaustedError,
+    RemoteHostsFailure,
     SlotsExhaustedError,
 )
 from homcc.common.messages import ArgumentMessage, DependencyReplyMessage, Message
@@ -32,7 +32,7 @@ from homcc.common.messages import ArgumentMessage, DependencyReplyMessage, Messa
 logger = logging.getLogger(__name__)
 
 
-class HostSelector:
+class RemoteHostSelector:
     """
     Class to enable random but weighted host selection on a load balancing principle. Hosts with more capacity have a
     higher probability of being chosen for remote compilation. The selection policy is agnostic to the server job
@@ -41,13 +41,14 @@ class HostSelector:
     whether localhost is added to the list of possible selections.
     """
 
-    def __init__(self, hosts: List[Host], tries: Optional[int] = None, allow_localhost: bool = False):
+    def __init__(self, hosts: List[Host], tries: Optional[int] = None):
+        if any(host.is_local() for host in hosts):
+            raise ValueError("Selecting localhost is not permitted")
+
         if tries is not None and tries <= 0:
             raise ValueError(f"Amount of tries must be greater than 0, but was {tries}")
 
-        self._hosts: List[Host] = [
-            host for host in hosts if host.limit > 0 and (not host.is_local() or allow_localhost)
-        ]
+        self._hosts: List[Host] = [host for host in hosts if host.limit > 0]
         self._limits: List[int] = [host.limit for host in self._hosts]
 
         self._count: int = 0
@@ -68,7 +69,7 @@ class HostSelector:
         """return a random host where hosts with higher limits are more likely to be selected"""
         self._count += 1
         if self._tries is not None and self._count > self._tries:
-            raise HostsExhaustedError(f"{self._tries} hosts refused the connection")
+            raise RemoteHostsFailure(f"{self._tries} hosts refused the connection")
 
         # select one host and find its index
         host: Host = random.choices(population=self._hosts, weights=self._limits, k=1)[0]
@@ -346,7 +347,7 @@ class TCPClient:
 
     DEFAULT_PORT: int = 3126
     DEFAULT_BUFFER_SIZE_LIMIT: int = 65_536  # default buffer size limit of StreamReader is 64 KiB
-    DEFAULT_OPEN_CONNECTION_TIMEOUT: float = 5
+    DEFAULT_OPEN_CONNECTION_TIMEOUT: float = 5  # TODO: make this configurable
 
     def __init__(self, host: Host):
         connection_type: ConnectionType = host.type

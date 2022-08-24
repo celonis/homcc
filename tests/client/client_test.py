@@ -10,16 +10,16 @@ import posix_ipc
 import pytest
 
 from homcc.client.client import (
-    HostSelector,
     LocalHostSemaphore,
+    RemoteHostSelector,
     RemoteHostSemaphore,
     StateFile,
 )
 from homcc.client.host import ConnectionType, Host
-from homcc.common.errors import HostsExhaustedError, SlotsExhaustedError
+from homcc.common.errors import RemoteHostsFailure, SlotsExhaustedError
 
 
-class TestHostSelector:
+class TestRemoteHostSelector:
     """Tests for HostSelector"""
 
     # first host will be ignored by the host selector due to 0 limit
@@ -27,7 +27,6 @@ class TestHostSelector:
         Host.from_str(host_str)
         # the first two hosts will be skipped per default
         for host_str in [
-            "localhost/1",
             "remotehost0/0",
             "remotehost1/1",
             "remotehost2/2",
@@ -37,30 +36,25 @@ class TestHostSelector:
     ]
 
     def test_localhost_selector(self):
-        host_selector: HostSelector = HostSelector(self.HOSTS[0:1], tries=1, allow_localhost=True)
+        with pytest.raises(ValueError, match="Selecting localhost is not permitted"):
+            _: RemoteHostSelector = RemoteHostSelector([Host.from_str("localhost/1")], tries=1)
 
-        assert len(host_selector) == 1
-
-        host: Host = next(iter(host_selector))
-        assert host == self.HOSTS[0]
-        assert host.is_local()
-
-    def test_host_selector(self):
-        host_selector: HostSelector = HostSelector(self.HOSTS)
+    def test_remotehost_selector(self):
+        host_selector: RemoteHostSelector = RemoteHostSelector(self.HOSTS)
 
         assert len(host_selector) == 4
 
         host_iter: Iterator = iter(host_selector)
         for count, host in enumerate(host_iter):
             assert host in self.HOSTS
-            assert count == len(self.HOSTS[2:]) - len(host_selector) - 1
+            assert count == len(self.HOSTS[1:]) - len(host_selector) - 1
 
         assert len(host_selector) == 0
         with pytest.raises(StopIteration):
             assert next(host_iter)
 
-    def test_host_selector_with_tries(self):
-        host_selector: HostSelector = HostSelector(self.HOSTS, 3)
+    def test_remotehost_selector_with_tries(self):
+        host_selector: RemoteHostSelector = RemoteHostSelector(self.HOSTS, 3)
 
         assert len(host_selector) == 4
 
@@ -70,17 +64,17 @@ class TestHostSelector:
             assert host in self.HOSTS
 
         assert len(host_selector) == 1
-        with pytest.raises(HostsExhaustedError):
+        with pytest.raises(RemoteHostsFailure):
             assert next(host_iter)
 
-    def test_host_selector_with_tries_not_enough_hosts(self):
-        host_selector: HostSelector = HostSelector(self.HOSTS[2:3], 3)
+    def test_remotehost_selector_with_tries_not_enough_hosts(self):
+        host_selector: RemoteHostSelector = RemoteHostSelector(self.HOSTS[1:2], 3)
 
         assert len(host_selector) == 1
 
         host_iter: Iterator = iter(host_selector)
         host: Host = next(host_iter)
-        assert host == self.HOSTS[2]
+        assert host == self.HOSTS[1]
 
         assert len(host_selector) == 0
         with pytest.raises(StopIteration):

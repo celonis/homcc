@@ -234,6 +234,13 @@ def setup_client(cli_args: List[str]) -> Tuple[ClientConfig, Arguments, Host, Li
         level=LogLevel.INFO,
     )
 
+    # if the compiler output must be parsable we explicitly disable verbose logging and default to INFO logs
+    if compiler_arguments.must_be_parsable():
+        homcc_args_dict["verbose"] = False
+        homcc_config.verbose = False
+        homcc_args_dict["log_level"] = LogLevel.INFO.name
+        homcc_config.log_level = LogLevel.INFO
+
     # LOG_LEVEL and VERBOSITY
     log_level: Optional[str] = homcc_args_dict.pop("log_level", None)
 
@@ -294,7 +301,7 @@ def setup_client(cli_args: List[str]) -> Tuple[ClientConfig, Arguments, Host, Li
             else:
                 remote_hosts.append(host)
 
-    # TODO: PRINT DEBUG INFO
+    # TODO: use logger.debug instead again
     if homcc_args_dict.pop("DEBUG", False):
         hosts_from: str = hosts_file or f"--host={host_str}"
         all_hosts: str = "\n\t".join(str(host) for host in [localhost] + remote_hosts)

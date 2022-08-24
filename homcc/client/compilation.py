@@ -10,8 +10,8 @@ from pathlib import Path
 from typing import Dict, List, Optional, Set, Tuple
 
 from homcc.client.client import (
-    HostSelector,
     LocalHostSemaphore,
+    RemoteHostSelector,
     RemoteHostSemaphore,
     StateFile,
     TCPClient,
@@ -21,10 +21,9 @@ from homcc.client.host import Host
 from homcc.common.arguments import Arguments, ArgumentsExecutionResult
 from homcc.common.errors import (
     FailedHostNameResolutionError,
-    HostsExhaustedError,
     PreprocessorError,
     RemoteCompilationError,
-    RemoteCompilationTimeoutError,
+    RemoteHostsFailure,
     SlotsExhaustedError,
     TargetInferationError,
     UnexpectedMessageTypeError,
@@ -44,23 +43,28 @@ DEFAULT_COMPILATION_REQUEST_TIMEOUT: float = 120
 EXCLUDED_DEPENDENCY_PREFIXES: Tuple = ("/usr/include", "/usr/lib")
 
 
-async def compile_remotely(arguments: Arguments, hosts: List[Host], config: ClientConfig) -> int:
+async def compile_remotely(arguments: Arguments, remote_hosts: List[Host], config: ClientConfig) -> int:
     """main function to control remote compilation"""
 
     # try to connect to 3 different remote hosts before falling back to local compilation
-    for host in HostSelector(hosts, 3):
+    failed_hosts: List[Host] = []
+
+    for remote_host in RemoteHostSelector(remote_hosts, 3):
         timeout: float = config.timeout or DEFAULT_COMPILATION_REQUEST_TIMEOUT
         schroot_profile: Optional[str] = config.schroot_profile
         docker_container: Optional[str] = config.docker_container
 
         # overwrite host compression if none was explicitly specified but provided via config
-        host.compression = host.compression or config.compression
+        remote_host.compression = remote_host.compression or config.compression
 
         try:
-            with RemoteHostSemaphore(host), StateFile(arguments, host):
+            with RemoteHostSemaphore(remote_host), StateFile(arguments, remote_host):
                 return await asyncio.wait_for(
-                    compile_remotely_at(arguments, host, schroot_profile, docker_container), timeout=timeout
+                    compile_remotely_at(arguments, remote_host, schroot_profile, docker_container), timeout=timeout
                 )
+
+        except SystemExit as error:
+            logger.error("%s", error)
 
         # remote semaphore could not be acquired
         except SlotsExhaustedError as error:
@@ -71,12 +75,16 @@ async def compile_remotely(arguments: Arguments, hosts: List[Host], config: Clie
             logger.warning("%s", error)
 
         # compilation request timed out
-        except asyncio.TimeoutError as error:
-            raise RemoteCompilationTimeoutError(
-                f"Compilation request {arguments} at host '{host}' timed out."
-            ) from error
+        except asyncio.TimeoutError:
+            # TODO: make timeout and host tries configurable
+            logger.info("Compilation request %s at host '%s' timed out.", arguments, remote_host)
 
-    raise HostsExhaustedError(f"All hosts '{', '.join(str(host) for host in hosts)}' are exhausted.")
+        finally:
+            failed_hosts.append(remote_host)
+
+    raise RemoteHostsFailure(
+        f"Failed to compile {arguments} remotely on hosts: '{', '.join(str(host) for host in failed_hosts)}'."
+    )
 
 
 async def compile_remotely_at(

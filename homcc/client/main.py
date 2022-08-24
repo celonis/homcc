@@ -35,8 +35,8 @@ def is_recursively_invoked() -> bool:
 def main():
     # cancel execution if recursive call is detected
     if is_recursively_invoked():
-        sys.stderr.write(f"{sys.argv[0]} seems to have been invoked recursively!\n")
-        sys.exit(os.EX_USAGE)
+        # TODO: build and check this again!!!
+        sys.exit(f"{sys.argv[0]} seems to have been invoked recursively!\n")
 
     # client setup involves retrieval of hosts parsing of cli args, resulting in config and logging setup
     homcc_config, compiler_arguments, localhost, remote_hosts = setup_client(sys.argv)
@@ -58,8 +58,12 @@ def main():
         logger.error("%s", error.message)
         sys.exit(error.return_code)
 
-    # compile locally on recoverable errors
+    # compile locally on recoverable errors if local compilation is not disabled
     except RecoverableClientError as error:
+        # TODO: enable this
+        # if homcc_config.no_local_compilation:
+        #    sys.exit(os.EX_UNAVAILABLE)
+
         logger.warning("Compiling locally instead (%s):\n%s", error, compiler_arguments)
         sys.exit(compile_locally(compiler_arguments, localhost))
 
