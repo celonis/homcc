@@ -39,6 +39,8 @@ from homcc.common.messages import (
 
 logger = logging.getLogger(__name__)
 
+HOMCC_SAFEGUARD_ENV_VAR: str = "_HOMCC_SAFEGUARD"
+
 DEFAULT_COMPILATION_REQUEST_TIMEOUT: float = 120
 EXCLUDED_DEPENDENCY_PREFIXES: Tuple = ("/usr/include", "/usr/lib")
 
@@ -63,8 +65,11 @@ async def compile_remotely(arguments: Arguments, remote_hosts: List[Host], confi
                     compile_remotely_at(arguments, remote_host, schroot_profile, docker_container), timeout=timeout
                 )
 
-        except SystemExit as error:
-            logger.error("%s", error)
+        except PreprocessorError:
+            # if os.environ[HOMCC_SAFEGUARD_ENV_VAR] == "1":
+            #     logger.critical("Specified compiler '%s' seems to have been invoked recursively!", arguments.compiler)
+            sys.exit(os.EX_USAGE)
+            # logger.error("%s", error)
 
         # remote semaphore could not be acquired
         except SlotsExhaustedError as error:
@@ -210,8 +215,7 @@ def find_dependencies(arguments: Arguments) -> Set[str]:
         # execute preprocessor command, e.g.: "g++ foo.cpp -M -MT $(homcc)"
         result: ArgumentsExecutionResult = arguments.execute(check=True, output=False)
     except subprocess.CalledProcessError as error:
-        logger.error("Preprocessor error:\n%s", error.stderr)
-        sys.exit(error.returncode)
+        raise PreprocessorError(f"Preprocessor error:\n{error.stderr}") from error
 
     # read from the dependency file if it was created as a side effect
     dependency_result: str = (

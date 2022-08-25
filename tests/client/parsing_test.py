@@ -246,7 +246,6 @@ class TestParsingConfig:
     config: List[str] = [
         "[homcc]",
         "# Client global config",
-        "COMPILER=g++",
         "CoMpReSsIoN=lzo",
         "TIMEOUT=180",
         "schroot_profile=foobar",
@@ -261,7 +260,6 @@ class TestParsingConfig:
 
     config_overwrite: List[str] = [
         "[homcc]",
-        "COMPILER=clang++",
         "verbose=FALSE",
     ]
 
@@ -271,7 +269,6 @@ class TestParsingConfig:
 
         assert parse_config([tmp_config_file]) == ClientConfig(
             files=[str(tmp_config_file.absolute())],
-            compiler="g++",
             compression="lzo",
             timeout=180,
             log_level="INFO",
@@ -289,7 +286,6 @@ class TestParsingConfig:
 
         assert parse_config([tmp_config_file_overwrite, tmp_config_file]) == ClientConfig(
             files=[str(file.absolute()) for file in [tmp_config_file, tmp_config_file_overwrite]],
-            compiler="clang++",
             compression="lzo",
             timeout=180,
             schroot_profile="foobar",

@@ -1,6 +1,7 @@
 """Central collection of Client specific Error types"""
 
 from dataclasses import dataclass
+from typing import ClassVar
 
 
 class RecoverableClientError(Exception):
@@ -32,6 +33,15 @@ class NoHostsFoundError(RecoverableClientError):
     Error class to indicate a recoverable error when hosts could neither be determined from the environment variable nor
     from the default hosts file locations
     """
+
+    message: ClassVar[str] = (
+        "No hosts were found! "
+        "Please specify them via the HOMCC_HOSTS environmental variable or a dedicated hosts file."
+    )
+
+
+class RecursiveCallError(Exception):
+    """TODO"""
 
 
 class HostParsingError(RecoverableClientError):

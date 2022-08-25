@@ -59,9 +59,9 @@ class ShowHosts(ShowAndExitAction):
         try:
             _, hosts = load_hosts()
 
-        except NoHostsFoundError:
-            sys.stderr.write("Failed to get hosts list\n")
-            sys.exit(os.EX_NOINPUT)
+        except NoHostsFoundError as error:
+            sys.stderr.write(f"{error.message}\n")
+            raise SystemExit(os.EX_NOINPUT) from error
 
         for host in hosts:
             sys.stdout.write(f"{host}\n")
@@ -76,9 +76,9 @@ class ShowConcurrencyLevel(ShowAndExitAction):
         try:
             _, hosts = load_hosts()
 
-        except NoHostsFoundError:
+        except NoHostsFoundError as error:
             sys.stderr.write("Failed to get hosts list\n")
-            sys.exit(os.EX_NOINPUT)
+            raise SystemExit(os.EX_NOINPUT) from error
 
         concurrency_level: int = 0
         for host in hosts:
@@ -216,7 +216,7 @@ def parse_cli_args(cli_args: List[str]) -> Tuple[Dict[str, Any], Arguments]:
     for key in ("COMPILER_ARGUMENTS", "show_hosts", "show_concurrency", "show_variables"):
         homcc_args_dict.pop(key)
 
-    compiler_arguments: Arguments = Arguments.from_args(compiler_args)
+    compiler_arguments: Arguments = Arguments(compiler_args)
 
     return homcc_args_dict, compiler_arguments
 
@@ -261,9 +261,6 @@ def setup_client(cli_args: List[str]) -> Tuple[ClientConfig, Arguments, Host, Li
 
     setup_logging(logging_config)
 
-    # COMPILER; default: "gcc"
-    homcc_config.compiler = compiler_arguments.compiler
-
     # SCAN-INCLUDES; and exit
     if homcc_args_dict.pop("scan_includes", False):
         for include in scan_includes(compiler_arguments):
@@ -282,7 +279,11 @@ def setup_client(cli_args: List[str]) -> Tuple[ClientConfig, Arguments, Host, Li
     if (host_str := homcc_args_dict.pop("host", None)) is not None:
         remote_hosts = [Host.from_str(host_str)]
     else:
-        hosts_file, hosts_str = load_hosts()
+        try:
+            hosts_file, hosts_str = load_hosts()
+        except NoHostsFoundError as error:
+            logger.error("%s", error)
+            raise SystemExit(os.EX_NOINPUT) from error
         has_local: bool = False
 
         for host_str in hosts_str:
@@ -381,4 +382,4 @@ def load_hosts(hosts_file_locations: Optional[List[Path]] = None) -> Tuple[str, 
                 continue
             return str(hosts_file_location), filtered_lines(hosts_file_location.read_text(encoding="utf-8"))
 
-    raise NoHostsFoundError("No hosts information were found!")
+    raise NoHostsFoundError

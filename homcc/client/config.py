@@ -9,7 +9,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import ClassVar, Iterator, List, Optional
 
-from homcc.common.arguments import Arguments
 from homcc.common.compression import Compression
 from homcc.common.logging import LogLevel
 from homcc.common.parsing import HOMCC_CONFIG_FILENAME, default_locations, parse_configs
@@ -24,29 +23,30 @@ class ClientConfig:
     class EnvironmentVariables:
         """Encapsulation of all environment variables relevant to client configuration"""
 
-        HOMCC_COMPILER_ENV_VAR: ClassVar[str] = "HOMCC_COMPILER"
         HOMCC_COMPRESSION_ENV_VAR: ClassVar[str] = "HOMCC_COMPRESSION"
         HOMCC_SCHROOT_PROFILE_ENV_VAR: ClassVar[str] = "HOMCC_SCHROOT_PROFILE"
         HOMCC_DOCKER_CONTAINER_ENV_VAR: ClassVar[str] = "HOMCC_DOCKER_CONTAINER"
         HOMCC_TIMEOUT_ENV_VAR: ClassVar[str] = "HOMCC_TIMEOUT"
         HOMCC_LOG_LEVEL_ENV_VAR: ClassVar[str] = "HOMCC_LOG_LEVEL"
         HOMCC_VERBOSE_ENV_VAR: ClassVar[str] = "HOMCC_VERBOSE"
+        HOMCC_NO_LOCAL_COMPILATION_ENV_VAR: ClassVar[str] = "HOMCC_NO_LOCAL_COMPILATION"
 
         @classmethod
         def __iter__(cls) -> Iterator[str]:
             yield from (
-                cls.HOMCC_COMPILER_ENV_VAR,
                 cls.HOMCC_COMPRESSION_ENV_VAR,
                 cls.HOMCC_SCHROOT_PROFILE_ENV_VAR,
                 cls.HOMCC_DOCKER_CONTAINER_ENV_VAR,
                 cls.HOMCC_TIMEOUT_ENV_VAR,
                 cls.HOMCC_LOG_LEVEL_ENV_VAR,
                 cls.HOMCC_VERBOSE_ENV_VAR,
+                cls.HOMCC_NO_LOCAL_COMPILATION_ENV_VAR,
             )
 
-        @classmethod
-        def get_compiler(cls) -> Optional[str]:
-            return os.getenv(cls.HOMCC_COMPILER_ENV_VAR)
+        @staticmethod
+        def parse_bool_str(s: str):
+            """parse boolean string analogously to configparser.getboolean"""
+            return re.match(r"^(1)|(yes)|(true)|(on)$", s, re.IGNORECASE) is not None
 
         @classmethod
         def get_compression(cls) -> Optional[str]:
@@ -73,40 +73,47 @@ class ClientConfig:
         @classmethod
         def get_verbose(cls) -> Optional[bool]:
             if (verbose := os.getenv(cls.HOMCC_VERBOSE_ENV_VAR)) is not None:
-                # parse analogously to configparser.getboolean
-                return re.match(r"^(1)|(yes)|(true)|(on)$", verbose, re.IGNORECASE) is not None
+                return cls.parse_bool_str(verbose)
+            return None
+
+        @classmethod
+        def get_no_local_compilation(cls) -> Optional[bool]:
+            if (no_local_compilation := os.getenv(cls.HOMCC_NO_LOCAL_COMPILATION_ENV_VAR)) is not None:
+                return cls.parse_bool_str(no_local_compilation)
             return None
 
     files: List[str]
-    compiler: str
     compression: Compression
     schroot_profile: Optional[str]
     docker_container: Optional[str]
     timeout: Optional[float]
     log_level: Optional[LogLevel]
+    local_compilation_enabled: bool
     verbose: bool
 
     def __init__(
         self,
         *,
         files: List[str],
-        compiler: Optional[str] = None,
         compression: Optional[str] = None,
         schroot_profile: Optional[str] = None,
         docker_container: Optional[str] = None,
         timeout: Optional[float] = None,
         log_level: Optional[str] = None,
+        no_local_compilation: Optional[bool] = None,
         verbose: Optional[bool] = None,
     ):
         self.files = files
 
         # configurations via environmental variables have higher precedence than those specified via config files
-        self.compiler = self.EnvironmentVariables.get_compiler() or compiler or Arguments.DEFAULT_COMPILER
         self.compression = Compression.from_name(self.EnvironmentVariables.get_compression() or compression)
         self.schroot_profile = self.EnvironmentVariables.get_schroot_profile() or schroot_profile
         self.docker_container = self.EnvironmentVariables.get_docker_container() or docker_container
         self.timeout = self.EnvironmentVariables.get_timeout() or timeout
         self.log_level = LogLevel.from_str(self.EnvironmentVariables.get_log_level() or log_level)
+        self.local_compilation_enabled = not (
+            self.EnvironmentVariables.get_no_local_compilation() or no_local_compilation
+        )
 
         verbose = self.EnvironmentVariables.get_verbose() or verbose
         self.verbose = verbose is not None and verbose
@@ -117,7 +124,6 @@ class ClientConfig:
 
     @classmethod
     def from_config_section(cls, files: List[str], homcc_config: SectionProxy) -> ClientConfig:
-        compiler: Optional[str] = homcc_config.get("compiler")
         compression: Optional[str] = homcc_config.get("compression")
         schroot_profile: Optional[str] = homcc_config.get("schroot_profile")
         docker_container: Optional[str] = homcc_config.get("docker_container")
@@ -127,7 +133,6 @@ class ClientConfig:
 
         return ClientConfig(
             files=files,
-            compiler=compiler,
             compression=compression,
             schroot_profile=schroot_profile,
             docker_container=docker_container,
@@ -139,7 +144,6 @@ class ClientConfig:
     def __str__(self):
         return (
             f"Configuration (from [{', '.join(self.files)}]):\n"
-            f"\tcompiler:\t\t{self.compiler}\n"
             f"\tcompression:\t\t{self.compression}\n"
             f"\tschroot_profile:\t{self.schroot_profile}\n"
             f"\tdocker_container:\t{self.docker_container}\n"

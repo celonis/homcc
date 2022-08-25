@@ -95,9 +95,9 @@ def main():
     # start server
     try:
         tcp_server, server_thread = start_server(homccd_config, schroot_profiles=schroot_profiles)
-    except ServerInitializationError:
+    except ServerInitializationError as error:
         logger.error("Could not start homccd, terminating.")
-        sys.exit(os.EX_OSERR)
+        raise SystemExit(os.EX_OSERR) from error
 
     def signal_handler(*_):
         stop_server(tcp_server)

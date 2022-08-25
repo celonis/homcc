@@ -145,7 +145,7 @@ class TCPRequestHandler(socketserver.BaseRequestHandler):
     def _handle_argument_message(self, message: ArgumentMessage):
         logger.info("Handling ArgumentMessage...")
 
-        self.compiler_arguments = Arguments.from_args(message.get_args())
+        self.compiler_arguments: Arguments = Arguments(message.get_args())
 
         target = message.target
         schroot_profile = message.schroot_profile

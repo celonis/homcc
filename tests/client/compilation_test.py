@@ -15,8 +15,8 @@ class TestCompilation:
     """Tests for functions in client/compilation.py"""
 
     def test_scan_includes(self):
-        arguments: Arguments = Arguments.from_args(
-            ["g++", "-Iexample/include", "example/src/main.cpp", "example/src/foo.cpp"]
+        arguments: Arguments = Arguments.from_vargs(
+            "g++", "-Iexample/include", "example/src/main.cpp", "example/src/foo.cpp"
         )
 
         includes: List[str] = scan_includes(arguments)
@@ -27,7 +27,7 @@ class TestCompilation:
     @staticmethod
     def find_dependencies(compiler: str):
         args: List[str] = [compiler, "-Iexample/include", "example/src/main.cpp"]
-        dependencies: Set[str] = find_dependencies(Arguments.from_args(args))
+        dependencies: Set[str] = find_dependencies(Arguments(args))
 
         assert len(dependencies) == 2
         assert str(Path("example/src/main.cpp").absolute()) in dependencies
@@ -56,7 +56,7 @@ class TestCompilation:
             "-c",
             "example/src/main.cpp",
         ]
-        dependencies: Set[str] = find_dependencies(Arguments.from_args(args))
+        dependencies: Set[str] = find_dependencies(Arguments(args))
 
         assert len(dependencies) == 2
         assert str(Path("example/src/main.cpp").absolute()) in dependencies
@@ -75,8 +75,9 @@ class TestCompilation:
 
     @staticmethod
     def find_dependencies_class_impl_with_compiler(compiler: str):
-        args: List[str] = [compiler, "-Iexample/include", "example/src/main.cpp", "example/src/foo.cpp"]
-        dependencies: Set[str] = find_dependencies(Arguments.from_args(args))
+        dependencies: Set[str] = find_dependencies(
+            Arguments.from_vargs(compiler, "-Iexample/include", "example/src/main.cpp", "example/src/foo.cpp")
+        )
 
         assert len(dependencies) == 3
         assert str(Path("example/src/main.cpp").absolute()) in dependencies
@@ -92,10 +93,12 @@ class TestCompilation:
         self.find_dependencies_class_impl_with_compiler("clang++")
 
     def test_find_dependencies_error(self):
-        args: List[str] = ["g++", "-Iexample/include", "example/src/main.cpp", "example/src/foo.cpp", "-OError"]
-
         with pytest.raises(SystemExit) as sys_exit:
-            _: Set[str] = find_dependencies(Arguments.from_args(args))
+            _: Set[str] = find_dependencies(
+                Arguments.from_vargs(
+                    "g++", "-Iexample/include", "example/src/main.cpp", "example/src/foo.cpp", "-OError"
+                )
+            )
 
         assert sys_exit.value.code != os.EX_OK
 
@@ -104,7 +107,7 @@ class TestCompilation:
         args: List[str] = ["g++", "-Iexample/include", "example/src/main.cpp", "example/src/foo.cpp", f"-o{output}"]
 
         assert not Path(output).exists()
-        assert compile_locally(Arguments.from_args(args), Host.localhost_with_limit(1)) == os.EX_OK
+        assert compile_locally(Arguments(args), Host.localhost_with_limit(1)) == os.EX_OK
         assert Path(output).exists()
 
         executable_stdout: str = subprocess.check_output([f"./{output}"], encoding="utf-8")
@@ -113,4 +116,4 @@ class TestCompilation:
         Path(output).unlink(missing_ok=True)
 
         # intentionally execute an erroneous call
-        assert compile_locally(Arguments.from_args(args + ["-OError"]), Host.localhost_with_limit(1)) != os.EX_OK
+        assert compile_locally(Arguments(args + ["-OError"]), Host.localhost_with_limit(1)) != os.EX_OK

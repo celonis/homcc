@@ -39,9 +39,6 @@ class Arguments:
     compilation which implies arguments being able to be sent!
     """
 
-    # if the compiler is neither specified by the callee nor defined in the config file use this as fallback
-    DEFAULT_COMPILER: str = "gcc"
-
     NO_LINKING_ARG: str = "-c"
     SHOW_COMPILER_STAGES: str = "-v"
 
@@ -110,55 +107,48 @@ class Arguments:
         # debug
         DEBUG_ARG_PREFIX: str = "-dr"
 
-    def __init__(self, compiler: str, args: List[str]):
-        self._compiler: str = compiler
+    def __init__(self, args: List[str]):
+        """construct arguments from a list of args"""
+        if not args:
+            raise ValueError("Not enough args supplied to construct Arguments")
+
+        if not self.is_compiler_arg(args[0]):
+            raise UnsupportedCompilerError("Specifying a compiler is necessary")
+
         self._args: List[str] = args
 
     def __eq__(self, other: Any) -> bool:
         if isinstance(other, Arguments) and len(self) == len(other):
-            return self.compiler == other.compiler and self.args == other.args
+            return self.args == other.args
         if isinstance(other, list) and len(self) == len(other):
-            return self.compiler == other[0] and self.args == other[1:]
+            return self.args == other
         return False
 
     def __iter__(self) -> Iterator[str]:
-        yield self.compiler
         yield from self.args
 
     def __len__(self) -> int:
         return len(self.args) + 1
 
     def __str__(self) -> str:
-        return f"[{self.compiler} {' '.join(self.args)}]"
+        return f"[{' '.join(self.args)}]"
 
     def __repr__(self) -> str:
         return f"{self.__class__}({str(self)})"
 
     def copy(self) -> Arguments:
         """return an arguments copy"""
-        return Arguments(self.compiler, self.args.copy())
+        return Arguments(self.args.copy())
 
     @classmethod
-    def from_args(cls, args: List[str]) -> Arguments:
-        """construct arguments from a list of args"""
-        if not args:
-            raise ValueError("Not enough args supplied to construct Arguments")
-
-        # singular arg, e.g. ["g++"] or ["foo.cpp"]
-        if len(args) == 1:
-            arg: str = args[0]
-            if cls.is_compiler_arg(arg):
-                return cls(arg, [])
-            else:
-                raise UnsupportedCompilerError("Specifying a compiler is necessary")
-
-        # compiler with args, e.g. ["g++", "foo.cpp", "-c"]
-        return cls(args[0], args[1:])
+    def from_vargs(cls, *vargs: str) -> Arguments:
+        """construct arguments from a variadic list of args"""
+        return cls(list(vargs))
 
     @classmethod
     def from_str(cls, args_str: str) -> Arguments:
         """construct arguments from an args string"""
-        return Arguments.from_args(args_str.split())
+        return Arguments(args_str.split())
 
     @staticmethod
     def is_source_file_arg(arg: str) -> bool:
@@ -186,9 +176,8 @@ class Arguments:
                 logger.debug("%s is used as compiler", arg)
 
                 if not Arguments.is_executable_arg(arg):
-                    # no returning of False here since none-executable compilers on the client might still be executable
-                    # on the remote server
-                    logger.warning("Specified compiler '%s' is not an executable", arg)
+                    # no return False here since compiler might still be executable on the remote server
+                    logger.warning("Specified compiler '%s' is not executable locally", arg)
 
                 return True
 
@@ -288,15 +277,15 @@ class Arguments:
     @property
     def compiler(self) -> str:
         """return the specified compiler"""
-        return self._compiler
+        return self._args[0]
 
     @compiler.setter
     def compiler(self, compiler: str):
-        self._compiler = compiler
+        self._args[0] = compiler
 
     def compiler_normalized(self) -> str:
         """normalize the compiler (remove path, keep just executable if a path is provided as compiler)"""
-        return Path(self.compiler).name
+        return Path(self.args[0]).name
 
     def compiler_object(self) -> Compiler:
         """return a new compiler object"""
@@ -461,7 +450,7 @@ class Arguments:
         args: List[str] = []
         path_option_prefix_args: List[str] = [self.OUTPUT_ARG] + self.INCLUDE_ARGS
 
-        it: Iterator[str] = iter(self.args)
+        it: Iterator[str] = iter(self.args[1:])
         for arg in it:
             if arg in self.source_files:
                 arg = self.map_path_arg(arg, instance_path, mapped_cwd)
@@ -569,17 +558,16 @@ class Arguments:
 
     def schroot_execute(self, profile: str, **kwargs) -> ArgumentsExecutionResult:
         """
-        Execute arguments in a secure changed root environment by forwarding it as a list of args prepended by schroot
-        args to subprocess and return the result as an ArgumentsExecutionResult. If possible, all parameters to this
-        method will also be forwarded directly to the subprocess function call.
+        Execute arguments in a secure changed root environment. If possible, all parameters to this method will also be
+        forwarded directly to the subprocess function call.
         """
         schroot_args: List[str] = ["schroot", "-c", profile, "--"]
         return self._execute_args(schroot_args + list(self), **kwargs)
 
     def docker_execute(self, container: str, cwd: str, **kwargs) -> ArgumentsExecutionResult:
         """
-        Execute arguments in a docker container.
-        If possible, all parameters to this method will also be forwarded directly to the subprocess function call.
+        Execute arguments in a docker container. If possible, all parameters to this method will also be forwarded
+        directly to the subprocess function call.
         """
         docker_args: List[str] = ["docker", "exec", "--workdir", cwd, container]
         return self._execute_args(docker_args + list(self), **kwargs)
@@ -647,7 +635,7 @@ class Clang(Compiler):
         return True
 
     def get_target_triple(self) -> str:
-        clang_arguments = Arguments(self.compiler_str, ["--version"])
+        clang_arguments: Arguments = Arguments.from_vargs(self.compiler_str, "--version")
 
         try:
             result = clang_arguments.execute(check=True, output=False)
@@ -689,7 +677,7 @@ class Gcc(Compiler):
         return shutil.which(f"{target}-{self.compiler_str}") is not None
 
     def get_target_triple(self) -> str:
-        gcc_arguments = Arguments(self.compiler_str, ["-dumpmachine"])
+        gcc_arguments: Arguments = Arguments.from_vargs(self.compiler_str, "-dumpmachine")
 
         try:
             result = gcc_arguments.execute(check=True, output=False)

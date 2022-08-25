@@ -253,7 +253,7 @@ class TestEndToEnd:
         Path("main.cpp.o.d").unlink(missing_ok=True)
         Path("foo.o").unlink(missing_ok=True)
         Path(self.OUTPUT).unlink(missing_ok=True)
-        Path("./homcc/client/clang-homcc").unlink(missing_ok=True)
+        # Path("./homcc/client/clang-homcc").unlink(missing_ok=True)
 
     # client failures
     @pytest.mark.timeout(TIMEOUT)
@@ -267,13 +267,18 @@ class TestEndToEnd:
 
         with pytest.raises(subprocess.CalledProcessError) as err:
             subprocess.run(  # client receiving itself as compiler arg
-                list(self.BasicClientArguments(str(homcc_shadow_compiler), unused_tcp_port)),
+                list(self.BasicClientArguments(str(homcc_shadow_compiler), unused_tcp_port))
+                + ["-Iexample/include", "example/src/foo.cpp", "example/src/main.cpp", f"-o{self.OUTPUT}"],
                 check=True,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
                 encoding="utf-8",
             )
 
+        # assert not err.value.stdout
+        assert (
+            f"Specified compiler '{homcc_shadow_compiler}' seems to have been invoked recursively!" in err.value.stdout
+        )
         assert "seems to have been invoked recursively!" in err.value.stdout
 
     @pytest.mark.timeout(TIMEOUT)
@@ -435,9 +440,9 @@ class TestEndToEnd:
     @pytest.mark.clangplusplus
     @pytest.mark.timeout(TIMEOUT)
     def test_print_compilation_stages_clangplusplus(self):
-        # homcc --no-config clang++ -v
+        # homcc --verbose clang++ -v; even with explicit verbose enabled, logging should not interfere
         homcc_result: subprocess.CompletedProcess = subprocess.run(
-            ["./homcc/client/main.py", "--no-config", "clang++", "-v"],
+            ["./homcc/client/main.py", "--verbose", "--host=127.0.0.1/1", "clang++", "-v"],
             check=True,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
