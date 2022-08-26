@@ -203,7 +203,7 @@ class TestEndToEnd:
 
             linking_result = self.run_client(list(basic_arguments) + linking_args)
             assert linking_result.returncode == os.EX_OK
-            assert f"is linking-only to {self.OUTPUT}" in linking_result.stdout
+            assert f"is linking-only to '{self.OUTPUT}'" in linking_result.stdout
             assert os.path.exists(self.OUTPUT)
 
     def cpp_end_to_end_multiple_clients_shared_host(self, basic_arguments: BasicClientArguments):
