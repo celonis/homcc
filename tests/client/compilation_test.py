@@ -27,7 +27,7 @@ class TestCompilation:
     @staticmethod
     def find_dependencies(compiler: str):
         args: List[str] = [compiler, "-Iexample/include", "example/src/main.cpp"]
-        dependencies: Set[str] = find_dependencies(Arguments(args))
+        dependencies: Set[str] = find_dependencies(Arguments.from_vargs(*args))
 
         assert len(dependencies) == 2
         assert str(Path("example/src/main.cpp").absolute()) in dependencies
@@ -56,7 +56,7 @@ class TestCompilation:
             "-c",
             "example/src/main.cpp",
         ]
-        dependencies: Set[str] = find_dependencies(Arguments(args))
+        dependencies: Set[str] = find_dependencies(Arguments.from_vargs(*args))
 
         assert len(dependencies) == 2
         assert str(Path("example/src/main.cpp").absolute()) in dependencies
@@ -105,7 +105,7 @@ class TestCompilation:
         args: List[str] = ["g++", "-Iexample/include", "example/src/main.cpp", "example/src/foo.cpp", f"-o{output}"]
 
         assert not Path(output).exists()
-        assert compile_locally(Arguments(args), Host.localhost_with_limit(1)) == os.EX_OK
+        assert compile_locally(Arguments.from_vargs(*args), Host.localhost_with_limit(1)) == os.EX_OK
         assert Path(output).exists()
 
         executable_stdout: str = subprocess.check_output([f"./{output}"], encoding="utf-8")
@@ -115,6 +115,6 @@ class TestCompilation:
 
         # intentionally execute an erroneous call
         with pytest.raises(SystemExit) as sys_exit:
-            compile_locally(Arguments(args + ["-OError"]), Host.localhost_with_limit(1))
+            compile_locally(Arguments.from_vargs(*args, "-OError"), Host.localhost_with_limit(1))
 
         assert sys_exit != os.EX_OK

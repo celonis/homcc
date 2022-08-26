@@ -13,6 +13,8 @@ class MissingLogFileError(Exception):
 
 
 class LogLevel(int, Enum):
+    """LogLevel wrapper class for logging levels"""
+
     DEBUG = logging.DEBUG
     INFO = logging.INFO
     WARNING = logging.WARNING
@@ -22,6 +24,9 @@ class LogLevel(int, Enum):
     @classmethod
     def from_str(cls, log_level: Optional[str]) -> Optional[LogLevel]:
         return cls[log_level] if log_level else None
+
+    def __str__(self) -> str:
+        return self.name
 
 
 class Formatter(Enum):

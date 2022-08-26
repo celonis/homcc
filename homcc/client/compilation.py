@@ -17,7 +17,7 @@ from homcc.client.client import (
 )
 from homcc.client.config import ClientConfig
 from homcc.client.host import Host
-from homcc.common.arguments import Arguments, ArgumentsExecutionResult
+from homcc.common.arguments import Arguments, ArgumentsExecutionResult, Compiler
 from homcc.common.errors import (
     FailedHostNameResolutionError,
     RemoteCompilationError,
@@ -43,11 +43,11 @@ DEFAULT_COMPILATION_REQUEST_TIMEOUT: float = 120
 EXCLUDED_DEPENDENCY_PREFIXES: Tuple = ("/usr/include", "/usr/lib")
 
 
-def check_recursive_call(compiler: str, error: subprocess.CalledProcessError):
+def check_recursive_call(compiler: Compiler, error: subprocess.CalledProcessError):
     """check if homcc was called recursively"""
 
     if f"{HOMCC_RECURSIVE_ERROR_MESSAGE}\n" == error.stderr:
-        logger.critical("Specified compiler '%s' has been invoked recursively!", compiler)
+        logger.error("Specified compiler '%s' has been invoked recursively!", compiler)
         raise SystemExit(os.EX_USAGE) from error
 
 
@@ -107,13 +107,8 @@ async def compile_remotely_at(
         dependency_dict: Dict[str, str] = calculate_dependency_dict(find_dependencies(arguments))
         remote_arguments: Arguments = arguments.copy().remove_local_args()
 
-        logger.debug(
-            "Normalizing compiler '%s' to '%s' for the server.",
-            remote_arguments.compiler,
-            remote_arguments.compiler_normalized(),
-        )
         # normalize compiler (e.g. /usr/bin/g++ -> g++)
-        remote_arguments.compiler = remote_arguments.compiler_normalized()
+        remote_arguments.normalize_compiler()
 
         target: Optional[str] = None
         try:

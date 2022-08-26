@@ -12,12 +12,12 @@ class TestArguments:
 
     def test_arguments(self):
         args: List[str] = ["g++", "foo.cpp", "-O0", "-Iexample/include/"]
-        arguments: Arguments = Arguments(args)
-        assert arguments != Arguments(args + ["-ofoo"])
+        arguments: Arguments = Arguments.from_vargs(*args)
+        assert arguments == args
+        assert arguments == arguments.copy()
+        assert arguments != Arguments.from_vargs(*args, "-ofoo")
         assert str(arguments) == "[g++ foo.cpp -O0 -Iexample/include/]"
         assert repr(arguments) == f"{Arguments}([g++ foo.cpp -O0 -Iexample/include/])"
-        arguments.compiler = "clang++"
-        assert arguments.compiler == "clang++"
 
     def test_is_source_file_arg(self):
         source_files: List[str] = ["foo.c", "bar.cpp"]
@@ -51,23 +51,14 @@ class TestArguments:
 
     def test_is_sendable(self):
         args: List[str] = ["g++", "foo.cpp", "-O0", "-Iexample/include/"]
-        assert Arguments(args).is_sendable()
-
-        sendable_args: List[str] = args + ["-c", "-ofoo"]
-        assert Arguments(sendable_args).is_sendable()
-
-        sendable_preprocessor_args: List[str] = args + ["-MD", "-MF", "foo.d"]
-        assert Arguments(sendable_preprocessor_args).is_sendable()
+        assert Arguments.from_vargs(*args).is_sendable()
+        assert Arguments.from_vargs(*args, "-c", "-ofoo").is_sendable()
+        assert Arguments.from_vargs(*args, "-MD", "-MF", "foo.d").is_sendable()  # sendable preprocessor
 
         # unsendability
-        no_source_files_args: List[str] = args[0:1] + args[2:]
-        assert not Arguments(no_source_files_args).is_sendable()
-
-        ambiguous_output_args: List[str] = args + ["-o", "-"]
-        assert not Arguments(ambiguous_output_args).is_sendable()
-
-        unknown_language_args: List[str] = args + ["-x", "unsendable"]
-        assert not Arguments(unknown_language_args).is_sendable()
+        assert not Arguments.from_vargs(args[0], *args[2:]).is_sendable()  # no source files
+        assert not Arguments.from_vargs(*args, "-o", "-").is_sendable()  # ambiguous output
+        assert not Arguments.from_vargs(*args, "-x", "unsendable").is_sendable()  # unknown language
 
         unsendable_args: List[str] = [
             "-E",
@@ -82,121 +73,110 @@ class TestArguments:
             "-drUnsendable",
         ]
         for unsendable_arg in unsendable_args:
-            assert not Arguments(args + [unsendable_arg]).is_sendable()
+            assert not Arguments.from_vargs(*args, unsendable_arg).is_sendable()
 
     def test_is_linking(self):
         linking_args: List[str] = ["g++", "foo.cpp", "-O0", "-Iexample/include/", "-ofoo"]
-        assert Arguments(linking_args).is_linking()
-
-        not_linking_args: List[str] = linking_args + ["-c"]
-        assert not Arguments(not_linking_args).is_linking()
+        assert Arguments.from_vargs(*linking_args).is_linking()
+        assert not Arguments.from_vargs(*linking_args, "-c").is_linking()
 
     def test_is_linking_only(self):
         compile_and_link_args: List[str] = ["g++", "foo.cpp", "-O0", "-Iexample/include/"]
-        assert not Arguments(compile_and_link_args).is_linking_only()
+        assert not Arguments.from_vargs(*compile_and_link_args).is_linking_only()  # compile and link
+        assert not Arguments.from_vargs(*compile_and_link_args, "-c").is_linking_only()  # compile and no link
 
-        compile_and_no_link_args: List[str] = compile_and_link_args + ["-c"]
-        assert not Arguments(compile_and_no_link_args).is_linking_only()
-
-        linking_only_args: List[str] = ["g++", "foo.o", "bar.o", "-ofoobar"]
-        assert Arguments(linking_only_args).is_linking_only()
+        assert Arguments.from_vargs("g++", "foo.o", "bar.o", "-ofoobar").is_linking_only()  # linking only
 
     def test_dependency_finding_filename(self):
-        source_file_args_str: str = "g++ -Iexample/include -c example/src/main.cpp"
-        assert Arguments.from_str(source_file_args_str).dependency_finding()[1] is None
+        source_file_args: List[str] = [
+            "g++",
+            "-Iexample/include",
+            "-c",
+            "example/src/main.cpp",
+        ]
+        assert Arguments.from_vargs(*source_file_args).dependency_finding()[1] is None
 
-        simple_dependency_args_str: str = f"{source_file_args_str} -MD"
-        assert Arguments.from_str(simple_dependency_args_str).dependency_finding()[1] == "main.d"
+        simple_dependency_args: List[str] = source_file_args + ["-MD"]
+        assert Arguments.from_vargs(*simple_dependency_args).dependency_finding()[1] == "main.d"
 
-        dependency_target_args_str: str = f"{simple_dependency_args_str} -MT main.cpp.o"
-        assert Arguments.from_str(dependency_target_args_str).dependency_finding()[1] == "main.d"
+        dependency_target_args: List[str] = simple_dependency_args + ["-MT", "main.cpp.o"]
+        assert Arguments.from_vargs(*dependency_target_args).dependency_finding()[1] == "main.d"
 
-        dependency_file_args_str: str = f"{dependency_target_args_str} -MF main.cpp.o.d"
-        assert Arguments.from_str(dependency_file_args_str).dependency_finding()[1] == "main.cpp.o.d"
+        assert (  # dependency_file_args
+            Arguments.from_vargs(*dependency_target_args, "-MF", "main.cpp.o.d").dependency_finding()[1]
+            == "main.cpp.o.d"
+        )
 
-        duplicated_dependency_file_args_str: str = f"{dependency_target_args_str} -MF main.cpp.o.d -MF foo.cpp.o.d"
-        assert Arguments.from_str(duplicated_dependency_file_args_str).dependency_finding()[1] == "foo.cpp.o.d"
+        assert (  # duplicated_dependency_file_args
+            Arguments.from_vargs(
+                *dependency_target_args, "-MF", "main.cpp.o.d", "-MF", "foo.cpp.o.d"
+            ).dependency_finding()[1]
+            == "foo.cpp.o.d"
+        )
 
-        output_dependency_file_args_str: str = f"{dependency_target_args_str} -o main.cpp.o"
-        assert Arguments.from_str(output_dependency_file_args_str).dependency_finding()[1] == "main.cpp.d"
+        # output_dependency_file_args
+        assert Arguments.from_vargs(*dependency_target_args, "-o", "main.cpp.o").dependency_finding()[1] == "main.cpp.d"
 
-        multiple_dependency_file_args_str: str = f"{dependency_target_args_str} -MF main.cpp.o.d -o main.cpp.o"
-        assert Arguments.from_str(multiple_dependency_file_args_str).dependency_finding()[1] == "main.cpp.o.d"
+        assert (  # multiple_dependency_file_args
+            Arguments.from_vargs(
+                *dependency_target_args, "-MF", "main.cpp.o.d", "-o", "main.cpp.o"
+            ).dependency_finding()[1]
+            == "main.cpp.o.d"
+        )
 
     def test_output_target(self):
         args: List[str] = ["g++", "foo.cpp", "-O0", "-Iexample/include/"]
-        assert Arguments(args).output is None
+        assert Arguments.from_vargs(*args).output is None
 
-        single_output_args: List[str] = args + ["-o", "foo"]
-        assert Arguments(single_output_args).output == "foo"
-
-        multiple_output_args: List[str] = args + ["-o", "foo", "-o", "bar"]
-        assert Arguments(multiple_output_args).output == "bar"
-
-        mixed_output_args: List[str] = args + ["-o", "foo", "-obar"]
-        assert Arguments(mixed_output_args).output == "bar"
-
-        output_flag_as_output_args: List[str] = args + ["-ofoo", "-o", "-o"]
-        assert Arguments(output_flag_as_output_args).output == "-o"
-
-        long_output_path_args: List[str] = args + ["-o", "long/path/to/output"]
-        assert Arguments(long_output_path_args).output == "long/path/to/output"
+        assert Arguments.from_vargs(*args, "-o", "foo").output == "foo"  # single output
+        assert Arguments.from_vargs(*args, "-o", "foo", "-o", "bar").output == "bar"  # multiple output
+        assert Arguments.from_vargs(*args, "-o", "foo", "-obar").output == "bar"  # mixed output
+        assert Arguments.from_vargs(*args, "-ofoo", "-o", "-o").output == "-o"  # output flag as output
+        assert Arguments.from_vargs(*args, "-o", "long/path/to/output").output == "long/path/to/output"  # output path
 
         # failing output extraction as 2nd output argument has no specified target
         with pytest.raises(StopIteration):
-            ill_formed_output_args: List[str] = args + ["-ofoo", "-o"]
-            _: Optional[str] = Arguments(ill_formed_output_args).output
+            _: Optional[str] = Arguments.from_vargs(*args, "-ofoo", "-o").output
 
     def test_remove_local_args(self):
         args: List[str] = ["g++", "foo.cpp", "-O0", "-Iexample/include/"]
-        assert Arguments(args).remove_local_args() == args
+        assert Arguments.from_vargs(*args).remove_local_args() == args
 
         local_args: List[str] = (
             Arguments.Local.LINKER_OPTION_PREFIX_ARGS + Arguments.Local.PREPROCESSOR_OPTION_PREFIX_ARGS
         )
 
         for preprocessing_arg in Arguments.Local.PREPROCESSOR_ARGS:
-            assert Arguments(args + [preprocessing_arg]).remove_local_args() == args
+            assert Arguments.from_vargs(*args, preprocessing_arg).remove_local_args() == args
 
         local_option_args: List[str] = args.copy()
         for local_option_arg in local_args:
             local_option_args.extend([local_option_arg, "option"])
-        assert Arguments(local_option_args).remove_local_args() == args
+        assert Arguments.from_vargs(*local_option_args).remove_local_args() == args
 
         local_prefixed_args: List[str] = args + [f"{arg_prefix}suffix" for arg_prefix in local_args]
-        assert Arguments(local_prefixed_args).remove_local_args() == args
+        assert Arguments.from_vargs(*local_prefixed_args).remove_local_args() == args
 
     def test_remove_output_args(self):
         args: List[str] = ["g++", "foo.cpp", "-O0", "-Iexample/include/"]
-        assert Arguments(args).remove_output_args() == args
-
-        single_output_args: List[str] = args + ["-o", "foo"]
-        assert Arguments(single_output_args).remove_output_args() == args
-
-        multiple_output_args: List[str] = args + ["-o", "foo", "-o", "bar"]
-        assert Arguments(multiple_output_args).remove_output_args() == args
-
-        mixed_output_args: List[str] = args + ["-o", "foo", "-obar"]
-        assert Arguments(mixed_output_args).remove_output_args() == args
-
-        output_flag_as_output_target_args: List[str] = args + ["-ofoo", "-o", "-o"]
-        assert Arguments(output_flag_as_output_target_args).remove_output_args() == args
+        assert Arguments.from_vargs(*args).remove_output_args() == args  # no output
+        assert Arguments.from_vargs(*args, "-o", "foo").remove_output_args() == args  # single output
+        assert Arguments.from_vargs(*args, "-o", "foo", "-o", "bar").remove_output_args() == args  # multiple outputs
+        assert Arguments.from_vargs(*args, "-o", "foo", "-obar").remove_output_args() == args  # mixed outputs
+        assert Arguments.from_vargs(*args, "-ofoo", "-o", "-o").remove_output_args() == args  # output flag target
 
         # failing output removal as 2nd output argument has no specified target
         with pytest.raises(StopIteration):
-            ill_formed_output_args: List[str] = args + ["-ofoo", "-o"]
-            _: Arguments = Arguments(ill_formed_output_args).remove_output_args()
+            _: Arguments = Arguments.from_vargs(*args, "-ofoo", "-o").remove_output_args()
 
         # test cached_property of output
-        single_output_remove_args: List[str] = args + ["-o", "foo"]
-        single_output_remove_arguments: Arguments = Arguments(single_output_remove_args)
+        single_output_remove_arguments: Arguments = Arguments.from_vargs(*args, "-o", "foo")
         assert single_output_remove_arguments.output == "foo"
         assert single_output_remove_arguments.add_arg("-obar").output == "foo"  # no change as property is cached
         assert single_output_remove_arguments.remove_output_args().output is None
         assert single_output_remove_arguments.add_arg("-obar").output is None  # no change as property is cached
 
-        multiple_output_remove_args: List[str] = args + ["-o", "foo", "-o", "bar"]
-        multiple_output_remove_arguments: Arguments = Arguments(multiple_output_remove_args)
+        multiple_output_remove_arguments: Arguments = Arguments.from_vargs(*args, "-o", "foo", "-o", "bar")
         assert multiple_output_remove_arguments.output == "bar"
         assert multiple_output_remove_arguments.add_arg("-obaz").output == "bar"  # no change as property is cached
         assert multiple_output_remove_arguments.remove_output_args().output is None
@@ -206,8 +186,7 @@ class TestArguments:
         args: List[str] = ["g++", "-O0", "-Iexample/include/"]
         source_files: List[str] = ["foo.cpp", "bar.cpp"]
 
-        source_file_args: List[str] = args + source_files
-        source_file_arguments: Arguments = Arguments(source_file_args)
+        source_file_arguments: Arguments = Arguments.from_vargs(*args, *source_files)
         assert source_file_arguments.source_files == source_files
         assert source_file_arguments.add_arg("baz.cpp").source_files == source_files  # no change as property is cached
         assert not source_file_arguments.remove_source_file_args().source_files
@@ -215,8 +194,8 @@ class TestArguments:
 
     def test_single_source_file_args(self):
         single_source_file_args: List[str] = ["some/relative/path.c"]
-        assert Arguments(["g++"] + single_source_file_args).source_files == single_source_file_args
-        assert Arguments(["g++", "-O3"] + single_source_file_args).source_files == single_source_file_args
+        assert Arguments.from_vargs("g++", *single_source_file_args).source_files == single_source_file_args
+        assert Arguments.from_vargs("g++", "-O3", *single_source_file_args).source_files == single_source_file_args
 
     def test_multiple_source_file_args_with_output(self):
         source_file_args: List[str] = [
@@ -233,30 +212,30 @@ class TestArguments:
             "out",
         ] + source_file_args
 
-        assert Arguments(args).source_files == source_file_args
+        assert Arguments.from_vargs(*args).source_files == source_file_args
 
     def test_compiler_normalized(self):
-        assert Arguments.from_vargs("gcc", "foo").compiler_normalized() == "gcc"
-        assert Arguments.from_vargs("/usr/bin/gcc", "foo").compiler_normalized() == "gcc"
-        assert Arguments.from_vargs("~/bin/g++", "foo").compiler_normalized() == "g++"
+        assert Arguments.from_vargs("gcc", "foo").normalize_compiler().compiler == "gcc"
+        assert Arguments.from_vargs("/usr/bin/gcc", "foo").normalize_compiler().compiler == "gcc"
+        assert Arguments.from_vargs("~/bin/g++", "foo").normalize_compiler().compiler == "g++"
 
 
 class TestCompiler:
     """Tests the compiler class of homcc."""
 
     def test_from_arguments(self):
-        assert isinstance(Compiler.from_arguments(Arguments(["gcc"])), Gcc)
-        assert isinstance(Compiler.from_arguments(Arguments(["gcc-11"])), Gcc)
-        assert isinstance(Compiler.from_arguments(Arguments(["g++"])), Gcc)
-        assert isinstance(Compiler.from_arguments(Arguments(["g++-11"])), Gcc)
-        assert isinstance(Compiler.from_arguments(Arguments(["/usr/lib/ccache/gcc-11"])), Gcc)
+        assert isinstance(Compiler.from_str("gcc"), Gcc)
+        assert isinstance(Compiler.from_str("gcc-11"), Gcc)
+        assert isinstance(Compiler.from_str("g++"), Gcc)
+        assert isinstance(Compiler.from_str("g++-11"), Gcc)
+        assert isinstance(Compiler.from_str("/usr/lib/ccache/gcc-11"), Gcc)
 
-        assert isinstance(Compiler.from_arguments(Arguments(["clang++"])), Clang)
-        assert isinstance(Compiler.from_arguments(Arguments(["clang++-11"])), Clang)
-        assert isinstance(Compiler.from_arguments(Arguments(["/usr/lib/ccache/clang-14"])), Clang)
+        assert isinstance(Compiler.from_str("clang++"), Clang)
+        assert isinstance(Compiler.from_str("clang++-11"), Clang)
+        assert isinstance(Compiler.from_str("/usr/lib/ccache/clang-14"), Clang)
 
         with pytest.raises(UnsupportedCompilerError):
-            Compiler.from_arguments(Arguments(["unknown++"]))
+            Compiler.from_str("unknown++")
 
 
 class TestGcc:

@@ -122,6 +122,7 @@ class TestEndToEnd:
                 encoding="utf-8",
             )
         except subprocess.CalledProcessError as err:
+            time.sleep(0.25)  # wait so that we do not interfere with server logging
             sys.stdout.write(err.stdout)
             raise err
 
@@ -243,14 +244,14 @@ class TestEndToEnd:
         Path("main.cpp.o.d").unlink(missing_ok=True)
         Path("foo.o").unlink(missing_ok=True)
         Path(self.OUTPUT).unlink(missing_ok=True)
-        Path("./homcc/client/clang-homcc").unlink(missing_ok=True)
+        Path("./homcc/client/clang-HOMCC_TEST_E2E_CLIENT_RECURSIVE").unlink(missing_ok=True)
 
     # client failures
     @pytest.mark.timeout(TIMEOUT)
     def test_end_to_end_client_recursive(self, unused_tcp_port: int):
         # symlink clang-homcc to homcc and make it executable in order for it to be viewed as a "regular" clang compiler
         # the mocked compiler needs to be in the same folder as the original script in order for imports to work
-        mock_compiler: Path = Path.cwd() / "homcc/client/clang-homcc"
+        mock_compiler: Path = Path.cwd() / "homcc/client/clang-HOMCC_TEST_E2E_CLIENT_RECURSIVE"
         mock_compiler.symlink_to(Path.cwd() / "homcc/client/main.py")
         mock_compiler.chmod(mock_compiler.stat().st_mode | stat.S_IEXEC)
         assert mock_compiler.exists()

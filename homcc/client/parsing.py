@@ -11,9 +11,9 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from homcc import client
 from homcc.client.compilation import scan_includes
-from homcc.client.config import ClientConfig, parse_config
+from homcc.client.config import ClientConfig, ClientEnvironmentVariables, parse_config
 from homcc.client.host import Host
-from homcc.common.arguments import Arguments
+from homcc.common.arguments import Arguments, Compiler
 from homcc.common.compression import Compression
 from homcc.common.errors import HostParsingError, NoHostsFoundError
 from homcc.common.logging import (
@@ -95,14 +95,14 @@ class ShowEnvironmentVariables(ShowAndExitAction):
         if (homcc_hosts_env_var := os.getenv(HOMCC_HOSTS_ENV_VAR)) is not None:
             sys.stdout.write(f"{HOMCC_HOSTS_ENV_VAR}: {homcc_hosts_env_var}\n")
 
-        for config_env_var in iter(ClientConfig.EnvironmentVariables):
+        for config_env_var in iter(ClientEnvironmentVariables):
             if (config := os.getenv(config_env_var)) is not None:
                 sys.stdout.write(f"{config_env_var}: {config}\n")
 
         sys.exit(os.EX_OK)
 
 
-def parse_cli_args(cli_args: List[str]) -> Tuple[Dict[str, Any], Arguments]:
+def parse_cli_args(cli_args: List[str]) -> Tuple[Dict[str, Any], Optional[Arguments]]:
     parser: ArgumentParser = ArgumentParser(
         description="homcc - Home-Office friendly distcc replacement",
         allow_abbrev=False,
@@ -201,13 +201,16 @@ def parse_cli_args(cli_args: List[str]) -> Tuple[Dict[str, Any], Arguments]:
         "before being forwarded to and executed by the actual COMPILER",
     )
 
+    compiler_arguments: Optional[Arguments] = None
+
     # split cli_args in order to respectively use them for homcc client or the specified compiler
     for i, arg in enumerate(cli_args):
         if Arguments.is_compiler_arg(arg):
-            homcc_args, compiler_args = cli_args[:i], cli_args[i:]
+            homcc_args = cli_args[:i]
+            compiler_arguments = Arguments(Compiler.from_str(arg), cli_args[i + 1 :])  # compiler_str at cli_args[i]
             break
     else:
-        homcc_args, compiler_args = cli_args, []  # command without a compiler
+        homcc_args = cli_args
 
     homcc_args_dict = vars(parser.parse_args(homcc_args))
 
@@ -215,14 +218,17 @@ def parse_cli_args(cli_args: List[str]) -> Tuple[Dict[str, Any], Arguments]:
     for key in ("COMPILER_ARGUMENTS", "show_hosts", "show_concurrency", "show_variables"):
         homcc_args_dict.pop(key)
 
-    compiler_arguments: Arguments = Arguments(compiler_args)
-
     return homcc_args_dict, compiler_arguments
 
 
 def setup_client(cli_args: List[str]) -> Tuple[ClientConfig, Arguments, Host, List[Host]]:
     # load and parse arguments and configuration information
     homcc_args_dict, compiler_arguments = parse_cli_args(cli_args)
+
+    if compiler_arguments is None:
+        raise NotImplementedError(
+            "All options that do not require COMPILER ARGUMENTS should be handled in parse_cli_args"
+        )
 
     # prevent config loading and parsing if --no-config was specified
     homcc_config: ClientConfig = ClientConfig.empty() if homcc_args_dict.pop("no_config", False) else parse_config()

@@ -107,48 +107,42 @@ class Arguments:
         # debug
         DEBUG_ARG_PREFIX: str = "-dr"
 
-    def __init__(self, args: List[str]):
+    def __init__(self, compiler: Compiler, args: List[str]):
         """construct arguments from a list of args"""
-        if not args:
-            raise ValueError("Not enough args supplied to construct Arguments")
-
-        if not self.is_compiler_arg(args[0]):
-            raise UnsupportedCompilerError("Specifying a compiler is necessary")
-
+        self._compiler: Compiler = compiler
         self._args: List[str] = args
 
     def __eq__(self, other: Any) -> bool:
         if isinstance(other, Arguments) and len(self) == len(other):
-            return self.args == other.args
+            return self.compiler == other.compiler and self.args == other.args
         if isinstance(other, list) and len(self) == len(other):
-            return self.args == other
+            return str(self.compiler) == other[0] and self.args == other[1:]
         return False
 
     def __iter__(self) -> Iterator[str]:
+        yield str(self.compiler)
         yield from self.args
 
     def __len__(self) -> int:
-        return len(self.args)
+        return len(self.args) + 1
 
     def __str__(self) -> str:
-        return f"[{' '.join(self.args)}]"
+        return f"[{str(self.compiler)} {' '.join(self.args)}]"
 
     def __repr__(self) -> str:
         return f"{self.__class__}({str(self)})"
 
     def copy(self) -> Arguments:
         """return an arguments copy"""
-        return Arguments(self.args.copy())
+        return Arguments(self.compiler, self.args.copy())
 
     @classmethod
     def from_vargs(cls, *vargs: str) -> Arguments:
-        """construct arguments from a variadic list of args"""
-        return cls(list(vargs))
+        """construct arguments from variadic str args"""
+        if len(vargs) == 0:
+            raise ValueError("Not enough args supplied to construct Arguments")
 
-    @classmethod
-    def from_str(cls, args_str: str) -> Arguments:
-        """construct arguments from an args string"""
-        return Arguments(args_str.split())
+        return cls(Compiler.from_str(vargs[0]), list(vargs[1:]))
 
     @staticmethod
     def is_source_file_arg(arg: str) -> bool:
@@ -170,14 +164,14 @@ class Arguments:
 
     @staticmethod
     def is_compiler_arg(arg: str) -> bool:
-        """check whether an argument is a valid compiler"""
+        """check whether an argument is a supported compiler"""
         if not arg.startswith("-") and not Arguments.is_source_file_arg(arg) and not Arguments.is_object_file_arg(arg):
-            if Compiler.is_supported_compiler(arg):
+            if Compiler.is_supported(arg):
                 logger.debug("%s is used as compiler", arg)
 
                 if not Arguments.is_executable_arg(arg):
                     # no return False here since compiler might still be executable on the remote server
-                    logger.warning("Specified compiler '%s' is not executable locally", arg)
+                    logger.warning("Specified compiler '%s' is not executable", arg)
 
                 return True
 
@@ -275,21 +269,14 @@ class Arguments:
         return self
 
     @property
-    def compiler(self) -> str:
+    def compiler(self) -> Compiler:
         """return the specified compiler"""
-        return self._args[0]
+        return self._compiler
 
-    @compiler.setter
-    def compiler(self, compiler: str):
-        self._args[0] = compiler
-
-    def compiler_normalized(self) -> str:
+    def normalize_compiler(self) -> Arguments:
         """normalize the compiler (remove path, keep just executable if a path is provided as compiler)"""
-        return Path(self.args[0]).name
-
-    def compiler_object(self) -> Compiler:
-        """return a new compiler object"""
-        return Compiler.from_arguments(self)
+        self._compiler.normalize()
+        return self
 
     @cached_property
     def output(self) -> Optional[str]:
@@ -440,14 +427,14 @@ class Arguments:
 
     def add_target(self, target: str) -> Arguments:
         """returns a copy of arguments where the specified target is added (for cross compilation)"""
-        return self.compiler_object().add_target_to_arguments(self, target)
+        return self.compiler.add_target_to_arguments(self, target)
 
     def map(self, instance_path: str, mapped_cwd: str) -> Arguments:
         """modify and return arguments by mapping relevant paths"""
         args: List[str] = []
         path_option_prefix_args: List[str] = [self.OUTPUT_ARG] + self.INCLUDE_ARGS
 
-        it: Iterator[str] = iter(self.args[1:])
+        it: Iterator[str] = iter(self.args)
         for arg in it:
             if arg in self.source_files:
                 arg = self.map_path_arg(arg, instance_path, mapped_cwd)
@@ -520,10 +507,7 @@ class Arguments:
 
     def get_compiler_target_triple(self) -> str:
         """returns the target triple for the given compiler"""
-        if (compiler := self.compiler_object()) is not None:
-            return compiler.get_target_triple()
-
-        raise TargetInferationError("No compiler to ask for targets")
+        return self.compiler.get_target_triple()
 
     @staticmethod
     def _execute_args(
@@ -575,21 +559,36 @@ class Compiler(ABC):
 
     def __init__(self, compiler_str: str) -> None:
         super().__init__()
-        self.compiler_str = compiler_str
+        self._compiler_str: str = compiler_str
+
+    def __eq__(self, other: Any) -> bool:
+        if isinstance(other, Compiler):
+            return self._compiler_str == other._compiler_str
+        if isinstance(other, str):
+            return self._compiler_str == other
+        return False
+
+    def __str__(self) -> str:
+        return self._compiler_str
 
     @staticmethod
-    def from_arguments(arguments: Arguments) -> Compiler:
-        normalized_compiler = arguments.compiler_normalized()
-        for compiler in Compiler.available_compilers():
-            if compiler.is_matching_str(normalized_compiler):
-                return compiler(arguments.compiler)
+    def from_str(compiler_str: str) -> Compiler:
+        for CompilerType in Compiler.available_compilers():  # pylint: disable=invalid-name
+            if CompilerType.is_matching_str(compiler_str):
+                return CompilerType(compiler_str)
 
-        raise UnsupportedCompilerError(f"Compiler '{arguments.compiler}' is not supported.")
+        raise UnsupportedCompilerError(f"Compiler '{compiler_str}' is not supported.")
 
     @staticmethod
-    def is_supported_compiler(compiler_str: str) -> bool:
+    def is_supported(compiler_str: str) -> bool:
         # pylint: disable=invalid-name
         return any(CompilerType.is_matching_str(compiler_str) for CompilerType in Compiler.available_compilers())
+
+    def normalize(self):
+        """normalize the compiler (remove path, keep just executable if a path is provided as compiler)"""
+        normalized_compiler_str: str = Path(self._compiler_str).name
+        logger.debug("Normalizing compiler '%s' to '%s'.", self._compiler_str, normalized_compiler_str)
+        self._compiler_str = normalized_compiler_str
 
     @staticmethod
     @abstractmethod
@@ -632,14 +631,14 @@ class Clang(Compiler):
         return True
 
     def get_target_triple(self) -> str:
-        clang_arguments: Arguments = Arguments.from_vargs(self.compiler_str, "--version")
+        clang_arguments: Arguments = Arguments(self, ["--version"])
 
         try:
             result = clang_arguments.execute(check=True)
         except subprocess.CalledProcessError as err:
             logger.error(
                 "Could not get target triple for compiler '%s', executed '%s'. %s",
-                self.compiler_str,
+                self._compiler_str,
                 clang_arguments,
                 err,
             )
@@ -671,17 +670,17 @@ class Gcc(Compiler):
         return "gcc" in compiler_str or ("g++" in compiler_str and "clang" not in compiler_str)
 
     def supports_target(self, target: str) -> bool:
-        return shutil.which(f"{target}-{self.compiler_str}") is not None
+        return shutil.which(f"{target}-{self._compiler_str}") is not None
 
     def get_target_triple(self) -> str:
-        gcc_arguments: Arguments = Arguments.from_vargs(self.compiler_str, "-dumpmachine")
+        gcc_arguments: Arguments = Arguments(self, ["-dumpmachine"])
 
         try:
             result = gcc_arguments.execute(check=True)
         except subprocess.CalledProcessError as err:
             logger.error(
                 "Could not get target triple for compiler '%s', executed '%s'. %s",
-                self.compiler_str,
+                self._compiler_str,
                 gcc_arguments,
                 err,
             )
@@ -690,13 +689,11 @@ class Gcc(Compiler):
         return result.stdout.strip()
 
     def add_target_to_arguments(self, arguments: Arguments, target: str) -> Arguments:
-        if target in arguments.compiler:
+        if target in str(arguments.compiler):
             logger.info(
                 "Not adding target '%s' to compiler '%s', as target is already specified.", target, arguments.compiler
             )
             return arguments
 
-        copied_arguments = arguments.copy()
         # e.g. g++ -> x86_64-linux-gnu-g++
-        copied_arguments.compiler = f"{target}-{self.compiler_str}"
-        return copied_arguments
+        return Arguments(Compiler.from_str(f"{target}-{self._compiler_str}"), arguments.args)

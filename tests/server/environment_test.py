@@ -42,7 +42,7 @@ class TestServerEnvironment:
             "/opt/src/absolute.cpp",
         ]
         environment = create_mock_environment("/client1", "/client1/test/xyz")
-        mapped_args: List[str] = list(environment.map_args(Arguments(args)))
+        mapped_args: List[str] = list(environment.map_args(Arguments.from_vargs(*args)))
 
         assert mapped_args.pop(0) == "gcc"
         assert mapped_args.pop(0) == f"-I{environment.mapped_cwd}/relative_path/relative.h"
@@ -74,7 +74,7 @@ class TestServerEnvironment:
         ]
 
         environment = create_mock_environment("/client1", "/client1/test/xyz")
-        mapped_args: List[str] = list(environment.map_args(Arguments(args)))
+        mapped_args: List[str] = list(environment.map_args(Arguments.from_vargs(*args)))
 
         assert mapped_args.pop(0) == "gcc"
         assert mapped_args.pop(0) == "-BsomeOtherArgument"
@@ -199,8 +199,5 @@ class TestServerCompilation:
 
     @pytest.mark.gplusplus
     def test_compiler_exists(self):
-        gplusplus_args: Arguments = Arguments.from_vargs("g++", "foo")
-        assert Environment.compiler_exists(gplusplus_args)
-
-        failing_args: Arguments = Arguments.from_vargs("non-existing-compiler", "foo")
-        assert not Environment.compiler_exists(failing_args)
+        assert Environment.compiler_exists(Arguments.from_vargs("g++", "foo"))
+        assert not Environment.compiler_exists(Arguments.from_vargs("clang-HOMCC_TEST_COMPILER_EXISTS", "foo"))
