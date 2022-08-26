@@ -17,6 +17,10 @@ from homcc.common.parsing import HOMCC_CONFIG_FILENAME, default_locations, parse
 
 HOMCC_CLIENT_CONFIG_SECTION: str = "homcc"
 
+DEFAULT_COMPILATION_REQUEST_TIMEOUT: float = 120
+DEFAULT_ESTABLISH_CONNECTION_TIMEOUT: float = 5
+DEFAULT_REMOTE_COMPILATION_TRIES: int = 3
+
 
 class ClientEnvironmentVariables:
     """Encapsulation of all environment variables relevant to client configuration"""
@@ -24,7 +28,9 @@ class ClientEnvironmentVariables:
     HOMCC_COMPRESSION_ENV_VAR: ClassVar[str] = "HOMCC_COMPRESSION"
     HOMCC_SCHROOT_PROFILE_ENV_VAR: ClassVar[str] = "HOMCC_SCHROOT_PROFILE"
     HOMCC_DOCKER_CONTAINER_ENV_VAR: ClassVar[str] = "HOMCC_DOCKER_CONTAINER"
-    HOMCC_TIMEOUT_ENV_VAR: ClassVar[str] = "HOMCC_TIMEOUT"
+    HOMCC_COMPILATION_REQUEST_TIMEOUT_ENV_VAR: ClassVar[str] = "HOMCC_COMPILATION_REQUEST_TIMEOUT"
+    HOMCC_ESTABLISH_CONNECTION_TIMEOUT_ENV_VAR: ClassVar[str] = "HOMCC_ESTABLISH_CONNECTION_TIMEOUT"
+    HOMCC_REMOTE_COMPILATION_TRIES_ENV_VAR: ClassVar[str] = "HOMCC_REMOTE_COMPILATION_TRIES"
     HOMCC_LOG_LEVEL_ENV_VAR: ClassVar[str] = "HOMCC_LOG_LEVEL"
     HOMCC_VERBOSE_ENV_VAR: ClassVar[str] = "HOMCC_VERBOSE"
     HOMCC_NO_LOCAL_COMPILATION_ENV_VAR: ClassVar[str] = "HOMCC_NO_LOCAL_COMPILATION"
@@ -35,7 +41,9 @@ class ClientEnvironmentVariables:
             cls.HOMCC_COMPRESSION_ENV_VAR,
             cls.HOMCC_SCHROOT_PROFILE_ENV_VAR,
             cls.HOMCC_DOCKER_CONTAINER_ENV_VAR,
-            cls.HOMCC_TIMEOUT_ENV_VAR,
+            cls.HOMCC_COMPILATION_REQUEST_TIMEOUT_ENV_VAR,
+            cls.HOMCC_ESTABLISH_CONNECTION_TIMEOUT_ENV_VAR,
+            cls.HOMCC_REMOTE_COMPILATION_TRIES_ENV_VAR,
             cls.HOMCC_LOG_LEVEL_ENV_VAR,
             cls.HOMCC_VERBOSE_ENV_VAR,
             cls.HOMCC_NO_LOCAL_COMPILATION_ENV_VAR,
@@ -59,9 +67,21 @@ class ClientEnvironmentVariables:
         return os.getenv(cls.HOMCC_DOCKER_CONTAINER_ENV_VAR)
 
     @classmethod
-    def get_timeout(cls) -> Optional[float]:
-        if timeout := os.getenv(cls.HOMCC_TIMEOUT_ENV_VAR):
-            return float(timeout)
+    def get_compilation_request_timeout(cls) -> Optional[float]:
+        if compilation_request_timeout := os.getenv(cls.HOMCC_COMPILATION_REQUEST_TIMEOUT_ENV_VAR):
+            return float(compilation_request_timeout)
+        return None
+
+    @classmethod
+    def get_establish_connection_timeout(cls) -> Optional[float]:
+        if establish_connection_timeout := os.getenv(cls.HOMCC_ESTABLISH_CONNECTION_TIMEOUT_ENV_VAR):
+            return float(establish_connection_timeout)
+        return None
+
+    @classmethod
+    def get_remote_compilation_tries(cls) -> Optional[int]:
+        if remote_compilation_tries := os.getenv(cls.HOMCC_REMOTE_COMPILATION_TRIES_ENV_VAR):
+            return int(remote_compilation_tries)
         return None
 
     @classmethod
@@ -89,7 +109,9 @@ class ClientConfig:
     compression: Compression
     schroot_profile: Optional[str]
     docker_container: Optional[str]
-    timeout: Optional[float]
+    compilation_request_timeout: float
+    establish_connection_timeout: float
+    remote_compilation_tries: int
     log_level: Optional[LogLevel]
     local_compilation_enabled: bool
     verbose: bool
@@ -101,7 +123,9 @@ class ClientConfig:
         compression: Optional[str] = None,
         schroot_profile: Optional[str] = None,
         docker_container: Optional[str] = None,
-        timeout: Optional[float] = None,
+        compilation_request_timeout: Optional[float] = None,
+        establish_connection_timeout: Optional[float] = None,
+        remote_compilation_tries: Optional[int] = None,
         log_level: Optional[str] = None,
         no_local_compilation: Optional[bool] = None,
         verbose: Optional[bool] = None,
@@ -112,7 +136,21 @@ class ClientConfig:
         self.compression = Compression.from_name(ClientEnvironmentVariables.get_compression() or compression)
         self.schroot_profile = ClientEnvironmentVariables.get_schroot_profile() or schroot_profile
         self.docker_container = ClientEnvironmentVariables.get_docker_container() or docker_container
-        self.timeout = ClientEnvironmentVariables.get_timeout() or timeout
+        self.compilation_request_timeout = (
+            ClientEnvironmentVariables.get_compilation_request_timeout()
+            or compilation_request_timeout
+            or DEFAULT_COMPILATION_REQUEST_TIMEOUT
+        )
+        self.establish_connection_timeout = (
+            ClientEnvironmentVariables.get_establish_connection_timeout()
+            or establish_connection_timeout
+            or DEFAULT_ESTABLISH_CONNECTION_TIMEOUT
+        )
+        self.remote_compilation_tries = (
+            ClientEnvironmentVariables.get_remote_compilation_tries()
+            or remote_compilation_tries
+            or DEFAULT_REMOTE_COMPILATION_TRIES
+        )
         self.log_level = LogLevel.from_str(ClientEnvironmentVariables.get_log_level() or log_level)
         self.local_compilation_enabled = not (
             ClientEnvironmentVariables.get_no_local_compilation() or no_local_compilation
@@ -130,7 +168,9 @@ class ClientConfig:
         compression: Optional[str] = homcc_config.get("compression")
         schroot_profile: Optional[str] = homcc_config.get("schroot_profile")
         docker_container: Optional[str] = homcc_config.get("docker_container")
-        timeout: Optional[float] = homcc_config.getfloat("timeout")
+        compilation_request_timeout: Optional[float] = homcc_config.getfloat("compilation_request_timeout")
+        establish_connection_timeout: Optional[float] = homcc_config.getfloat("establish_connection_timeout")
+        remote_compilation_tries: Optional[int] = homcc_config.getint("remote_compilation_tries")
         log_level: Optional[str] = homcc_config.get("log_level")
         verbose: Optional[bool] = homcc_config.getboolean("verbose")
 
@@ -139,7 +179,9 @@ class ClientConfig:
             compression=compression,
             schroot_profile=schroot_profile,
             docker_container=docker_container,
-            timeout=timeout,
+            compilation_request_timeout=compilation_request_timeout,
+            establish_connection_timeout=establish_connection_timeout,
+            remote_compilation_tries=remote_compilation_tries,
             log_level=log_level,
             verbose=verbose,
         )
@@ -147,12 +189,14 @@ class ClientConfig:
     def __str__(self):
         return (
             f"Configuration (from [{', '.join(self.files)}]):\n"
-            f"\tcompression:\t\t{self.compression}\n"
-            f"\tschroot_profile:\t{self.schroot_profile}\n"
-            f"\tdocker_container:\t{self.docker_container}\n"
-            f"\ttimeout:\t\t{self.timeout}\n"
-            f"\tlog_level:\t{self.log_level}\n"
-            f"\tverbose:\t\t{str(self.verbose)}\n"
+            f"\tcompression:\t\t\t{self.compression}\n"
+            f"\tschroot_profile:\t\t{self.schroot_profile}\n"
+            f"\tdocker_container:\t\t{self.docker_container}\n"
+            f"\tcompilation_request_timeout:\t{self.compilation_request_timeout}\n"
+            f"\testablish_connection_timeout:\t{self.establish_connection_timeout}\n"
+            f"\tremote_compilation_tries:\t{self.remote_compilation_tries}\n"
+            f"\tlog_level:\t\t\t{self.log_level}\n"
+            f"\tverbose:\t\t\t{str(self.verbose)}\n"
         )
 
     def set_verbose(self):

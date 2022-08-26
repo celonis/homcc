@@ -247,7 +247,7 @@ class TestParsingConfig:
         "[homcc]",
         "# Client global config",
         "CoMpReSsIoN=lzo",
-        "TIMEOUT=180",
+        "COMPILATION_REQUEST_TIMEOUT=180",
         "schroot_profile=foobar",
         "docker_container=some_container",
         "log_level=INFO",
@@ -270,7 +270,7 @@ class TestParsingConfig:
         assert parse_config([tmp_config_file]) == ClientConfig(
             files=[str(tmp_config_file.absolute())],
             compression="lzo",
-            timeout=180,
+            compilation_request_timeout=180,
             log_level="INFO",
             verbose=True,
             schroot_profile="foobar",
@@ -287,7 +287,7 @@ class TestParsingConfig:
         assert parse_config([tmp_config_file_overwrite, tmp_config_file]) == ClientConfig(
             files=[str(file.absolute()) for file in [tmp_config_file, tmp_config_file_overwrite]],
             compression="lzo",
-            timeout=180,
+            compilation_request_timeout=180,
             schroot_profile="foobar",
             docker_container="some_container",
             log_level="INFO",

@@ -37,38 +37,44 @@ from homcc.common.messages import (
 
 logger = logging.getLogger(__name__)
 
-HOMCC_RECURSIVE_ERROR_MESSAGE: str = "_HOMCC_CALLED_RECURSIVELY"
+RECURSIVE_ERROR_MESSAGE: str = "_HOMCC_CALLED_RECURSIVELY"
 
-DEFAULT_COMPILATION_REQUEST_TIMEOUT: float = 120
 EXCLUDED_DEPENDENCY_PREFIXES: Tuple = ("/usr/include", "/usr/lib")
 
 
 def check_recursive_call(compiler: Compiler, error: subprocess.CalledProcessError):
     """check if homcc was called recursively"""
-
-    if f"{HOMCC_RECURSIVE_ERROR_MESSAGE}\n" == error.stderr:
+    if f"{RECURSIVE_ERROR_MESSAGE}\n" == error.stderr:
         logger.error("Specified compiler '%s' has been invoked recursively!", compiler)
         raise SystemExit(os.EX_USAGE) from error
 
 
-async def compile_remotely(arguments: Arguments, remote_hosts: List[Host], config: ClientConfig) -> int:
+async def compile_remotely(arguments: Arguments, hosts: List[Host], config: ClientConfig) -> int:
     """main function to control remote compilation"""
 
-    # try to connect to 3 different remote hosts before falling back to local compilation
+    # try to connect to remote hosts before falling back to local compilation and track which hosts we failed at
     failed_hosts: List[Host] = []
 
-    for remote_host in RemoteHostSelector(remote_hosts, 3):
-        timeout: float = config.timeout or DEFAULT_COMPILATION_REQUEST_TIMEOUT
+    for host in RemoteHostSelector(hosts, config.remote_compilation_tries):
+        compilation_request_timeout: float = config.compilation_request_timeout
+        establish_connection_timeout: float = config.establish_connection_timeout
         schroot_profile: Optional[str] = config.schroot_profile
         docker_container: Optional[str] = config.docker_container
 
         # overwrite host compression if none was explicitly specified but provided via config
-        remote_host.compression = remote_host.compression or config.compression
+        host.compression = host.compression or config.compression
 
         try:
-            with RemoteHostSemaphore(remote_host), StateFile(arguments, remote_host):
+            with RemoteHostSemaphore(host), StateFile(arguments, host):
                 return await asyncio.wait_for(
-                    compile_remotely_at(arguments, remote_host, schroot_profile, docker_container), timeout=timeout
+                    compile_remotely_at(
+                        arguments=arguments,
+                        host=host,
+                        timeout=establish_connection_timeout,
+                        schroot_profile=schroot_profile,
+                        docker_container=docker_container,
+                    ),
+                    timeout=compilation_request_timeout,
                 )
 
         # arguments execution error
@@ -87,11 +93,10 @@ async def compile_remotely(arguments: Arguments, remote_hosts: List[Host], confi
 
         # compilation request timed out
         except asyncio.TimeoutError:
-            # TODO: make timeout and host tries configurable
-            logger.info("Compilation request %s at host '%s' timed out.", arguments, remote_host)
+            logger.info("Compilation request %s at host '%s' timed out.", arguments, host)
 
         finally:
-            failed_hosts.append(remote_host)
+            failed_hosts.append(host)
 
     raise RemoteHostsFailure(
         f"Failed to compile {arguments} remotely on hosts: '{', '.join(str(host) for host in failed_hosts)}'."
@@ -99,11 +104,15 @@ async def compile_remotely(arguments: Arguments, remote_hosts: List[Host], confi
 
 
 async def compile_remotely_at(
-    arguments: Arguments, host: Host, schroot_profile: Optional[str], docker_container: Optional[str]
+    arguments: Arguments,
+    host: Host,
+    timeout: float,
+    schroot_profile: Optional[str],
+    docker_container: Optional[str],
 ) -> int:
     """main function for the communication between client and a remote compilation host"""
 
-    async with TCPClient(host) as client:
+    async with TCPClient(host, timeout=timeout) as client:
         dependency_dict: Dict[str, str] = calculate_dependency_dict(find_dependencies(arguments))
         remote_arguments: Arguments = arguments.copy().remove_local_args()
 

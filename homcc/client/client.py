@@ -346,9 +346,8 @@ class TCPClient:
     """Wrapper class to exchange homcc protocol messages via TCP"""
 
     DEFAULT_BUFFER_SIZE_LIMIT: int = 65_536  # default buffer size limit of StreamReader is 64 KiB
-    DEFAULT_OPEN_CONNECTION_TIMEOUT: float = 5  # TODO: make this configurable
 
-    def __init__(self, host: Host):
+    def __init__(self, host: Host, timeout: float):
         connection_type: ConnectionType = host.type
 
         if connection_type != ConnectionType.TCP:
@@ -357,6 +356,8 @@ class TCPClient:
         self.host: str = host.name
         self.port: int = host.port
         self.compression = host.compression
+
+        self.timeout: float = timeout
 
         self._data: bytes = bytes()
         self._reader: asyncio.StreamReader
@@ -368,7 +369,7 @@ class TCPClient:
         try:
             self._reader, self._writer = await asyncio.wait_for(
                 asyncio.open_connection(host=self.host, port=self.port, limit=self.DEFAULT_BUFFER_SIZE_LIMIT),
-                timeout=self.DEFAULT_OPEN_CONNECTION_TIMEOUT,
+                timeout=self.timeout,
             )
         except asyncio.TimeoutError as error:
             logger.warning("Connection establishment to '%s:%s' timed out.", self.host, self.port)

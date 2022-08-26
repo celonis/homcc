@@ -394,7 +394,9 @@ class Arguments:
 
     def is_linking_only(self) -> bool:
         """check whether the execution of arguments leads to calling only the linker"""
-        return not self.source_files and self.is_linking()
+        if is_linking_only := not self.source_files and self.is_linking():
+            logger.debug("%s is linking-only to '%s'", self, self.output)
+        return is_linking_only
 
     def dependency_finding(self) -> Tuple[Arguments, Optional[str]]:
         """return a dependency finding arguments with which to find dependencies via the preprocessor"""

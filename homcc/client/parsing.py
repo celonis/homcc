@@ -186,9 +186,24 @@ def parse_cli_args(cli_args: List[str]) -> Tuple[Dict[str, Any], Optional[Argume
     )
 
     parser.add_argument(
-        "--timeout",
+        "--compilation_request_timeout",
+        metavar="TIMEOUT",
         type=float,
         help="TIMEOUT in seconds to wait for a response from the remote compilation server",
+    )
+
+    parser.add_argument(
+        "--establish_connection_timeout",
+        metavar="TIMEOUT",
+        type=float,
+        help="TIMEOUT in seconds for establishing a connection to a remote compilation server",
+    )
+
+    parser.add_argument(
+        "--remote_compilation_tries",
+        metavar="AMOUNT",
+        type=int,
+        help="maximal AMOUNT of remote compilation servers that are requested from for a single compilation",
     )
 
     # this argument will only be used to automatically generate user-facing strings
@@ -345,9 +360,17 @@ def setup_client(cli_args: List[str]) -> Tuple[ClientConfig, Arguments, Host, Li
             )
             sys.exit(os.EX_USAGE)
 
-    # TIMEOUT
-    if (timeout := homcc_args_dict.pop("timeout", None)) is not None:
-        homcc_config.timeout = timeout
+    # COMPILATION_REQUEST_TIMEOUT
+    if (compilation_request_timeout := homcc_args_dict.pop("compilation_request_timeout", None)) is not None:
+        homcc_config.compilation_request_timeout = compilation_request_timeout
+
+    # ESTABLISH_CONNECTION_TIMEOUT
+    if (establish_connection_timeout := homcc_args_dict.pop("establish_connection_timeout", None)) is not None:
+        homcc_config.establish_connection_timeout = establish_connection_timeout
+
+    # REMOTE_COMPILATION_TRIES
+    if (remote_compilation_tries := homcc_args_dict.pop("remote_compilation_tries", None)) is not None:
+        homcc_config.remote_compilation_tries = remote_compilation_tries
 
     # verify that all homcc cli args were handled
     if homcc_args_dict:
