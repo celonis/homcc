@@ -1,4 +1,4 @@
-python-lzo>=1.12 # TODO(o.layer): see https://packages.ubuntu.com/focal/python3-lzo, upgrade after newer version is in Ubuntu repository
+python-lzo==1.12 # see https://packages.ubuntu.com/jammy/python3-lzo
 posix_ipc==0.9.8 # see https://packages.ubuntu.com/jammy/python3-posix-ipc
 
 # test, CI, package, formatting, linting, ...

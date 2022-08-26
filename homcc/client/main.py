@@ -15,6 +15,7 @@ from homcc.client.compilation import (  # pylint: disable=wrong-import-position
     compile_remotely,
 )
 from homcc.client.parsing import setup_client  # pylint: disable=wrong-import-position
+from homcc.common.arguments import Arguments  # pylint: disable=wrong-import-position
 from homcc.common.errors import (  # pylint: disable=wrong-import-position
     RecoverableClientError,
     RecursiveCallError,

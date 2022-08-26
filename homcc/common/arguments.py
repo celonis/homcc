@@ -440,10 +440,7 @@ class Arguments:
 
     def add_target(self, target: str) -> Arguments:
         """returns a copy of arguments where the specified target is added (for cross compilation)"""
-        if (compiler := self.compiler_object()) is not None:
-            return compiler.add_target_to_arguments(self, target)
-
-        raise UnsupportedCompilerError("Could not add target to compilation call as no compiler was given.")
+        return self.compiler_object().add_target_to_arguments(self, target)
 
     def map(self, instance_path: str, mapped_cwd: str) -> Arguments:
         """modify and return arguments by mapping relevant paths"""
@@ -533,7 +530,7 @@ class Arguments:
         args: List[str],
         check: bool = False,
         cwd: Path = Path.cwd(),
-        output: bool = True,
+        output: bool = False,
         timeout: Optional[float] = None,
     ) -> ArgumentsExecutionResult:
         logger.debug("Executing: [%s]", " ".join(args))
@@ -585,7 +582,7 @@ class Compiler(ABC):
         normalized_compiler = arguments.compiler_normalized()
         for compiler in Compiler.available_compilers():
             if compiler.is_matching_str(normalized_compiler):
-                return compiler(arguments.compiler)  # type: ignore[arg-type]
+                return compiler(arguments.compiler)
 
         raise UnsupportedCompilerError(f"Compiler '{arguments.compiler}' is not supported.")
 
@@ -638,7 +635,7 @@ class Clang(Compiler):
         clang_arguments: Arguments = Arguments.from_vargs(self.compiler_str, "--version")
 
         try:
-            result = clang_arguments.execute(check=True, output=False)
+            result = clang_arguments.execute(check=True)
         except subprocess.CalledProcessError as err:
             logger.error(
                 "Could not get target triple for compiler '%s', executed '%s'. %s",
@@ -680,7 +677,7 @@ class Gcc(Compiler):
         gcc_arguments: Arguments = Arguments.from_vargs(self.compiler_str, "-dumpmachine")
 
         try:
-            result = gcc_arguments.execute(check=True, output=False)
+            result = gcc_arguments.execute(check=True)
         except subprocess.CalledProcessError as err:
             logger.error(
                 "Could not get target triple for compiler '%s', executed '%s'. %s",
