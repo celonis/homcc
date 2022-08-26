@@ -56,9 +56,9 @@ def main():
 
     # compile locally on recoverable errors if local compilation is not disabled
     except RecoverableClientError as error:
-        # TODO: enable this
-        # if homcc_config.no_local_compilation:
-        #    sys.exit(os.EX_UNAVAILABLE)
+        if not homcc_config.local_compilation_enabled:
+            logger.error("Failed to compile remotely:\n%s", error)
+            sys.exit(os.EX_UNAVAILABLE)
 
         logger.warning("Compiling locally instead:\n%s", error)
         sys.exit(compile_locally(compiler_arguments, localhost))

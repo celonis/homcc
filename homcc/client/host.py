@@ -1,4 +1,6 @@
-"""TODO"""
+"""
+Host class and related parsing utilities
+"""
 from __future__ import annotations
 
 import os

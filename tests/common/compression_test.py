@@ -1,6 +1,4 @@
 """ Tests for common/compression.py"""
-import pytest
-
 from homcc.common.compression import LZMA, LZO, CompressedBytes, NoCompression
 
 TEST_DATA: bytearray = bytearray([0x1, 0x2, 0x3, 0x4, 0x5, 0x6, 0x6, 0x6, 0x9])
@@ -11,7 +9,6 @@ class TestCompression:
     Tests for parsing related to compression
     """
 
-    @pytest.mark.skip
     def test_lzo(self):
         lzo = LZO()
         compressed_data = lzo.compress(TEST_DATA)
@@ -60,6 +57,5 @@ class TestCompressedBytes:
     def test_lzma(self):
         self.compression_test(LZMA())
 
-    @pytest.mark.skip
     def test_lzo(self):
         self.compression_test(LZO())

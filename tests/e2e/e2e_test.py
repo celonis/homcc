@@ -111,11 +111,11 @@ class TestEndToEnd:
             self.process.__exit__(*exc)
 
     @staticmethod
-    def run_client(basic_arguments: BasicClientArguments, args: List[str]) -> subprocess.CompletedProcess:
+    def run_client(args: List[str]) -> subprocess.CompletedProcess:
         time.sleep(0.5)  # wait in order to reduce the chance of trying to connect to an unavailable server
         try:
             return subprocess.run(
-                list(basic_arguments) + args,
+                args,
                 check=True,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
@@ -147,7 +147,7 @@ class TestEndToEnd:
         ]
 
         with self.ServerProcess(basic_arguments.tcp_port):
-            result = self.run_client(basic_arguments, args)
+            result = self.run_client(list(basic_arguments) + args)
             self.check_remote_compilation_assertions(result)
             executable_stdout: str = subprocess.check_output([f"./{self.OUTPUT}"], encoding="utf-8")
             assert executable_stdout == "homcc\n"
@@ -162,7 +162,7 @@ class TestEndToEnd:
         ]
 
         with self.ServerProcess(basic_arguments.tcp_port):
-            result = self.run_client(basic_arguments, args)
+            result = self.run_client(list(basic_arguments) + args)
             self.check_remote_compilation_assertions(result)
             assert os.path.exists(self.OUTPUT)
 
@@ -181,7 +181,7 @@ class TestEndToEnd:
         ]
 
         with self.ServerProcess(basic_arguments.tcp_port):
-            result = self.run_client(basic_arguments, args)
+            result = self.run_client(list(basic_arguments) + args)
             self.check_remote_compilation_assertions(result)
             assert os.path.exists("main.cpp.o")
             assert os.path.exists("main.cpp.o.d")
@@ -192,15 +192,15 @@ class TestEndToEnd:
         linking_args: List[str] = ["main.o", "foo.o", f"-o{self.OUTPUT}"]
 
         with self.ServerProcess(basic_arguments.tcp_port):
-            main_result = self.run_client(basic_arguments, main_args)
+            main_result = self.run_client(list(basic_arguments) + main_args)
             self.check_remote_compilation_assertions(main_result)
             assert os.path.exists("main.o")
 
-            foo_result = self.run_client(basic_arguments, foo_args)
+            foo_result = self.run_client(list(basic_arguments) + foo_args)
             self.check_remote_compilation_assertions(foo_result)
             assert os.path.exists("foo.o")
 
-            linking_result = self.run_client(basic_arguments, linking_args)
+            linking_result = self.run_client(list(basic_arguments) + linking_args)
             assert linking_result.returncode == os.EX_OK
             assert f"Linking [main.o, foo.o] to {self.OUTPUT}" in linking_result.stdout
             assert os.path.exists(self.OUTPUT)
@@ -255,19 +255,31 @@ class TestEndToEnd:
         mock_compiler.chmod(mock_compiler.stat().st_mode | stat.S_IEXEC)
         assert mock_compiler.exists()
 
-        with pytest.raises(subprocess.CalledProcessError) as err:
-            subprocess.run(  # client receiving itself as compiler arg
-                list(self.BasicClientArguments(str(mock_compiler), unused_tcp_port))
-                + ["-Iexample/include", "example/src/foo.cpp", "example/src/main.cpp", f"-o{self.OUTPUT}"],
-                check=True,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                encoding="utf-8",
-            )
+        basic_arguments = self.BasicClientArguments(str(mock_compiler), unused_tcp_port)
+        args = ["-Iexample/include", "example/src/foo.cpp", "example/src/main.cpp", f"-o{self.OUTPUT}"]
 
-        # TODO: test remote, scan_includes
+        # fail scan_includes during dependency finding (not e2e)
+        with pytest.raises(subprocess.CalledProcessError) as scan_includes_err:
+            scan_includes_args = list(basic_arguments)
+            scan_includes_args.insert(1, "--scan-includes")
+            self.run_client(scan_includes_args + args)
 
-        assert f"Specified compiler '{mock_compiler}' seems to have been invoked recursively!" in err.value.stdout
+        assert f"Specified compiler '{mock_compiler}' has been invoked recursively!" in scan_includes_err.value.stdout
+
+        # fail during local compilation fallback since server was not started
+        with pytest.raises(subprocess.CalledProcessError) as local_err:
+            self.run_client(list(basic_arguments) + args)
+
+        assert "Compiling locally instead" in local_err.value.stdout
+        assert f"Specified compiler '{mock_compiler}' has been invoked recursively!" in local_err.value.stdout
+
+        # fail remote compilation during dependency finding
+        with self.ServerProcess(basic_arguments.tcp_port), pytest.raises(
+            subprocess.CalledProcessError
+        ) as try_remote_err:
+            self.run_client(list(basic_arguments) + args)
+
+        assert f"Specified compiler '{mock_compiler}' has been invoked recursively!" in try_remote_err.value.stdout
 
     @pytest.mark.timeout(TIMEOUT)
     def test_end_to_end_client_multiple_sandbox(self, unused_tcp_port: int):

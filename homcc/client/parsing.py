@@ -116,25 +116,12 @@ def parse_cli_args(cli_args: List[str]) -> Tuple[Dict[str, Any], Arguments]:
     show_and_exit.add_argument("--show-hosts", action=ShowHosts)
     show_and_exit.add_argument("-j", "--show-concurrency", action=ShowConcurrencyLevel)
     show_and_exit.add_argument("--show-variables", action=ShowEnvironmentVariables)
-    # TODO: FIX!!! and merge with ShowVariables
-    show_and_exit.add_argument(
-        "--DEBUG",
-        # action="store_true",
-        nargs=1,
-        help="show all relevant info regarding configuration and execution of homcc, and exit",
-    )
 
     parser.add_argument(
         "--scan-includes",
         action="store_true",
         help="show all header dependencies that would be sent to the server, as calculated from the given arguments, "
         "and exit",
-    )
-
-    parser.add_argument(
-        "--no-config",
-        action="store_true",
-        help="enforce that only configurations provided via the CLI are used",
     )
 
     parser.add_argument(
@@ -149,6 +136,18 @@ def parse_cli_args(cli_args: List[str]) -> Tuple[Dict[str, Any], Arguments]:
         "--verbose",
         action="store_true",
         help="enable a verbose mode which implies detailed and colored logging of debug messages",
+    )
+
+    parser.add_argument(
+        "--no-config",
+        action="store_true",
+        help="enforce that only configurations provided via the CLI are used",
+    )
+
+    parser.add_argument(
+        "--no-local-compilation",
+        action="store_true",
+        help="enforce that even on recoverable failures no local compilation is executed",
     )
 
     indented_newline: str = "\n\t"
@@ -284,6 +283,7 @@ def setup_client(cli_args: List[str]) -> Tuple[ClientConfig, Arguments, Host, Li
         except NoHostsFoundError as error:
             logger.error("%s", error)
             raise SystemExit(os.EX_NOINPUT) from error
+
         has_local: bool = False
 
         for host_str in hosts_str:
@@ -302,16 +302,22 @@ def setup_client(cli_args: List[str]) -> Tuple[ClientConfig, Arguments, Host, Li
             else:
                 remote_hosts.append(host)
 
-    # TODO: use logger.debug instead again
-    if homcc_args_dict.pop("DEBUG", False):
-        hosts_from: str = hosts_file or f"--host={host_str}"
-        all_hosts: str = "\n\t".join(str(host) for host in [localhost] + remote_hosts)
-        sys.stdout.write(
-            f"{sys.argv[0]} - {client.__version__}\n"  # homcc location and version
-            f"Caller:\t{sys.executable}\n"  # homcc caller
-            f"{homcc_config}"  # config info
-            f"Hosts (from [{hosts_from}]):\n\t{all_hosts}\n"  # hosts info
-        )
+    logger.debug(
+        "%s - %s\n"  # homcc location and version
+        "Caller:\t%s\n"  # homcc caller
+        "%s"  # config info
+        "Hosts ('%s'):\n\t%s",  # hosts info
+        sys.argv[0],
+        client.__version__,
+        sys.executable,
+        homcc_config,
+        hosts_file or f"--host={host_str}",
+        "\n\t".join(str(host) for host in [localhost] + remote_hosts),
+    )
+
+    # NO-LOCAL-COMPILATION
+    if local_compilation_enabled := not homcc_args_dict.pop("no_local_compilation", False):
+        homcc_config.local_compilation_enabled = local_compilation_enabled
 
     # SCHROOT_PROFILE; DOCKER_CONTAINER; if --no-sandbox is specified do not use any specified sandbox configurations
     if homcc_args_dict.pop("no_sandbox", False):

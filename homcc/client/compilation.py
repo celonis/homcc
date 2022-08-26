@@ -47,7 +47,7 @@ def check_recursive_call(compiler: str, error: subprocess.CalledProcessError):
     """check if homcc was called recursively"""
 
     if f"{HOMCC_RECURSIVE_ERROR_MESSAGE}\n" == error.stderr:
-        logger.critical("Specified compiler '%s' seems to have been invoked recursively!", compiler)
+        logger.critical("Specified compiler '%s' has been invoked recursively!", compiler)
         raise SystemExit(os.EX_USAGE) from error
 
 

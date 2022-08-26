@@ -1,10 +1,12 @@
-"""TODO"""
+"""
+Client Configuration class and related parsing utilities
+"""
 from __future__ import annotations
 
+import configparser
 import os
 import re
 import sys
-from configparser import Error, SectionProxy
 from dataclasses import dataclass
 from pathlib import Path
 from typing import ClassVar, Iterator, List, Optional
@@ -123,7 +125,7 @@ class ClientConfig:
         return cls(files=[])
 
     @classmethod
-    def from_config_section(cls, files: List[str], homcc_config: SectionProxy) -> ClientConfig:
+    def from_config_section(cls, files: List[str], homcc_config: configparser.SectionProxy) -> ClientConfig:
         compression: Optional[str] = homcc_config.get("compression")
         schroot_profile: Optional[str] = homcc_config.get("schroot_profile")
         docker_container: Optional[str] = homcc_config.get("docker_container")
@@ -163,7 +165,7 @@ class ClientConfig:
 def parse_config(filenames: List[Path] = None) -> ClientConfig:
     try:
         files, cfg = parse_configs(filenames or default_locations(HOMCC_CONFIG_FILENAME))
-    except Error as err:
+    except configparser.Error as err:
         sys.stderr.write(f"{err}; using default configuration instead\n")
         return ClientConfig.empty()
 
