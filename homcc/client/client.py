@@ -345,7 +345,6 @@ class StateFile:
 class TCPClient:
     """Wrapper class to exchange homcc protocol messages via TCP"""
 
-    DEFAULT_PORT: int = 3126
     DEFAULT_BUFFER_SIZE_LIMIT: int = 65_536  # default buffer size limit of StreamReader is 64 KiB
     DEFAULT_OPEN_CONNECTION_TIMEOUT: float = 5  # TODO: make this configurable
 
@@ -356,7 +355,7 @@ class TCPClient:
             raise ValueError(f"TCPClient cannot be initialized with {connection_type}!")
 
         self.host: str = host.name
-        self.port: int = host.port or self.DEFAULT_PORT
+        self.port: int = host.port
         self.compression = host.compression
 
         self._data: bytes = bytes()

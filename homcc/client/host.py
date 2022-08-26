@@ -10,6 +10,8 @@ from typing import Dict, Optional, Union
 from homcc.common.compression import Compression
 from homcc.common.errors import HostParsingError
 
+DEFAULT_PORT: int = 3126
+
 
 class ConnectionType(str, Enum):
     """Helper class to distinguish between different host connection types"""
@@ -27,7 +29,7 @@ class Host:
     name: str
     limit: int
     compression: Compression
-    port: Optional[int]
+    port: int
     user: Optional[str]
 
     def __init__(
@@ -44,8 +46,8 @@ class Host:
         self.name = name
         self.limit = int(limit) if limit is not None else 2  # enable minor level of concurrency on default
         self.compression = Compression.from_name(compression)
-        self.port = int(port) if port is not None else None  # TCP
-        self.user = user  # SSH
+        self.port = int(port) if port is not None else DEFAULT_PORT  # TCP only info
+        self.user = user  # SSH only info
 
     def __str__(self) -> str:
         if self.type == ConnectionType.LOCAL:
@@ -57,7 +59,7 @@ class Host:
         if self.type == ConnectionType.SSH:
             return f"ssh_{f'{self.user}_' or '_'}{self.name}_{self.limit}"
 
-        raise ValueError(f"Erroneous connection type '{self.type}'")
+        raise NotImplementedError(f"Erroneous connection type '{self.type}'")
 
     @staticmethod
     def default_localhost() -> Host:

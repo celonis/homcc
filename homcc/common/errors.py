@@ -40,10 +40,6 @@ class NoHostsFoundError(RecoverableClientError):
     )
 
 
-class RecursiveCallError(Exception):
-    """TODO"""
-
-
 class HostParsingError(RecoverableClientError):
     """Error class to indicate an error during parsing a host"""
 

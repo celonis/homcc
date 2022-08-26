@@ -128,7 +128,7 @@ class Arguments:
         yield from self.args
 
     def __len__(self) -> int:
-        return len(self.args) + 1
+        return len(self.args)
 
     def __str__(self) -> str:
         return f"[{' '.join(self.args)}]"

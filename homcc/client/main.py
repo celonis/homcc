@@ -10,19 +10,19 @@ import sys
 sys.path.append(os.path.join(os.path.dirname(__file__), "../.."))
 
 from homcc.client.compilation import (  # pylint: disable=wrong-import-position
-    HOMCC_SAFEGUARD_ENV_VAR,
+    HOMCC_RECURSIVE_ERROR_MESSAGE,
     compile_locally,
     compile_remotely,
 )
 from homcc.client.parsing import setup_client  # pylint: disable=wrong-import-position
-from homcc.common.arguments import Arguments  # pylint: disable=wrong-import-position
 from homcc.common.errors import (  # pylint: disable=wrong-import-position
     RecoverableClientError,
-    RecursiveCallError,
     RemoteCompilationError,
 )
 
 logger: logging.Logger = logging.getLogger(__name__)
+
+HOMCC_SAFEGUARD_ENV_VAR: str = "_HOMCC_SAFEGUARD"
 
 
 def is_recursively_invoked() -> bool:
@@ -30,25 +30,19 @@ def is_recursively_invoked() -> bool:
 
     if not (is_safeguard_active := HOMCC_SAFEGUARD_ENV_VAR in os.environ):
         os.environ[HOMCC_SAFEGUARD_ENV_VAR] = "0"  # activate safeguard
-    else:
-        os.environ[HOMCC_SAFEGUARD_ENV_VAR] = "1"  # increment safeguard
     return is_safeguard_active
 
 
 def main():
     # cancel execution if recursive call is detected
     if is_recursively_invoked():
-        sys.exit(os.EX_USAGE)
+        sys.exit(HOMCC_RECURSIVE_ERROR_MESSAGE)
 
-    # client setup involves retrieval of hosts parsing of cli args, resulting in config and logging setup
+    # client setup retrieves hosts and parses cli args to create central config and setup logging
     homcc_config, compiler_arguments, localhost, remote_hosts = setup_client(sys.argv)
 
-    # force local execution on specific conditions
-    if compiler_arguments.is_linking_only():
-        logger.debug("Linking [%s] to %s", ", ".join(compiler_arguments.object_files), compiler_arguments.output)
-        sys.exit(compile_locally(compiler_arguments, localhost))
-
-    if not compiler_arguments.is_sendable():  # logging of detailed info is done during sendability check
+    # force local execution
+    if compiler_arguments.is_linking_only() or not compiler_arguments.is_sendable():
         sys.exit(compile_locally(compiler_arguments, localhost))
 
     # try to compile remotely
@@ -58,8 +52,7 @@ def main():
     # exit on unrecoverable errors
     except RemoteCompilationError as error:
         logger.error("%s", error.message)
-        # raise SystemExit(error.return_code) from error
-        sys.exit(error.return_code)
+        raise SystemExit(error.return_code) from error
 
     # compile locally on recoverable errors if local compilation is not disabled
     except RecoverableClientError as error:
@@ -69,10 +62,6 @@ def main():
 
         logger.warning("Compiling locally instead:\n%s", error)
         sys.exit(compile_locally(compiler_arguments, localhost))
-
-    except RecursiveCallError:
-        logger.error("Specified compiler '%s' seems to have been invoked recursively!", compiler_arguments.compiler)
-        sys.exit(os.EX_USAGE)
 
 
 if __name__ == "__main__":

@@ -40,15 +40,14 @@ class TestArguments:
     def test_is_compiler_arg(self):
         assert Arguments.is_compiler_arg("g++")
 
-    def test_from_args(self):
+    def test_from_vargs(self):
         with pytest.raises(ValueError):
-            Arguments([])
+            Arguments.from_vargs()
 
-        compiler_args: List[str] = ["g++"]
-        assert Arguments(compiler_args) == compiler_args
+        assert Arguments.from_vargs("g++") == ["g++"]
 
         args: List[str] = ["g++", "foo.cpp", "-O0", "-Iexample/include/"]
-        assert Arguments(args) == args
+        assert Arguments.from_vargs(*args) == args
 
     def test_is_sendable(self):
         args: List[str] = ["g++", "foo.cpp", "-O0", "-Iexample/include/"]
@@ -61,7 +60,7 @@ class TestArguments:
         assert Arguments(sendable_preprocessor_args).is_sendable()
 
         # unsendability
-        no_source_files_args: List[str] = args[1:]
+        no_source_files_args: List[str] = args[0:1] + args[2:]
         assert not Arguments(no_source_files_args).is_sendable()
 
         ambiguous_output_args: List[str] = args + ["-o", "-"]
@@ -240,7 +239,6 @@ class TestArguments:
         assert Arguments.from_vargs("gcc", "foo").compiler_normalized() == "gcc"
         assert Arguments.from_vargs("/usr/bin/gcc", "foo").compiler_normalized() == "gcc"
         assert Arguments.from_vargs("~/bin/g++", "foo").compiler_normalized() == "g++"
-        assert Arguments.from_vargs("../custom_compiler.py", "foo").compiler_normalized() == "custom_compiler.py"
 
 
 class TestCompiler:

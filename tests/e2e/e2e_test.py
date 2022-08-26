@@ -243,21 +243,21 @@ class TestEndToEnd:
         Path("main.cpp.o.d").unlink(missing_ok=True)
         Path("foo.o").unlink(missing_ok=True)
         Path(self.OUTPUT).unlink(missing_ok=True)
-        # Path("./homcc/client/clang-homcc").unlink(missing_ok=True)
+        Path("./homcc/client/clang-homcc").unlink(missing_ok=True)
 
     # client failures
     @pytest.mark.timeout(TIMEOUT)
     def test_end_to_end_client_recursive(self, unused_tcp_port: int):
         # symlink clang-homcc to homcc and make it executable in order for it to be viewed as a "regular" clang compiler
-        # the shadow compiler needs to be in the same folder as the original script in order for imports to work
-        homcc_shadow_compiler: Path = Path.cwd() / "homcc/client/clang-homcc"
-        homcc_shadow_compiler.symlink_to(Path.cwd() / "homcc/client/main.py")
-        homcc_shadow_compiler.chmod(homcc_shadow_compiler.stat().st_mode | stat.S_IEXEC)
-        assert homcc_shadow_compiler.exists()
+        # the mocked compiler needs to be in the same folder as the original script in order for imports to work
+        mock_compiler: Path = Path.cwd() / "homcc/client/clang-homcc"
+        mock_compiler.symlink_to(Path.cwd() / "homcc/client/main.py")
+        mock_compiler.chmod(mock_compiler.stat().st_mode | stat.S_IEXEC)
+        assert mock_compiler.exists()
 
         with pytest.raises(subprocess.CalledProcessError) as err:
             subprocess.run(  # client receiving itself as compiler arg
-                list(self.BasicClientArguments(str(homcc_shadow_compiler), unused_tcp_port))
+                list(self.BasicClientArguments(str(mock_compiler), unused_tcp_port))
                 + ["-Iexample/include", "example/src/foo.cpp", "example/src/main.cpp", f"-o{self.OUTPUT}"],
                 check=True,
                 stdout=subprocess.PIPE,
@@ -265,11 +265,9 @@ class TestEndToEnd:
                 encoding="utf-8",
             )
 
-        # assert not err.value.stdout
-        assert (
-            f"Specified compiler '{homcc_shadow_compiler}' seems to have been invoked recursively!" in err.value.stdout
-        )
-        assert "seems to have been invoked recursively!" in err.value.stdout
+        # TODO: test remote, scan_includes
+
+        assert f"Specified compiler '{mock_compiler}' seems to have been invoked recursively!" in err.value.stdout
 
     @pytest.mark.timeout(TIMEOUT)
     def test_end_to_end_client_multiple_sandbox(self, unused_tcp_port: int):

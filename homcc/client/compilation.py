@@ -5,7 +5,6 @@ import asyncio
 import logging
 import os
 import subprocess
-import sys
 from pathlib import Path
 from typing import Dict, List, Optional, Set, Tuple
 
@@ -21,7 +20,6 @@ from homcc.client.host import Host
 from homcc.common.arguments import Arguments, ArgumentsExecutionResult
 from homcc.common.errors import (
     FailedHostNameResolutionError,
-    PreprocessorError,
     RemoteCompilationError,
     RemoteHostsFailure,
     SlotsExhaustedError,
@@ -39,10 +37,18 @@ from homcc.common.messages import (
 
 logger = logging.getLogger(__name__)
 
-HOMCC_SAFEGUARD_ENV_VAR: str = "_HOMCC_SAFEGUARD"
+HOMCC_RECURSIVE_ERROR_MESSAGE: str = "_HOMCC_CALLED_RECURSIVELY"
 
 DEFAULT_COMPILATION_REQUEST_TIMEOUT: float = 120
 EXCLUDED_DEPENDENCY_PREFIXES: Tuple = ("/usr/include", "/usr/lib")
+
+
+def check_recursive_call(compiler: str, error: subprocess.CalledProcessError):
+    """check if homcc was called recursively"""
+
+    if f"{HOMCC_RECURSIVE_ERROR_MESSAGE}\n" == error.stderr:
+        logger.critical("Specified compiler '%s' seems to have been invoked recursively!", compiler)
+        raise SystemExit(os.EX_USAGE) from error
 
 
 async def compile_remotely(arguments: Arguments, remote_hosts: List[Host], config: ClientConfig) -> int:
@@ -65,11 +71,11 @@ async def compile_remotely(arguments: Arguments, remote_hosts: List[Host], confi
                     compile_remotely_at(arguments, remote_host, schroot_profile, docker_container), timeout=timeout
                 )
 
-        except PreprocessorError:
-            # if os.environ[HOMCC_SAFEGUARD_ENV_VAR] == "1":
-            #     logger.critical("Specified compiler '%s' seems to have been invoked recursively!", arguments.compiler)
-            sys.exit(os.EX_USAGE)
-            # logger.error("%s", error)
+        # arguments execution error
+        except subprocess.CalledProcessError as error:
+            check_recursive_call(arguments.compiler, error)
+            logger.error("%s", error)
+            raise SystemExit(error.returncode) from error
 
         # remote semaphore could not be acquired
         except SlotsExhaustedError as error:
@@ -192,8 +198,9 @@ def compile_locally(arguments: Arguments, localhost: Host) -> int:
             # execute compile command, e.g.: "g++ foo.cpp -o foo"
             result: ArgumentsExecutionResult = arguments.execute(check=True, output=True)
         except subprocess.CalledProcessError as error:
-            logger.error("Compiler error:\n%s", error.stderr)
-            return error.returncode
+            check_recursive_call(arguments.compiler, error)
+            logger.error("%s", error)
+            raise SystemExit(error.returncode) from error
 
         if result.stdout:
             logger.debug("Compiler result:\n%s", result.stdout)
@@ -203,27 +210,28 @@ def compile_locally(arguments: Arguments, localhost: Host) -> int:
 
 def scan_includes(arguments: Arguments) -> List[str]:
     """find all included dependencies"""
-    dependencies: Set[str] = find_dependencies(arguments)
+
+    try:
+        dependencies: Set[str] = find_dependencies(arguments)
+    except subprocess.CalledProcessError as error:
+        check_recursive_call(arguments.compiler, error)
+        logger.error("%s", error)
+        raise SystemExit(error.returncode) from error
+
     return [dependency for dependency in dependencies if not Arguments.is_source_file_arg(dependency)]
 
 
 def find_dependencies(arguments: Arguments) -> Set[str]:
     """get unique set of dependencies by calling the preprocessor and filtering the result"""
 
+    # execute preprocessor command, e.g.: "g++ foo.cpp -M -MT $(homcc)"
     arguments, filename = arguments.dependency_finding()
-    try:
-        # execute preprocessor command, e.g.: "g++ foo.cpp -M -MT $(homcc)"
-        result: ArgumentsExecutionResult = arguments.execute(check=True, output=False)
-    except subprocess.CalledProcessError as error:
-        raise PreprocessorError(f"Preprocessor error:\n{error.stderr}") from error
+    result: ArgumentsExecutionResult = arguments.execute(check=True)
 
     # read from the dependency file if it was created as a side effect
     dependency_result: str = (
         Path(filename).read_text(encoding="utf-8") if filename is not None and filename != "-" else result.stdout
     )
-
-    if not dependency_result:
-        raise PreprocessorError("Empty preprocessor result.")
 
     logger.debug("Preprocessor result:\n%s", dependency_result)
 
@@ -263,14 +271,7 @@ def link_object_files(arguments: Arguments, object_files: List[ObjectFile]) -> i
     for object_file in object_files:
         arguments.add_arg(object_file.file_name)
 
-    try:
-        # execute linking command, e.g.: "g++ foo.o bar.o -ofoobar"
-        result: ArgumentsExecutionResult = arguments.execute(check=True, output=True)
-    except subprocess.CalledProcessError as error:
-        logger.error("Linker error:\n%s", error.stderr)
-        return error.returncode
-
-    if result.stdout:
-        logger.debug("Linker result:\n%s", result.stdout)
+    # execute linking command, e.g.: "g++ foo.o bar.o -ofoobar"
+    result: ArgumentsExecutionResult = arguments.execute(check=True, output=True)
 
     return result.return_code

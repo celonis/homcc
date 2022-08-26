@@ -93,14 +93,12 @@ class TestCompilation:
         self.find_dependencies_class_impl_with_compiler("clang++")
 
     def test_find_dependencies_error(self):
-        with pytest.raises(SystemExit) as sys_exit:
+        with pytest.raises(subprocess.CalledProcessError):
             _: Set[str] = find_dependencies(
                 Arguments.from_vargs(
                     "g++", "-Iexample/include", "example/src/main.cpp", "example/src/foo.cpp", "-OError"
                 )
             )
-
-        assert sys_exit.value.code != os.EX_OK
 
     def test_local_compilation(self):
         output: str = "compilation_test"
@@ -116,4 +114,7 @@ class TestCompilation:
         Path(output).unlink(missing_ok=True)
 
         # intentionally execute an erroneous call
-        assert compile_locally(Arguments(args + ["-OError"]), Host.localhost_with_limit(1)) != os.EX_OK
+        with pytest.raises(SystemExit) as sys_exit:
+            compile_locally(Arguments(args + ["-OError"]), Host.localhost_with_limit(1))
+
+        assert sys_exit != os.EX_OK
