@@ -1,6 +1,7 @@
 """Parsing related functionality regarding the homcc client"""
 from __future__ import annotations
 
+import hashlib
 import logging
 import os
 import re
@@ -153,8 +154,16 @@ class Host:
 
         raise ValueError(f"Erroneous connection type '{self.type}'")
 
-    def id(self) -> str:
-        return f"homcc_{str(self)}"
+    def __int__(self) -> int:
+        return self.id()
+
+    def id(self) -> int:
+        """Generates an ID for a certain host by hashing a string representation and
+        cutting it to 4 digits. We can use max. 4 digits because we can not exceed
+        the SHRT_MAX (see https://semanchuk.com/philip/posix_ipc).
+        This may lead to collisions, but we usually do not have many hosts,
+        so the probability of collisions should be acceptable."""
+        return int(hashlib.sha1(str(self).encode("utf-8")).hexdigest(), 16) % 10**4
 
     @classmethod
     def from_str(cls, host_str: str) -> Host:

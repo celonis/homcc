@@ -1,5 +1,5 @@
 python-lzo==1.12 # see https://packages.ubuntu.com/jammy/python3-lzo
-posix_ipc==0.9.8 # see https://packages.ubuntu.com/jammy/python3-posix-ipc
+sysv_ipc==1.0.0 # see https://packages.ubuntu.com/jammy/python3-sysv-ipc
 
 # test, CI, package, formatting, linting, ...
 black
