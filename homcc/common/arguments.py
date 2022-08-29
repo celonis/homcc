@@ -379,7 +379,7 @@ class Arguments:
         return True
 
     def is_linking(self) -> bool:
-        """check whether the no linking arg is missing"""
+        """check whether the no-linking arg is missing"""
         return self.NO_LINKING_ARG not in self.args
 
     def must_be_parsable(self) -> bool:
@@ -559,7 +559,7 @@ class Arguments:
 class Compiler(ABC):
     """Base class for compiler abstraction."""
 
-    def __init__(self, compiler_str: str) -> None:
+    def __init__(self, compiler_str: str):
         super().__init__()
         self._compiler_str: str = compiler_str
 
@@ -573,9 +573,9 @@ class Compiler(ABC):
     def __str__(self) -> str:
         return self._compiler_str
 
-    @staticmethod
-    def from_str(compiler_str: str) -> Compiler:
-        for CompilerType in Compiler.available_compilers():  # pylint: disable=invalid-name
+    @classmethod
+    def from_str(cls, compiler_str: str) -> Compiler:
+        for CompilerType in cls.available_compilers():  # pylint: disable=invalid-name
             if CompilerType.is_matching_str(compiler_str):
                 return CompilerType(compiler_str)
 

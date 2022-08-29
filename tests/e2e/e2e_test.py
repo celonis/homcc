@@ -244,20 +244,23 @@ class TestEndToEnd:
         Path("main.cpp.o.d").unlink(missing_ok=True)
         Path("foo.o").unlink(missing_ok=True)
         Path(self.OUTPUT).unlink(missing_ok=True)
-        Path("./homcc/client/clang-HOMCC_TEST_E2E_CLIENT_RECURSIVE").unlink(missing_ok=True)
+        Path("homcc/client/clang-homcc").unlink(missing_ok=True)  # test_end_to_end_client_recursive
+        Path("tests/clang++").unlink(missing_ok=True)  # test_end_to_end_implicit_clangplusplus
 
     # client failures
     @pytest.mark.timeout(TIMEOUT)
     def test_end_to_end_client_recursive(self, unused_tcp_port: int):
         # symlink clang-homcc to homcc and make it executable in order for it to be viewed as a "regular" clang compiler
         # the mocked compiler needs to be in the same folder as the original script in order for imports to work
-        mock_compiler: Path = Path.cwd() / "homcc/client/clang-HOMCC_TEST_E2E_CLIENT_RECURSIVE"
+        mock_compiler: Path = Path.cwd() / "homcc/client/clang-homcc"
         mock_compiler.symlink_to(Path.cwd() / "homcc/client/main.py")
         mock_compiler.chmod(mock_compiler.stat().st_mode | stat.S_IEXEC)
         assert mock_compiler.exists()
 
-        basic_arguments = self.BasicClientArguments(str(mock_compiler), unused_tcp_port)
-        args = ["-Iexample/include", "example/src/foo.cpp", "example/src/main.cpp", f"-o{self.OUTPUT}"]
+        basic_arguments: TestEndToEnd.BasicClientArguments = self.BasicClientArguments(
+            str(mock_compiler), unused_tcp_port
+        )
+        args: List[str] = ["-Iexample/include", "example/src/foo.cpp", "example/src/main.cpp", f"-o{self.OUTPUT}"]
 
         # fail scan_includes during dependency finding (not e2e)
         with pytest.raises(subprocess.CalledProcessError) as scan_includes_err:
@@ -274,12 +277,13 @@ class TestEndToEnd:
         assert "Compiling locally instead" in local_err.value.stdout
         assert f"Specified compiler '{mock_compiler}' has been invoked recursively!" in local_err.value.stdout
 
-        # fail remote compilation during dependency finding
+        # fail remote compilation during dependency finding after having connected to the server
         with self.ServerProcess(basic_arguments.tcp_port), pytest.raises(
             subprocess.CalledProcessError
         ) as try_remote_err:
             self.run_client(list(basic_arguments) + args)
 
+        assert "Compiling locally instead" not in try_remote_err.value.stdout
         assert f"Specified compiler '{mock_compiler}' has been invoked recursively!" in try_remote_err.value.stdout
 
     @pytest.mark.timeout(TIMEOUT)
@@ -455,3 +459,27 @@ class TestEndToEnd:
         assert homcc_result.returncode == os.EX_OK
         assert clangplusplus_result.returncode == os.EX_OK
         assert homcc_result.stdout == clangplusplus_result.stdout
+
+    @pytest.skip
+    @pytest.mark.clangplusplus
+    @pytest.mark.timeout(TIMEOUT)
+    def test_end_to_end_implicit_clangplusplus(self, unused_tcp_port: int):
+        # symlink clang++ to homcc and make it executable, so we implicitly actually call clang++
+        shadow_clangplusplus: Path = Path.cwd() / "tests/clang++"
+        shadow_clangplusplus.symlink_to(Path.cwd() / "homcc/client/main.py")
+        shadow_clangplusplus.chmod(shadow_clangplusplus.stat().st_mode | stat.S_IEXEC)
+        assert shadow_clangplusplus.exists()
+
+        args: List[str] = [
+            str(shadow_clangplusplus),
+            "-Iexample/include",
+            "example/src/foo.cpp",
+            "example/src/main.cpp",
+            f"-o{self.OUTPUT}",
+        ]
+
+        with self.ServerProcess(unused_tcp_port):
+            result = self.run_client(args)
+            self.check_remote_compilation_assertions(result)
+            executable_stdout: str = subprocess.check_output([f"./{self.OUTPUT}"], encoding="utf-8")
+            assert executable_stdout == "homcc\n"

@@ -21,6 +21,7 @@ from homcc.common.arguments import Arguments, ArgumentsExecutionResult, Compiler
 from homcc.common.errors import (
     FailedHostNameResolutionError,
     RemoteCompilationError,
+    RemoteCompilationTimeoutError,
     RemoteHostsFailure,
     SlotsExhaustedError,
     TargetInferationError,
@@ -77,27 +78,31 @@ async def compile_remotely(arguments: Arguments, hosts: List[Host], config: Clie
                     timeout=compilation_request_timeout,
                 )
 
-        # arguments execution error
+        # arguments execution error during local pre-steps, unrecoverable failure
         except subprocess.CalledProcessError as error:
             check_recursive_call(arguments.compiler, error)
             logger.error("%s", error)
             raise SystemExit(error.returncode) from error
 
-        # remote semaphore could not be acquired
+        # compilation request timed out, local compilation fallback
+        except asyncio.TimeoutError as error:
+            raise RemoteCompilationTimeoutError(
+                f"Compilation request {arguments} at host '{host}' timed out."
+            ) from error
+
+        # remote semaphore could not be acquired, retry with different host
         except SlotsExhaustedError as error:
             logger.debug("%s", error)
 
-        # client could not connect
+        # client could not connect, retry with different host
         except (ConnectionError, FailedHostNameResolutionError) as error:
             logger.warning("%s", error)
 
-        # compilation request timed out
-        except asyncio.TimeoutError:
-            logger.info("Compilation request %s at host '%s' timed out.", arguments, host)
-
+        # track all failing hosts
         finally:
             failed_hosts.append(host)
 
+    # all selected hosts failed, local compilation fallback
     raise RemoteHostsFailure(
         f"Failed to compile {arguments} remotely on hosts: '{', '.join(str(host) for host in failed_hosts)}'."
     )

@@ -18,7 +18,7 @@ from homcc.common.parsing import HOMCC_CONFIG_FILENAME, default_locations, parse
 HOMCC_CLIENT_CONFIG_SECTION: str = "homcc"
 
 DEFAULT_COMPILATION_REQUEST_TIMEOUT: float = 120
-DEFAULT_ESTABLISH_CONNECTION_TIMEOUT: float = 5
+DEFAULT_ESTABLISH_CONNECTION_TIMEOUT: float = 10
 DEFAULT_REMOTE_COMPILATION_TRIES: int = 3
 
 
@@ -113,8 +113,8 @@ class ClientConfig:
     establish_connection_timeout: float
     remote_compilation_tries: int
     log_level: Optional[LogLevel]
-    local_compilation_enabled: bool
     verbose: bool
+    local_compilation_enabled: bool
 
     def __init__(
         self,
@@ -127,8 +127,8 @@ class ClientConfig:
         establish_connection_timeout: Optional[float] = None,
         remote_compilation_tries: Optional[int] = None,
         log_level: Optional[str] = None,
-        no_local_compilation: Optional[bool] = None,
         verbose: Optional[bool] = None,
+        no_local_compilation: Optional[bool] = None,
     ):
         self.files = files
 
@@ -152,12 +152,13 @@ class ClientConfig:
             or DEFAULT_REMOTE_COMPILATION_TRIES
         )
         self.log_level = LogLevel.from_str(ClientEnvironmentVariables.get_log_level() or log_level)
-        self.local_compilation_enabled = not (
-            ClientEnvironmentVariables.get_no_local_compilation() or no_local_compilation
-        )
 
         verbose = ClientEnvironmentVariables.get_verbose() or verbose
         self.verbose = verbose is not None and verbose
+
+        self.local_compilation_enabled = not (
+            ClientEnvironmentVariables.get_no_local_compilation() or no_local_compilation
+        )
 
     @classmethod
     def empty(cls):
@@ -173,6 +174,7 @@ class ClientConfig:
         remote_compilation_tries: Optional[int] = homcc_config.getint("remote_compilation_tries")
         log_level: Optional[str] = homcc_config.get("log_level")
         verbose: Optional[bool] = homcc_config.getboolean("verbose")
+        no_local_compilation: Optional[bool] = homcc_config.getboolean("no_local_compilation")
 
         return ClientConfig(
             files=files,
@@ -184,6 +186,7 @@ class ClientConfig:
             remote_compilation_tries=remote_compilation_tries,
             log_level=log_level,
             verbose=verbose,
+            no_local_compilation=no_local_compilation,
         )
 
     def __str__(self):
@@ -196,7 +199,8 @@ class ClientConfig:
             f"\testablish_connection_timeout:\t{self.establish_connection_timeout}\n"
             f"\tremote_compilation_tries:\t{self.remote_compilation_tries}\n"
             f"\tlog_level:\t\t\t{self.log_level}\n"
-            f"\tverbose:\t\t\t{str(self.verbose)}\n"
+            f"\tverbose:\t\t\t{self.verbose}\n"
+            f"\tlocal_compilation_enabled:\t{self.local_compilation_enabled}\n"
         )
 
     def set_verbose(self):

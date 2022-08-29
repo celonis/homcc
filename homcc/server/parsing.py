@@ -157,7 +157,7 @@ class ServerConfig:
             f"\tport:\t{self.port}\n"
             f"\taddress:\t{self.address}\n"
             f"\tlog_level:\t{self.log_level}\n"
-            f"\tverbose:\t{str(self.verbose)}\n"
+            f"\tverbose:\t{self.verbose}\n"
         )
 
 

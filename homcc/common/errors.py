@@ -16,6 +16,10 @@ class TargetInferationError(RecoverableClientError):
     """Exception for errors during infering the compilation target triple."""
 
 
+class RemoteCompilationTimeoutError(RecoverableClientError):
+    """Exception for a timed out compilation request"""
+
+
 class ClientParsingError(RecoverableClientError):
     """Exception for failing to parse message from the server"""
 
@@ -35,8 +39,8 @@ class NoHostsFoundError(RecoverableClientError):
     """
 
     message: ClassVar[str] = (
-        "No hosts were found! "
-        "Please specify them via the HOMCC_HOSTS environmental variable or a dedicated hosts file."
+        "No hosts were found! Please specify them via the HOMCC_HOSTS environmental variable or a dedicated hosts file "
+        "like '~/.homcc/hosts'."
     )
 
 
