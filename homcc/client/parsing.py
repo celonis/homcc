@@ -102,7 +102,7 @@ class ShowEnvironmentVariables(ShowAndExitAction):
         sys.exit(os.EX_OK)
 
 
-def parse_cli_args(cli_args: List[str]) -> Tuple[Dict[str, Any], Optional[Arguments]]:
+def parse_cli_args(cli_args: List[str]) -> Tuple[Dict[str, Any], Arguments]:
     parser: ArgumentParser = ArgumentParser(
         description="homcc - Home-Office friendly distcc replacement",
         allow_abbrev=False,
@@ -216,18 +216,16 @@ def parse_cli_args(cli_args: List[str]) -> Tuple[Dict[str, Any], Optional[Argume
         "before being forwarded to and executed by the actual COMPILER",
     )
 
-    compiler_arguments: Optional[Arguments] = None
-
     # split cli_args in order to respectively use them for homcc client or the specified compiler
-    for i, arg in enumerate(cli_args):
+    for i, arg in enumerate(cli_args[1:]):  # skip first arg since it's always homcc itself
         if Arguments.is_compiler_arg(arg):
-            homcc_args = cli_args[:i]
-            compiler_arguments = Arguments(Compiler.from_str(arg), cli_args[i + 1 :])  # compiler_str at cli_args[i]
+            homcc_args_dict: Dict[str, Any] = vars(parser.parse_args(cli_args[: i + 1]))
+            compiler_arguments: Arguments = Arguments(Compiler.from_str(arg), cli_args[i + 2 :])
             break
     else:
-        homcc_args = cli_args
-
-    homcc_args_dict = vars(parser.parse_args(homcc_args))
+        # no compiler invocation, all args are handled implicitly via argparse
+        parser.parse_args(cli_args)
+        sys.exit(os.EX_OK)
 
     # remove args that are already implicitly handled via their actions or are compiler specific arguments
     for key in ("COMPILER_ARGUMENTS", "show_hosts", "show_concurrency", "show_variables"):
@@ -237,13 +235,14 @@ def parse_cli_args(cli_args: List[str]) -> Tuple[Dict[str, Any], Optional[Argume
 
 
 def setup_client(cli_args: List[str]) -> Tuple[ClientConfig, Arguments, Host, List[Host]]:
-    # load and parse arguments and configuration information
-    homcc_args_dict, compiler_arguments = parse_cli_args(cli_args)
+    homcc_args_dict: Dict[str, Any]
+    compiler_arguments: Arguments
 
-    if compiler_arguments is None:
-        raise NotImplementedError(
-            "All options that do not require COMPILER ARGUMENTS should be handled in parse_cli_args"
-        )
+    # load and parse arguments and configuration information
+    if Arguments.is_compiler_arg(cli_args[0]):  # e.g. when "g++" is symlinked to "homcc"
+        homcc_args_dict, compiler_arguments = {}, Arguments(Compiler.from_str(cli_args[0]).normalize(), cli_args[1:])
+    else:  # e.g. explicit "homcc ... g++ ..." call
+        homcc_args_dict, compiler_arguments = parse_cli_args(cli_args)
 
     # prevent config loading and parsing if --no-config was specified
     homcc_config: ClientConfig = ClientConfig.empty() if homcc_args_dict.pop("no_config", False) else parse_config()

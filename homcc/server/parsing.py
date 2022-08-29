@@ -153,8 +153,8 @@ class ServerConfig:
     def __str__(self):
         return (
             f'Configuration (from [{", ".join(self.files)}]):\n'
-            f"\tlimit:\t{self.limit}\n"
-            f"\tport:\t{self.port}\n"
+            f"\tlimit:\t\t{self.limit}\n"
+            f"\tport:\t\t{self.port}\n"
             f"\taddress:\t{self.address}\n"
             f"\tlog_level:\t{self.log_level}\n"
             f"\tverbose:\t{self.verbose}\n"

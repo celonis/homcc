@@ -122,7 +122,7 @@ class TestEndToEnd:
                 encoding="utf-8",
             )
         except subprocess.CalledProcessError as err:
-            time.sleep(0.25)  # wait so that we do not interfere with server logging
+            time.sleep(0.5)  # wait to reduce interference with server logging
             sys.stdout.write(err.stdout)
             raise err
 
@@ -236,6 +236,39 @@ class TestEndToEnd:
             "Compiling locally instead" in stdout_main and "Compiling locally instead" not in stdout_foo
         )
 
+    def cpp_end_to_end_implicit_compiler(self, compiler: str, unused_tcp_port: int):
+        # symlink compiler to homcc and make it executable, so we implicitly call the actual specified compiler
+        shadow_compiler: Path = Path.cwd() / f"homcc/client/{compiler}"
+        shadow_compiler.symlink_to(Path.cwd() / "homcc/client/main.py")
+        shadow_compiler.chmod(shadow_compiler.stat().st_mode | stat.S_IEXEC)
+        assert shadow_compiler.exists()
+
+        env: Dict[str, str] = os.environ.copy()
+        env["HOMCC_HOSTS"] = f"127.0.0.1:{unused_tcp_port}/1"
+
+        args: List[str] = [
+            str(shadow_compiler),
+            "-Iexample/include",
+            "example/src/foo.cpp",
+            "example/src/main.cpp",
+            f"-o{self.OUTPUT}",
+        ]
+
+        with self.ServerProcess(unused_tcp_port):
+            time.sleep(0.5)  # wait in order to reduce the chance of trying to connect to an unavailable server
+            result = subprocess.run(
+                args,
+                check=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                encoding="utf-8",
+                env=env,
+            )
+            assert result.returncode == os.EX_OK
+            assert "Compiling locally instead" not in result.stdout
+            executable_stdout: str = subprocess.check_output([f"./{self.OUTPUT}"], encoding="utf-8")
+            assert executable_stdout == "homcc\n"
+
     @pytest.fixture(autouse=True)
     def clean_up(self):
         yield
@@ -245,7 +278,8 @@ class TestEndToEnd:
         Path("foo.o").unlink(missing_ok=True)
         Path(self.OUTPUT).unlink(missing_ok=True)
         Path("homcc/client/clang-homcc").unlink(missing_ok=True)  # test_end_to_end_client_recursive
-        Path("tests/clang++").unlink(missing_ok=True)  # test_end_to_end_implicit_clangplusplus
+        Path("homcc/client/g++").unlink(missing_ok=True)  # test_end_to_end_implicit_gplusplus
+        Path("homcc/client/clang++").unlink(missing_ok=True)  # test_end_to_end_implicit_clangplusplus
 
     # client failures
     @pytest.mark.timeout(TIMEOUT)
@@ -308,7 +342,8 @@ class TestEndToEnd:
     @pytest.mark.gplusplus
     @pytest.mark.timeout(TIMEOUT)
     def test_end_to_end_gplusplus(self, unused_tcp_port: int):
-        self.cpp_end_to_end(self.BasicClientArguments("g++", unused_tcp_port))
+        # self.cpp_end_to_end(self.BasicClientArguments("g++", unused_tcp_port))
+        self.cpp_end_to_end(self.BasicClientArguments("/usr/bin/g++", unused_tcp_port))
 
     @pytest.mark.gplusplus
     @pytest.mark.timeout(TIMEOUT)
@@ -356,6 +391,11 @@ class TestEndToEnd:
         self.cpp_end_to_end_linking_only(
             self.BasicClientArguments("g++", unused_tcp_port, schroot_profile=schroot_profile)
         )
+
+    @pytest.mark.gplusplus
+    @pytest.mark.timeout(TIMEOUT)
+    def test_end_to_end_implicit_gplusplus(self, unused_tcp_port: int):
+        self.cpp_end_to_end_implicit_compiler("g++", unused_tcp_port)
 
     @pytest.mark.gplusplus
     @pytest.mark.timeout(TIMEOUT)
@@ -432,6 +472,11 @@ class TestEndToEnd:
 
     @pytest.mark.clangplusplus
     @pytest.mark.timeout(TIMEOUT)
+    def test_end_to_end_implicit_clangplusplus(self, unused_tcp_port: int):
+        self.cpp_end_to_end_implicit_compiler("clang++", unused_tcp_port)
+
+    @pytest.mark.clangplusplus
+    @pytest.mark.timeout(TIMEOUT)
     def test_end_to_end_clangplusplus_shared_host_slot(self, unused_tcp_port: int):
         self.cpp_end_to_end_multiple_clients_shared_host(self.BasicClientArguments("clang++", unused_tcp_port))
 
@@ -459,27 +504,3 @@ class TestEndToEnd:
         assert homcc_result.returncode == os.EX_OK
         assert clangplusplus_result.returncode == os.EX_OK
         assert homcc_result.stdout == clangplusplus_result.stdout
-
-    @pytest.skip
-    @pytest.mark.clangplusplus
-    @pytest.mark.timeout(TIMEOUT)
-    def test_end_to_end_implicit_clangplusplus(self, unused_tcp_port: int):
-        # symlink clang++ to homcc and make it executable, so we implicitly actually call clang++
-        shadow_clangplusplus: Path = Path.cwd() / "tests/clang++"
-        shadow_clangplusplus.symlink_to(Path.cwd() / "homcc/client/main.py")
-        shadow_clangplusplus.chmod(shadow_clangplusplus.stat().st_mode | stat.S_IEXEC)
-        assert shadow_clangplusplus.exists()
-
-        args: List[str] = [
-            str(shadow_clangplusplus),
-            "-Iexample/include",
-            "example/src/foo.cpp",
-            "example/src/main.cpp",
-            f"-o{self.OUTPUT}",
-        ]
-
-        with self.ServerProcess(unused_tcp_port):
-            result = self.run_client(args)
-            self.check_remote_compilation_assertions(result)
-            executable_stdout: str = subprocess.check_output([f"./{self.OUTPUT}"], encoding="utf-8")
-            assert executable_stdout == "homcc\n"

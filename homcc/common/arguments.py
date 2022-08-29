@@ -586,11 +586,12 @@ class Compiler(ABC):
         # pylint: disable=invalid-name
         return any(CompilerType.is_matching_str(compiler_str) for CompilerType in Compiler.available_compilers())
 
-    def normalize(self):
+    def normalize(self) -> Compiler:
         """normalize the compiler (remove path, keep just executable if a path is provided as compiler)"""
         normalized_compiler_str: str = Path(self._compiler_str).name
         logger.debug("Normalizing compiler '%s' to '%s'.", self._compiler_str, normalized_compiler_str)
         self._compiler_str = normalized_compiler_str
+        return self
 
     @staticmethod
     @abstractmethod
