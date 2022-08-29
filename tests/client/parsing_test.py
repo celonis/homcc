@@ -300,7 +300,7 @@ class TestParsingConfig:
 
 
 class TestHost:
-    """Tests the Hosts class."""
+    """Tests the Host class."""
 
     def test_id(self):
         assert Host.from_str("8.8.8.8:3126/64").id() != Host.from_str("8.8.8.8:3127/64").id()
