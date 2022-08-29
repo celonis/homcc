@@ -228,9 +228,9 @@ Additionally, `HOMCC` provides sandboxed compiler execution for remote compilati
   ```sh
   $ pytest -v -rfEs --cov=homcc
   ```
-- \[TEMPORARY]: View all `homcc` semaphores:
+- The `homcc` client uses SysV semaphores. To view currently open semaphores, execute:
   ```sh
-  $ cat /dev/shm/sem.homcc* | xxd -p -c 32
+  $ ipcs -s
   ```
 
 
