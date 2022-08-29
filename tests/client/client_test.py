@@ -150,7 +150,6 @@ class TestLocalHostSemaphore:
 
         def hold_semaphore(host: Host):
             with LocalHostSemaphore(host, 2):  # successful acquire
-                # assert Path(f"/dev/shm/sem.{host_id}")
                 assert sysv_ipc.Semaphore(host_id).value == 0
                 time.sleep(1)
 
