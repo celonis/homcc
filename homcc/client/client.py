@@ -17,7 +17,7 @@ from enum import Enum, auto
 from pathlib import Path
 from typing import Dict, Iterator, List, Optional
 
-import posix_ipc
+import sysv_ipc
 
 from homcc.client.parsing import ConnectionType, Host
 from homcc.common.arguments import Arguments
@@ -88,16 +88,24 @@ class HostSemaphore(ABC):
     Inheriting classes only have to implement the context manager enter method.
     """
 
-    _semaphore: posix_ipc.Semaphore
-    """POSIX named semaphore to manage host slots between client processes."""
+    _semaphore: sysv_ipc.Semaphore
+    """SysV named semaphore to manage host slots between client processes."""
+    _host_limit: int
+    """Maximal semaphore value."""
 
     def __init__(self, host: Host):
         # signal handling to properly remove the semaphore
         signal.signal(signal.SIGINT, self._handle_interrupt)
         signal.signal(signal.SIGTERM, self._handle_termination)
 
+        self._host_limit = host.limit
+
+        semaphore_key: int = int(host)
         # create host-id semaphore with host slot limit if not already existing
-        self._semaphore = posix_ipc.Semaphore(host.id(), posix_ipc.O_CREAT, initial_value=host.limit)
+        try:
+            self._semaphore = sysv_ipc.Semaphore(key=semaphore_key, flags=sysv_ipc.IPC_CREX, initial_value=host.limit)
+        except sysv_ipc.ExistentialError:
+            self._semaphore = sysv_ipc.Semaphore(key=semaphore_key)
 
     def _handle_interrupt(self, _, frame):
         self.__exit__()
@@ -114,11 +122,14 @@ class HostSemaphore(ABC):
         pass
 
     def __exit__(self, *exc):
-        logger.debug("Exiting semaphore '%s' with value '%i'", self._semaphore.name, self._semaphore.value)
+        logger.debug("Exiting semaphore '%s' with value '%i'", self._semaphore.id, self._semaphore.value)
 
         if self._semaphore is not None:
-            self._semaphore.__exit__(*exc)  # releases the semaphore
-            self._semaphore = self._semaphore.close()  # closes and sets the semaphore to None
+            self._semaphore.release()  # releases the semaphore
+
+            if self._semaphore.value == self._host_limit:
+                # remove the semaphore from the system if no other process currently holds it
+                self._semaphore.remove()
 
 
 class RemoteHostSemaphore(HostSemaphore):
@@ -142,11 +153,11 @@ class RemoteHostSemaphore(HostSemaphore):
         super().__init__(host)
 
     def __enter__(self) -> RemoteHostSemaphore:
-        logger.debug("Entering semaphore '%s' with value '%i'", self._semaphore.name, self._semaphore.value)
+        logger.debug("Entering semaphore '%s' with value '%i'", self._semaphore.id, self._semaphore.value)
 
         try:
             self._semaphore.acquire(0)  # non-blocking acquisition
-        except posix_ipc.BusyError as error:
+        except sysv_ipc.BusyError as error:
             raise SlotsExhaustedError(f"All compilation slots for host {self._host} are occupied.") from error
         return self
 
@@ -186,14 +197,14 @@ class LocalHostSemaphore(HostSemaphore):
         super().__init__(host)
 
     def __enter__(self) -> LocalHostSemaphore:
-        logger.debug("Entering semaphore '%s' with value '%i'", self._semaphore.name, self._semaphore.value)
+        logger.debug("Entering semaphore '%s' with value '%i'", self._semaphore.id, self._semaphore.value)
 
         while True:
             try:
                 self._semaphore.acquire(self._compilation_time - self._timeout)  # blocking acquisition
                 return self
 
-            except posix_ipc.BusyError:
+            except sysv_ipc.BusyError:
                 logger.debug("All compilation slots for localhost are occupied.")
                 # inverse exponential backoff: https://www.desmos.com/calculator/uniats0s4c
                 time.sleep(self._timeout)
