@@ -293,3 +293,14 @@ class TestParsingConfig:
             log_level="INFO",
             verbose=False,
         )
+
+
+class TestHost:
+    """Tests the Host class."""
+
+    def test_id(self):
+        assert Host.from_str("8.8.8.8:3126/64").id() != Host.from_str("8.8.8.8:3127/64").id()
+        assert Host.from_str("other_hostname:3126/64").id() != Host.from_str("some_hostname:3126/64").id()
+
+        assert Host.from_str("8.8.8.8:3127/64").id() == Host.from_str("8.8.8.8:3127/64").id()
+        assert Host.from_str("some_hostname:3126/64").id() == Host.from_str("some_hostname:3126/64").id()

@@ -3,6 +3,7 @@ Host class and related parsing utilities
 """
 from __future__ import annotations
 
+import hashlib
 import os
 import re
 from dataclasses import dataclass
@@ -77,8 +78,16 @@ class Host:
 
         return Host.localhost_with_limit(default_localhost_limit)
 
-    def id(self) -> str:
-        return f"homcc_{str(self)}"
+    def __int__(self) -> int:
+        return self.id()
+
+    def id(self) -> int:
+        """Generates an ID for a certain host by hashing a string representation and
+        cutting it to 4 digits. We can use max. 4 digits because we can not exceed
+        the SHRT_MAX constant (see https://semanchuk.com/philip/sysv_ipc).
+        This may lead to collisions, but we usually do not have many hosts,
+        so the probability of collisions should be acceptable."""
+        return int(hashlib.sha1(str(self).encode("utf-8")).hexdigest(), 16) % 10**4
 
     @classmethod
     def from_str(cls, host_str: str) -> Host:

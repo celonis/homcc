@@ -6,8 +6,8 @@ import time
 from pathlib import Path
 from typing import Iterator, List
 
-import posix_ipc
 import pytest
+import sysv_ipc
 
 from homcc.client.client import (
     LocalHostSemaphore,
@@ -94,30 +94,34 @@ class TestRemoteHostSemaphore:
     def test_remotehosts(self, unused_tcp_port: int):
         name: str = self.test_remotehosts.__name__  # dedicated test semaphore
         remotehost: Host = Host(type=ConnectionType.TCP, name=name, port=unused_tcp_port, limit=1)
-        host_id: str = remotehost.id()
+        host_id: int = remotehost.id()
 
         with RemoteHostSemaphore(remotehost):  # successful first acquire
             assert Path(f"/dev/shm/sem.{host_id}")
-            assert posix_ipc.Semaphore(host_id).value == 0
+            assert sysv_ipc.Semaphore(host_id).value == 0
 
             with pytest.raises(SlotsExhaustedError):
                 with RemoteHostSemaphore(remotehost):  # failing second acquire
                     pass
 
-        assert posix_ipc.Semaphore(host_id).value == 1  # successful release
+        with pytest.raises(sysv_ipc.ExistentialError):
+            # check if semaphore got cleaned up
+            sysv_ipc.Semaphore(host_id)
 
     def test_release(self, unused_tcp_port: int):
         name: str = self.test_release.__name__  # dedicated test semaphore
         remotehost: Host = Host(type=ConnectionType.TCP, name=name, port=unused_tcp_port, limit=1)
-        host_id: str = remotehost.id()
+        host_id: int = remotehost.id()
 
         with pytest.raises(SystemExit):
             with RemoteHostSemaphore(remotehost):
                 assert Path(f"/dev/shm/sem.{host_id}")
-                assert posix_ipc.Semaphore(host_id).value == 0
+                assert sysv_ipc.Semaphore(host_id).value == 0
                 raise SystemExit(os.EX_TEMPFAIL)
 
-        assert posix_ipc.Semaphore(host_id).value == 1  # successful release
+        with pytest.raises(sysv_ipc.ExistentialError):
+            # check if semaphore got cleaned up
+            sysv_ipc.Semaphore(host_id)
 
 
 class TestLocalHostSemaphore:
@@ -136,17 +140,18 @@ class TestLocalHostSemaphore:
     def test_localhosts(self):
         localhost: Host = Host.localhost_with_limit(1)
         localhost.name = self.test_localhosts.__name__  # overwrite name to create dedicated test semaphore
-        host_id: str = localhost.id()
+        host_id: int = localhost.id()
 
         def hold_semaphore(host: Host):
             with LocalHostSemaphore(host, 2):  # successful acquire
-                assert Path(f"/dev/shm/sem.{host_id}")
-                assert posix_ipc.Semaphore(host_id).value == 0
+                assert sysv_ipc.Semaphore(host_id).value == 0
                 time.sleep(1)
 
         # single hold: 1sec total
         hold_semaphore(localhost)
-        assert posix_ipc.Semaphore(host_id).value == 1  # successful release
+        with pytest.raises(sysv_ipc.ExistentialError):
+            # check if semaphore got cleaned up
+            sysv_ipc.Semaphore(host_id)
 
         # concurrent holds: 2 or 3sec total
         threads: List[threading.Thread] = [
@@ -159,7 +164,9 @@ class TestLocalHostSemaphore:
         for thread in threads:
             thread.join()
 
-        assert posix_ipc.Semaphore(host_id).value == 1  # successful releases
+        with pytest.raises(sysv_ipc.ExistentialError):
+            # check if semaphore got cleaned up
+            sysv_ipc.Semaphore(host_id)
 
     def test_release(self):
         localhost: Host = Host.localhost_with_limit(1)
@@ -169,10 +176,12 @@ class TestLocalHostSemaphore:
         with pytest.raises(SystemExit):
             with LocalHostSemaphore(localhost, 2):
                 assert Path(f"/dev/shm/sem.{host_id}")
-                assert posix_ipc.Semaphore(host_id).value == 0
+                assert sysv_ipc.Semaphore(host_id).value == 0
                 raise SystemExit(os.EX_TEMPFAIL)
 
-        assert posix_ipc.Semaphore(host_id).value == 1  # successful release
+        with pytest.raises(sysv_ipc.ExistentialError):
+            # check if semaphore got cleaned up
+            sysv_ipc.Semaphore(host_id)
 
 
 class TestStateFile:
