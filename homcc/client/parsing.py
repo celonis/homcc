@@ -223,11 +223,11 @@ def parse_cli_args(cli_args: List[str]) -> Tuple[Dict[str, Any], Arguments]:
             compiler_arguments: Arguments = Arguments(Compiler.from_str(arg), cli_args[i + 2 :])
             break
     else:
-        # no compiler invocation, all args are handled implicitly via argparse
+        # no compiler invocation, all cli_args are handled implicitly via argparse
         parser.parse_args(cli_args)
         sys.exit(os.EX_OK)
 
-    # remove args that are already implicitly handled via their actions or are compiler specific arguments
+    # remove all args that are already implicitly handled via their actions or are compiler related
     for key in ("COMPILER_ARGUMENTS", "show_hosts", "show_concurrency", "show_variables"):
         homcc_args_dict.pop(key)
 

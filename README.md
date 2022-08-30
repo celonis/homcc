@@ -173,7 +173,7 @@ Additionally, `HOMCC` provides sandboxed compiler execution for remote compilati
     schroot_profile=jammy
     docker_container=example_container
     compilation_request_timeout=120
-    establish_connection_timeout=5
+    establish_connection_timeout=10
     remote_compilation_tries=3
     log_level=DEBUG
     verbose=True
@@ -191,8 +191,8 @@ Additionally, `HOMCC` provides sandboxed compiler execution for remote compilati
     Default compression algorithm: {lzo, lzma}
     Profile to specify the schroot environment for remote compilations
     Docker container that should be used on the server for remote compilations
-    Default total timeout value to wait for a remote compilation request in seconds
-    Default timeout value to wait for establishing a connection to a remote compilation server
+    Total timeout value to wait for a remote compilation request in seconds
+    Timeout value to wait for establishing a connection to a remote compilation server
     Maximal amount of remote compilation servers that are requested from for a single compilation
     Detail level for log messages: {DEBUG, INFO, WARNING, ERROR, CRITICAL}
     Enable verbosity mode which implies detailed and colored logging

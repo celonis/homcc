@@ -14,6 +14,10 @@ from homcc.common.errors import HostParsingError
 
 DEFAULT_PORT: int = 3126
 
+# enable minor levels of concurrency for defaulted hosts
+DEFAULT_LOCALHOST_LIMIT: int = 4
+DEFAULT_REMOTE_HOST_LIMIT: int = 2
+
 
 class ConnectionType(str, Enum):
     """Helper class to distinguish between different host connection types"""
@@ -46,7 +50,7 @@ class Host:
     ):
         self.type = ConnectionType.LOCAL if name == ConnectionType.LOCAL else type
         self.name = name
-        self.limit = int(limit) if limit is not None else 2  # enable minor level of concurrency on default
+        self.limit = int(limit) if limit is not None else DEFAULT_REMOTE_HOST_LIMIT
         self.compression = Compression.from_name(compression)
         self.port = int(port) if port is not None else DEFAULT_PORT  # TCP only info
         self.user = user  # SSH only info
@@ -68,7 +72,7 @@ class Host:
         default_localhost_limit: int = (
             len(os.sched_getaffinity(0))  # number of available CPUs for this process
             or os.cpu_count()  # total number of physical CPUs on the machine
-            or 4  # fallback value to enable minor level of concurrency
+            or DEFAULT_LOCALHOST_LIMIT  # fallback value to enable minor level of concurrency
         )
 
         return Host.localhost_with_limit(default_localhost_limit)

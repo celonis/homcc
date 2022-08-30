@@ -27,9 +27,8 @@ SAFEGUARD_ENV_VAR: str = "_HOMCC_SAFEGUARD"
 
 def is_recursively_invoked() -> bool:
     """Check whether homcc was called recursively by checking the existence of a safeguard environment variable"""
-
     if not (is_safeguard_active := SAFEGUARD_ENV_VAR in os.environ):
-        os.environ[SAFEGUARD_ENV_VAR] = "0"  # activate safeguard
+        os.environ[SAFEGUARD_ENV_VAR] = "1"  # activate safeguard
     return is_safeguard_active
 
 

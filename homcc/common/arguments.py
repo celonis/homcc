@@ -170,7 +170,7 @@ class Arguments:
                 logger.debug("%s is used as compiler", arg)
 
                 if not Arguments.is_executable_arg(arg):
-                    # no return False here since compiler might still be executable on the remote server
+                    # only warn the user here since compiler might still be an executable on the remote server
                     logger.warning("Specified compiler '%s' is not executable", arg)
 
                 return True

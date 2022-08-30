@@ -8,10 +8,6 @@ class RecoverableClientError(Exception):
     """Base class for TCPClient exceptions to indicate recoverability for the client main function"""
 
 
-class PreprocessorError(RecoverableClientError):
-    """Exception for errors during the preprocessor stage"""
-
-
 class TargetInferationError(RecoverableClientError):
     """Exception for errors during infering the compilation target triple."""
 

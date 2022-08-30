@@ -233,7 +233,7 @@ def scan_includes(arguments: Arguments) -> List[str]:
 def find_dependencies(arguments: Arguments) -> Set[str]:
     """get unique set of dependencies by calling the preprocessor and filtering the result"""
 
-    # execute preprocessor command, e.g.: "g++ foo.cpp -M -MT $(homcc)"
+    # execute preprocessor command, e.g.: "g++ foo.cpp -M"
     arguments, filename = arguments.dependency_finding()
     result: ArgumentsExecutionResult = arguments.execute(check=True)
 
