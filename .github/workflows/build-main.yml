@@ -1,4 +1,4 @@
-name: Build Main Branch
+name: Build Main and PR Branch
 
 on:
   push:
@@ -7,6 +7,10 @@ on:
     paths-ignore:
       - README.md
       - .gitignore
+  pull_request:
+    types:
+      - opened
+
 
 jobs:
   linter:

@@ -7,9 +7,6 @@ on:
       - .gitignore
     branches-ignore:
       - main
-  pull_request:
-    types:
-      - opened
 
 jobs:
   linter:
