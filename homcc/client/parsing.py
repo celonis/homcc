@@ -160,7 +160,7 @@ class Host:
     def id(self) -> int:
         """Generates an ID for a certain host by hashing a string representation and
         cutting it to 4 digits. We can use max. 4 digits because we can not exceed
-        the SHRT_MAX constant (see https://semanchuk.com/philip/posix_ipc).
+        the SHRT_MAX constant (see https://semanchuk.com/philip/sysv_ipc).
         This may lead to collisions, but we usually do not have many hosts,
         so the probability of collisions should be acceptable."""
         return int(hashlib.sha1(str(self).encode("utf-8")).hexdigest(), 16) % 10**4

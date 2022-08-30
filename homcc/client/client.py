@@ -89,14 +89,16 @@ class HostSemaphore(ABC):
     """
 
     _semaphore: sysv_ipc.Semaphore
-    """POSIX named semaphore to manage host slots between client processes."""
+    """SysV named semaphore to manage host slots between client processes."""
+    _host_limit: int
+    """Maximal semaphore value."""
 
     def __init__(self, host: Host):
         # signal handling to properly remove the semaphore
         signal.signal(signal.SIGINT, self._handle_interrupt)
         signal.signal(signal.SIGTERM, self._handle_termination)
 
-        self.host = host
+        self._host_limit = host.limit
 
         semaphore_key: int = int(host)
         # create host-id semaphore with host slot limit if not already existing
@@ -125,7 +127,7 @@ class HostSemaphore(ABC):
         if self._semaphore is not None:
             self._semaphore.release()  # releases the semaphore
 
-            if self._semaphore.value == self.host.limit:
+            if self._semaphore.value == self._host_limit:
                 # remove the semaphore from the system if no other process currently holds it
                 self._semaphore.remove()
 
