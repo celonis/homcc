@@ -36,9 +36,8 @@ class RemoteHostSelector:
     """
     Class to enable random but weighted host selection on a load balancing principle. Hosts with more capacity have a
     higher probability of being chosen for remote compilation. The selection policy is agnostic to the server job
-    limit and only relies on the limit information provided on the client side via the host format. If parameter tries
-    is not provided, a host will be randomly selected until all hosts are exhausted. Parameter allow_localhost toggles
-    whether localhost is added to the list of possible selections.
+    limit and only relies on the limit information provided on the client side via the host format. If parameter "tries"
+    is not provided, a host will be randomly selected until all hosts are exhausted.
     """
 
     def __init__(self, hosts: List[Host], tries: Optional[int] = None):

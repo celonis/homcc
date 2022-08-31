@@ -40,7 +40,7 @@ class Arguments:
     """
 
     NO_LINKING_ARG: str = "-c"
-    SHOW_COMPILER_STAGES: str = "-v"
+    SHOW_COMPILER_COMMANDS: str = "-v"
 
     OUTPUT_ARG: str = "-o"
     SPECIFY_LANGUAGE_ARG: str = "-x"
@@ -384,7 +384,7 @@ class Arguments:
 
     def must_be_parsable(self) -> bool:
         """check whether the execution must be parsable and verbose logging should therefore be deactivated"""
-        return self.SHOW_COMPILER_STAGES in self.args
+        return self.SHOW_COMPILER_COMMANDS in self.args
 
     def map_symbol_paths(self, old_path: str, new_path: str) -> Arguments:
         """return a copy of arguments with added command for translating symbol paths in the executable
@@ -448,7 +448,7 @@ class Arguments:
                         arg = f"{path_arg}{self.map_path_arg(path, instance_path, mapped_cwd)}"
 
             else:
-                logger.debug("Unmapped and possibly erroneous arg [%s]", arg)
+                logger.debug("Unmapped a possibly erroneous arg [%s]", arg)
 
             args.append(arg)
 

@@ -87,7 +87,7 @@ async def compile_remotely(arguments: Arguments, hosts: List[Host], config: Clie
         # compilation request timed out, local compilation fallback
         except asyncio.TimeoutError as error:
             raise RemoteCompilationTimeoutError(
-                f"Compilation request {arguments} at host '{host}' timed out."
+                f"Compilation request for {' '.join(arguments.source_files)} at host '{host}' timed out."
             ) from error
 
         # remote semaphore could not be acquired, retry with different host
@@ -104,7 +104,8 @@ async def compile_remotely(arguments: Arguments, hosts: List[Host], config: Clie
 
     # all selected hosts failed, local compilation fallback
     raise RemoteHostsFailure(
-        f"Failed to compile {arguments} remotely on hosts: '{', '.join(str(host) for host in failed_hosts)}'."
+        f"Failed to compile {' '.join(arguments.source_files)} remotely on hosts: "
+        f"'{', '.join(str(host) for host in failed_hosts)}'."
     )
 
 
@@ -210,9 +211,6 @@ def compile_locally(arguments: Arguments, localhost: Host) -> int:
             check_recursive_call(arguments.compiler, error)
             logger.error("%s", error)
             raise SystemExit(error.returncode) from error
-
-        if result.stdout:
-            logger.debug("Compiler result:\n%s", result.stdout)
 
         return result.return_code
 

@@ -11,7 +11,7 @@ from tempfile import TemporaryDirectory
 from threading import Lock
 from typing import Dict, List, Optional, Tuple
 
-from homcc.common.arguments import Arguments, Compiler
+from homcc.common.arguments import Arguments
 from homcc.common.errors import ServerInitializationError, UnsupportedCompilerError
 from homcc.common.hashing import hash_file_with_bytes
 from homcc.common.messages import (
@@ -147,9 +147,7 @@ class TCPRequestHandler(socketserver.BaseRequestHandler):
         logger.info("Handling ArgumentMessage...")
 
         # construct Arguments from args
-        args: List[str] = message.get_args()
-        compiler, args = Compiler.from_str(args[0]), args[1:]
-        self.compiler_arguments: Arguments = Arguments(compiler, args)
+        self.compiler_arguments: Arguments = Arguments.from_vargs(*message.get_args())
 
         target = message.target
         schroot_profile = message.schroot_profile
