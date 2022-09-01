@@ -46,6 +46,7 @@ def docker_container(request: pytest.FixtureRequest) -> str:
 def pytest_configure(config: pytest.Config):
     config.addinivalue_line("markers", "gplusplus: mark tests that execute the g++ compiler")
     config.addinivalue_line("markers", "clangplusplus: mark tests that execute the clang++ compiler")
+    config.addinivalue_line("markers", "ccache: mark tests that execute the ccache compiler cache")
     config.addinivalue_line("markers", "schroot: mark tests that are only run with a set up chroot environment")
     config.addinivalue_line("markers", "docker: mark tests that are only run with a set up docker environment")
 
@@ -63,6 +64,10 @@ def pytest_collection_modifyitems(config: pytest.Config, items: List[pytest.Item
     if shutil.which("clang++") is None:
         clangplusplus_marker = pytest.mark.skip(reason="clang++ is not installed")
         add_marker("clangplusplus", clangplusplus_marker)
+
+    if shutil.which("ccache") is None:
+        ccache_marker = pytest.mark.skip(reason="ccache is not installed")
+        add_marker("ccache", ccache_marker)
 
     if shutil.which("schroot") is None:
         schroot_marker = pytest.mark.skip(reason="schroot is not installed")

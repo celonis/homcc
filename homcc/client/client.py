@@ -401,8 +401,8 @@ class TCPClient:
     async def _send(self, message: Message):
         """send a message to homcc server"""
         logger.debug("Sending %s to '%s:%i':\n%s", message.message_type, self.host, self.port, message.get_json_str())
-        self._writer.write(message.to_bytes())  # type: ignore[union-attr]
-        await self._writer.drain()  # type: ignore[union-attr]
+        self._writer.write(message.to_bytes())
+        await self._writer.drain()
 
     async def send_argument_message(
         self,

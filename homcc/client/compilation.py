@@ -121,9 +121,6 @@ async def compile_remotely_at(
         dependency_dict: Dict[str, str] = calculate_dependency_dict(find_dependencies(arguments))
         remote_arguments: Arguments = arguments.copy().remove_local_args()
 
-        # normalize compiler (e.g. /usr/bin/g++ -> g++)
-        remote_arguments.normalize_compiler()
-
         target: Optional[str] = None
         try:
             target = arguments.get_compiler_target_triple()

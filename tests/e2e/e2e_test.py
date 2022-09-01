@@ -111,8 +111,9 @@ class TestEndToEnd:
             self.process.__exit__(*exc)
 
     @staticmethod
-    def run_client(args: List[str]) -> subprocess.CompletedProcess:
+    def run_client(args: List[str], env: Optional[Dict] = None) -> subprocess.CompletedProcess:
         time.sleep(0.5)  # wait in order to reduce the chance of trying to connect to an unavailable server
+
         try:
             return subprocess.run(
                 args,
@@ -120,6 +121,7 @@ class TestEndToEnd:
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
                 encoding="utf-8",
+                env=env or os.environ,
             )
         except subprocess.CalledProcessError as err:
             time.sleep(0.5)  # wait to reduce interference with server logging
@@ -269,6 +271,24 @@ class TestEndToEnd:
             executable_stdout: str = subprocess.check_output([f"./{self.OUTPUT}"], encoding="utf-8")
             assert executable_stdout == "homcc\n"
 
+    def cpp_ccache_end_to_end(self, basic_arguments: BasicClientArguments):
+        args: List[str] = [
+            "-Iexample/include",
+            "example/src/foo.cpp",
+            "example/src/main.cpp",
+            f"-o{self.OUTPUT}",
+        ]
+
+        env: Dict[str, str] = os.environ.copy()
+        # env["PATH"] = f"/usr/lib/ccache:{env['PATH']}"
+        env["CCACHE_PREFIX"] = "./homcc/client/main.py"
+
+        with self.ServerProcess(basic_arguments.tcp_port):
+            result = self.run_client(list(basic_arguments) + args, env=env)
+            self.check_remote_compilation_assertions(result)
+            executable_stdout: str = subprocess.check_output([f"./{self.OUTPUT}"], encoding="utf-8")
+            assert executable_stdout == "homcc\n"
+
     @pytest.fixture(autouse=True)
     def clean_up(self):
         yield
@@ -280,6 +300,20 @@ class TestEndToEnd:
         Path("homcc/client/clang-homcc").unlink(missing_ok=True)  # test_end_to_end_client_recursive
         Path("homcc/client/g++").unlink(missing_ok=True)  # test_end_to_end_implicit_gplusplus
         Path("homcc/client/clang++").unlink(missing_ok=True)  # test_end_to_end_implicit_clangplusplus
+
+    # TODO: TESTS!!!!!!!!!!!
+    # ccache tests
+    @pytest.mark.ccache
+    @pytest.mark.gplusplus
+    @pytest.mark.timeout(TIMEOUT)
+    def test_end_to_end_ccache_gplusplus(self, unused_tcp_port: int):
+        self.cpp_ccache_end_to_end(self.BasicClientArguments("g++", unused_tcp_port))
+
+    @pytest.mark.ccache
+    @pytest.mark.clangplusplus
+    @pytest.mark.timeout(TIMEOUT)
+    def test_end_to_end_ccache_clangplusplus(self, unused_tcp_port: int):
+        self.cpp_ccache_end_to_end(self.BasicClientArguments("clang++", unused_tcp_port))
 
     # client failures
     @pytest.mark.timeout(TIMEOUT)
@@ -302,14 +336,14 @@ class TestEndToEnd:
             scan_includes_args.insert(1, "--scan-includes")
             self.run_client(scan_includes_args + args)
 
-        assert f"Specified compiler '{mock_compiler}' has been invoked recursively!" in scan_includes_err.value.stdout
+        assert "has been invoked recursively!" in scan_includes_err.value.stdout
 
         # fail during local compilation fallback since server was not started
         with pytest.raises(subprocess.CalledProcessError) as local_err:
             self.run_client(list(basic_arguments) + args)
 
         assert "Compiling locally instead" in local_err.value.stdout
-        assert f"Specified compiler '{mock_compiler}' has been invoked recursively!" in local_err.value.stdout
+        assert "has been invoked recursively!" in local_err.value.stdout
 
         # fail remote compilation during dependency finding after having connected to the server
         with self.ServerProcess(basic_arguments.tcp_port), pytest.raises(
@@ -318,7 +352,7 @@ class TestEndToEnd:
             self.run_client(list(basic_arguments) + args)
 
         assert "Compiling locally instead" not in try_remote_err.value.stdout
-        assert f"Specified compiler '{mock_compiler}' has been invoked recursively!" in try_remote_err.value.stdout
+        assert "has been invoked recursively!" in try_remote_err.value.stdout
 
     @pytest.mark.timeout(TIMEOUT)
     def test_end_to_end_client_multiple_sandbox(self, unused_tcp_port: int):
@@ -342,8 +376,7 @@ class TestEndToEnd:
     @pytest.mark.gplusplus
     @pytest.mark.timeout(TIMEOUT)
     def test_end_to_end_gplusplus(self, unused_tcp_port: int):
-        # self.cpp_end_to_end(self.BasicClientArguments("g++", unused_tcp_port))
-        self.cpp_end_to_end(self.BasicClientArguments("/usr/bin/g++", unused_tcp_port))
+        self.cpp_end_to_end(self.BasicClientArguments("g++", unused_tcp_port))
 
     @pytest.mark.gplusplus
     @pytest.mark.timeout(TIMEOUT)
