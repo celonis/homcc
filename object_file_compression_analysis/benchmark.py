@@ -50,11 +50,11 @@ def main():
         print(f"Benchmarking method {algorithm.name} with compression level {compression_level}")
         result = algorithm.apply()
 
-        report_name = f"benchmarks/{compiler}/benchmark_{compiler}_{algorithm.name}_{mode}_{compression_level}.csv"
+        report_name = f"benchmarks/{compiler}_{mode}_{algorithm.name}_{compression_level}.csv"
         os.makedirs(os.path.dirname(report_name), exist_ok=True)
 
         with open(report_name, 'w') as report:
-            header = "Filename, Size_Original, Size_Compressed, Size_Ratio, Time_Compress, Time_Decompress"
+            header = "Filename,Size_Original,Size_Compressed,Size_Ratio,Time_Compress,Time_Decompress"
             report.write(header + '\n')
             for file, stats in result.items():
                 report.write(', '.join([file] + [str(stat) for stat in stats]) + '\n')
