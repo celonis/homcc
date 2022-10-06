@@ -131,6 +131,9 @@ async def compile_remotely_at(
                 err,
             )
 
+        # normalize compiler, e.g. /usr/bin/g++ -> g++
+        remote_arguments.normalize_compiler()
+
         await client.send_argument_message(
             arguments=remote_arguments,
             cwd=os.getcwd(),

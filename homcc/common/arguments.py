@@ -116,8 +116,7 @@ class Arguments:
         if isinstance(other, Arguments) and len(self) == len(other):
             return self.compiler == other.compiler and self.args == other.args
         if isinstance(other, list) and len(self) == len(other):
-            # TODO: fix, all(i in list(self.compiler) for i in other?
-            return list(self.compiler)[0] == other[0] and self.args == other[1:]
+            return str(self.compiler) == other[0] and self.args == other[1:]
         return False
 
     def __iter__(self) -> Iterator[str]:
@@ -273,6 +272,11 @@ class Arguments:
     def compiler(self) -> Compiler:
         """return the specified compiler"""
         return self._compiler
+
+    def normalize_compiler(self) -> Arguments:
+        """normalize the compiler (remove path, keep just executable if a path is provided as compiler)"""
+        self._compiler.normalized()
+        return self
 
     @cached_property
     def output(self) -> Optional[str]:
@@ -515,6 +519,10 @@ class Arguments:
         output: bool = False,
         timeout: Optional[float] = None,
     ) -> ArgumentsExecutionResult:
+        """
+        Central Arguments execution function that supports some of subprocess.run parameters and adds an additional
+        output parameter that defines whether to duplicate the stdout and stderr to the callers streams.
+        """
         logger.debug("Executing: [%s]", " ".join(args))
 
         result: subprocess.CompletedProcess = subprocess.run(
@@ -556,17 +564,13 @@ class Compiler(ABC):
     """Base class for compiler abstraction."""
 
     _compiler_str: str
-    _prefix: Optional[str]
 
     def __init__(self, compiler_str: str):
         super().__init__()
 
-        self._prefix = self.symlinked_to(compiler_str)
-        self._compiler_str = self.normalize(compiler_str)  # TODO
+        self._compiler_str = compiler_str
 
     def __iter__(self) -> Iterator[str]:
-        if self._prefix is not None:
-            yield self._prefix
         yield self._compiler_str
 
     def __eq__(self, other: Any) -> bool:
@@ -576,17 +580,8 @@ class Compiler(ABC):
             return self._compiler_str == other
         return False
 
-    @staticmethod
-    def symlinked_to(compiler_str) -> Optional[str]:
-        """check if the compiler is a symlink and if so, return the resolved path"""
-        # e.g. g++ symlinked to /usr/lib/ccache/g++
-        if os.path.islink(compiler_str):
-            # os.path.realpath(Path(compiler_str).absolute())
-            return str(Path(compiler_str).resolve())
-        return None
-
     def __str__(self) -> str:
-        return " ".join(self)
+        return self._compiler_str
 
     @classmethod
     def from_str(cls, compiler_str: str) -> Compiler:
@@ -601,12 +596,12 @@ class Compiler(ABC):
         # pylint: disable=invalid-name
         return any(CompilerType.is_matching_str(compiler_str) for CompilerType in Compiler.available_compilers())
 
-    @staticmethod
-    def normalize(compiler_str: str) -> str:
+    def normalized(self) -> Compiler:
         """normalize the compiler (remove path, keep just executable if a path is provided as compiler)"""
-        normalized_compiler_str: str = Path(compiler_str).name  # e.g. /usr/bin/g++ -> g++
-        logger.debug("Normalizing compiler '%s' to '%s'.", compiler_str, normalized_compiler_str)
-        return normalized_compiler_str
+        normalized_compiler_str: str = Path(self._compiler_str).name  # e.g. /usr/bin/g++ -> g++
+        logger.debug("Normalizing compiler '%s' to '%s'.", self._compiler_str, normalized_compiler_str)
+        self._compiler_str = normalized_compiler_str
+        return self
 
     @staticmethod
     @abstractmethod

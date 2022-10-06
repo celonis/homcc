@@ -129,6 +129,7 @@ class HostSemaphore(ABC):
 
             if self._semaphore.value == self._host_limit:
                 # remove the semaphore from the system if no other process currently holds it
+                logger.debug("Removing semaphore '%s'", self._semaphore.id)
                 self._semaphore.remove()
 
             # prevent double release while receiving signal during normal context manager exit

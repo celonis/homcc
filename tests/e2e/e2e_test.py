@@ -247,6 +247,7 @@ class TestEndToEnd:
 
         env: Dict[str, str] = os.environ.copy()
         env["HOMCC_HOSTS"] = f"127.0.0.1:{unused_tcp_port}/1"
+        env["HOMCC_VERBOSE"] = "True"
 
         args: List[str] = [
             str(shadow_compiler),
@@ -279,9 +280,11 @@ class TestEndToEnd:
             f"-o{self.OUTPUT}",
         ]
 
+        # simulate ccache setup and activate homcc debug logging
         env: Dict[str, str] = os.environ.copy()
         # env["PATH"] = f"/usr/lib/ccache:{env['PATH']}"
-        env["CCACHE_PREFIX"] = "./homcc/client/main.py"
+        env["CCACHE_PREFIX"] = str(Path("./homcc/client/main.py").absolute())
+        env["HOMCC_VERBOSE"] = "True"
 
         with self.ServerProcess(basic_arguments.tcp_port):
             result = self.run_client(list(basic_arguments) + args, env=env)
@@ -301,7 +304,6 @@ class TestEndToEnd:
         Path("homcc/client/g++").unlink(missing_ok=True)  # test_end_to_end_implicit_gplusplus
         Path("homcc/client/clang++").unlink(missing_ok=True)  # test_end_to_end_implicit_clangplusplus
 
-    # TODO: TESTS!!!!!!!!!!!
     # ccache tests
     @pytest.mark.ccache
     @pytest.mark.gplusplus
