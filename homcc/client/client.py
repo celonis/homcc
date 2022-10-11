@@ -122,19 +122,22 @@ class HostSemaphore(ABC):
         pass
 
     def __exit__(self, *exc):
-        logger.debug("Exiting semaphore '%s' with value '%i'", self._semaphore.id, self._semaphore.value)
-
         if self._semaphore is not None:
-            self._semaphore.release()  # releases the semaphore
+            try:
+                logger.debug("Exiting semaphore '%s' with value '%i'", self._semaphore.id, self._semaphore.value)
 
-            if self._semaphore.value == self._host_limit:
-                # remove the semaphore from the system if no other process currently holds it
-                self._semaphore.remove()
+                self._semaphore.release()  # releases the semaphore
+
+                if self._semaphore.value == self._host_limit:
+                    # remove the semaphore from the system if no other process currently holds it
+                    self._semaphore.remove()
+            except sysv_ipc.ExistentialError:
+                pass
 
 
 class RemoteHostSemaphore(HostSemaphore):
     """
-    Class to track remote compilation jobs via a named posix semaphore.
+    Class to track remote compilation jobs via a SysV  semaphore.
 
     Each semaphore for a host is uniquely identified by host_id which includes the host name itself and ConnectionType
     specific information like the port for TCP and the user for SSH connections. The semaphore will be acquired with a

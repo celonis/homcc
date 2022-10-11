@@ -1,19 +1,27 @@
 """shared common functionality for server and client regarding compiler arguments"""
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 import re
+import select
 import shutil
+import socket
 import subprocess
 import sys
 from abc import ABC, abstractmethod
+from asyncio.subprocess import Process
 from dataclasses import dataclass
 from functools import cached_property
 from pathlib import Path
 from typing import Any, Iterator, List, Optional, Tuple, Type
 
-from homcc.common.errors import TargetInferationError, UnsupportedCompilerError
+from homcc.common.errors import (
+    ClientDisconnectedError,
+    TargetInferationError,
+    UnsupportedCompilerError,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -542,19 +550,91 @@ class Arguments:
         check: bool = False,
         cwd: Path = Path.cwd(),
         output: bool = False,
+        event_socket: Optional[socket.socket] = None,
         timeout: Optional[float] = None,
     ) -> ArgumentsExecutionResult:
         logger.debug("Executing: [%s]", " ".join(args))
 
-        result: subprocess.CompletedProcess = subprocess.run(
-            args=args, check=check, cwd=cwd, encoding="utf-8", capture_output=True, timeout=timeout
+        if event_socket is None:
+            result: subprocess.CompletedProcess = subprocess.run(
+                args=args, check=check, cwd=cwd, encoding="utf-8", capture_output=True, timeout=timeout
+            )
+
+            if output:
+                sys.stdout.write(result.stdout)
+                sys.stderr.write(result.stderr)
+
+            return ArgumentsExecutionResult.from_process_result(result)
+        else:
+            if output or check:
+                raise ValueError("Async subprocess can not be used with output or check parameters.")
+
+            return asyncio.run(Arguments.execute_async(args, event_socket, cwd, timeout))
+
+    @staticmethod
+    async def execute_async(
+        args: List[str],
+        event_socket: socket.socket,
+        cwd: Path = Path.cwd(),
+        timeout: Optional[float] = None,
+    ) -> ArgumentsExecutionResult:
+        process: Process = await asyncio.create_subprocess_exec(
+            args[0],
+            *args[1:],
+            cwd=cwd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
         )
 
-        if output:
-            sys.stdout.write(result.stdout)
-            sys.stderr.write(result.stderr)
+        def wait_for_socket_close(shutdown_event: asyncio.Event):
+            poller = select.poll()
+            # socket is readable when FIN is sended, so also check if we can read (POLLIN)
+            poller.register(event_socket, select.POLLRDHUP | select.POLLIN)
+            while not shutdown_event.is_set():
+                try:
+                    events = poller.poll(0.1)
+                    for _, event in events:
+                        if event | select.POLLIN or event | select.POLLHUP or event | select.POLLRDHUP:
+                            logger.debug("Socket closing was detected by poll() event: %i", event)
+                            return
+                except ConnectionError:
+                    logger.debug("Socket closing was detected by exception during poll.")
+                    return
 
-        return ArgumentsExecutionResult.from_process_result(result)
+        process_task = asyncio.create_task(process.communicate())
+
+        socket_task_event = asyncio.Event()
+        socket_task = asyncio.to_thread(wait_for_socket_close, socket_task_event)
+
+        done, pending = await asyncio.wait(
+            [process_task, socket_task],
+            timeout=timeout,
+            return_when=asyncio.FIRST_COMPLETED,
+        )
+
+        socket_task_event.set()
+        for pending_task in pending:
+            pending_task.cancel()
+
+        if not done:
+            # no task has finished, but we ran into a timeout
+            process.kill()
+            raise subprocess.TimeoutExpired(args, timeout)  # type: ignore
+
+        stdout: str
+        stderr: str
+        for done_task in done:
+            # check if this comparison actually works.
+            if done_task == process_task:
+                stdout_bytes, stderr_bytes = done_task.result()
+                stdout = stdout_bytes.decode("utf-8")
+                stderr = stderr_bytes.decode("utf-8")
+            else:
+                logger.info("Terminating compilation process as socket got closed by remote.")
+                process.kill()
+                raise ClientDisconnectedError()
+
+        return ArgumentsExecutionResult(process.returncode, stdout, stderr)
 
     def execute(self, **kwargs) -> ArgumentsExecutionResult:
         """
