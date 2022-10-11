@@ -134,6 +134,13 @@ class TestEndToEnd:
         time.sleep(1.5)
 
     @staticmethod
+    def check_local_fallback_compilation_assertions(result: subprocess.CompletedProcess):
+        # make sure we did not compile at the server and fell back to local compilation,
+        # i.e. look at the log messages if the compilation of the file was not performed on the server side
+        assert result.returncode == os.EX_OK
+        assert "Compiling locally instead" in result.stdout
+
+    @staticmethod
     def check_remote_compilation_assertions(result: subprocess.CompletedProcess):
         # make sure we actually compile at the server (and did not fall back to local compilation),
         # i.e. look at the log messages if the compilation of the file on the server side was okay
@@ -257,6 +264,18 @@ class TestEndToEnd:
             f"-o{self.OUTPUT}",
         ]
 
+        # local compilation fallback
+        result = subprocess.run(
+            args,
+            check=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            encoding="utf-8",
+            env=env,
+        )
+        self.check_local_fallback_compilation_assertions(result)
+
+        # successful remote compilation
         with self.ServerProcess(unused_tcp_port):
             time.sleep(0.5)  # wait in order to reduce the chance of trying to connect to an unavailable server
             result = subprocess.run(
@@ -267,10 +286,7 @@ class TestEndToEnd:
                 encoding="utf-8",
                 env=env,
             )
-            assert result.returncode == os.EX_OK
-            assert "Compiling locally instead" not in result.stdout
-            executable_stdout: str = subprocess.check_output([f"./{self.OUTPUT}"], encoding="utf-8")
-            assert executable_stdout == "homcc\n"
+            self.check_remote_compilation_assertions(result)
 
     def cpp_ccache_end_to_end(self, basic_arguments: BasicClientArguments):
         args: List[str] = [
