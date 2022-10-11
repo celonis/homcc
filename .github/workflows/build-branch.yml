@@ -13,10 +13,10 @@ on:
 
 jobs:
   linter:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
       - name: Setup python
         uses: actions/setup-python@v2
         with:
@@ -33,10 +33,10 @@ jobs:
           pylint -v --rcfile=.pylintrc *.py homcc tests
           mypy -v --pretty *.py homcc
   format-check:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
       - name: Setup python
         uses: actions/setup-python@v2
         with:
@@ -57,10 +57,10 @@ jobs:
         with:
           configuration: "--check --color --diff --gitignore --verbose"
   tests:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
       - name: Setup python
         uses: actions/setup-python@v2
         with:
