@@ -13,9 +13,9 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
       - name: Setup python
-        uses: actions/setup-python@v2
+        uses: actions/setup-python@v4
         with:
           python-version: '3.8'
           cache: 'pip'
@@ -33,9 +33,9 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
       - name: Setup python
-        uses: actions/setup-python@v2
+        uses: actions/setup-python@v4
         with:
           python-version: '3.8'
           cache: 'pip'
@@ -57,9 +57,9 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
       - name: Setup python
-        uses: actions/setup-python@v2
+        uses: actions/setup-python@v4
         with:
           python-version: '3.8'
           cache: 'pip'
@@ -74,21 +74,19 @@ jobs:
           sudo debootstrap focal /var/chroot/focal http://archive.ubuntu.com/ubuntu
           sudo ./.github/setup_chroot_env.sh focal $(id -nG | sed 's/ /,/g')
           sudo schroot -c focal -- apt-get -y install g++
-      - name: Install docker
-        uses: docker-practice/actions-setup-docker@master
       - name: Setup docker container
         run: |
           docker run -dit --name jammy -v /tmp:/tmp ubuntu:jammy
       - name: Install build-essential in docker container
         run: |
-          docker exec jammy /bin/sh -c "apt update && apt install -y build-essential clang"
+          docker exec jammy /bin/sh -c "apt-get update && apt-get install -y build-essential clang"
       - name: Run tests
         run: pytest -v -rfE --cov=homcc --capture=tee-sys --runschroot=focal --rundocker=jammy
   build:
     runs-on: ubuntu-22.04
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
       - name: Install packaging dependencies # see https://github.com/astraw/stdeb/issues/175
         run: |
           sudo apt-get update
@@ -113,9 +111,9 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
       - name: Setup python
-        uses: actions/setup-python@v2
+        uses: actions/setup-python@v4
         with:
           python-version: '3.8'
           cache: 'pip'
