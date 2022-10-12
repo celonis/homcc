@@ -579,46 +579,46 @@ class Arguments:
         timeout: Optional[float] = None,
     ) -> ArgumentsExecutionResult:
         start_time = time.time()
+        with subprocess.Popen(args, cwd=cwd, stdout=subprocess.PIPE, stderr=subprocess.PIPE) as process:
+            poller = select.poll()
+            # socket is readable when TCP FIN is sended, so also check if we can read (POLLIN).
+            # As we do have the "contract" that the client should not send anything in the meantime,
+            # we can actually omit reading the socket in this case.
+            poller.register(event_socket_fd, select.POLLRDHUP | select.POLLIN)
 
-        process = subprocess.Popen(args, cwd=cwd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            process_fd = os.pidfd_open(process.pid)
+            poller.register(process_fd, select.POLLRDHUP | select.POLLIN)
 
-        poller = select.poll()
-        # socket is readable when TCP FIN is sended, so also check if we can read (POLLIN).
-        # As we do have the "contract" that the client should not send anything in the meantime,
-        # we can actually omit reading the socket in this case.
-        poller.register(event_socket_fd, select.POLLRDHUP | select.POLLIN)
+            while True:
+                now_time = time.time()
 
-        process_fd = os.pidfd_open(process.pid)
-        poller.register(process_fd, select.POLLRDHUP | select.POLLIN)
+                if timeout is not None and now_time - start_time >= timeout:
+                    raise TimeoutError(f"Compiler timed out. (Timeout: {timeout}s).")
 
-        while True:
-            now_time = time.time()
+                events = poller.poll(1)
+                for fd, event in events:
+                    if fd == event_socket_fd:
+                        logger.info(
+                            "Terminating compilation process as socket got closed by remote. (event: %i)", event
+                        )
 
-            if timeout is not None and now_time - start_time >= timeout:
-                raise TimeoutError(f"Compiler timed out. (Timeout: {timeout}s).")
+                        process.terminate()
+                        # we need to wait for the process to terminate, so that the handle is correctly closed
+                        process.wait()
 
-            events = poller.poll(1)
-            for fd, event in events:
-                if fd == event_socket_fd:
-                    logger.info("Terminating compilation process as socket got closed by remote. (event: %i)", event)
+                        raise ClientDisconnectedError
+                    elif fd == process_fd:
+                        logger.debug("Process has finished (process_fd has event): %i", event)
 
-                    process.terminate()
-                    # we need to wait for the process to terminate, so that the handle is correctly closed
-                    process.wait()
+                        stdout_bytes, stderr_bytes = process.communicate()
+                        stdout = stdout_bytes.decode(Arguments.ENCODING)
+                        stderr = stderr_bytes.decode(Arguments.ENCODING)
 
-                    raise ClientDisconnectedError
-                elif fd == process_fd:
-                    logger.debug("Process has finished (process_fd has event): %i", event)
-
-                    stdout_bytes, stderr_bytes = process.communicate()
-                    stdout = stdout_bytes.decode(Arguments.ENCODING)
-                    stderr = stderr_bytes.decode(Arguments.ENCODING)
-
-                    return ArgumentsExecutionResult(process.returncode, stdout, stderr)
-                else:
-                    logger.warning(
-                        "Got poll() event for fd '%i', which does neither match the socket nor the process.", fd
-                    )
+                        return ArgumentsExecutionResult(process.returncode, stdout, stderr)
+                    else:
+                        logger.warning(
+                            "Got poll() event for fd '%i', which does neither match the socket nor the process.", fd
+                        )
 
     def execute(self, **kwargs) -> ArgumentsExecutionResult:
         """
