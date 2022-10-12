@@ -4,7 +4,6 @@ import os
 import random
 import socketserver
 import threading
-import gc
 from functools import singledispatchmethod
 from pathlib import Path
 from socket import SHUT_RD
@@ -170,7 +169,7 @@ class TCPRequestHandler(socketserver.BaseRequestHandler):
             schroot_profile=schroot_profile,
             docker_container=docker_container,
             compression=compression,
-            sock=self.request,
+            sock_fd=self.request.fileno(),
         )
 
         if target is not None:
@@ -483,13 +482,6 @@ class TCPRequestHandler(socketserver.BaseRequestHandler):
         finally:
             with self.server.current_amount_connections_mutex:
                 self.server.current_amount_connections -= 1
-
-            ##logger.error(sys.getrefcount(self.environment))
-            # for referrer in gc.get_referrers(self.environment):
-            #    logger.error(referrer)
-
-            # TODO: should not be required (but is when connection gets closed)
-            gc.collect()
 
 
 def start_server(config: ServerConfig) -> Tuple[TCPServer, threading.Thread]:

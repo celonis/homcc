@@ -2,7 +2,6 @@
 import logging
 import os
 import shutil
-import socket
 import uuid
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -31,8 +30,8 @@ class Environment:
     """docker container for the compilation."""
     compression: Compression
     """Compression used for data transfer."""
-    sock: socket.socket
-    """Socket that is used for this environment."""
+    sock_fd: int
+    """File descriptor of the socket that is used to communicate."""
 
     def __init__(
         self,
@@ -41,14 +40,14 @@ class Environment:
         schroot_profile: Optional[str],
         docker_container: Optional[str],
         compression: Compression,
-        sock: socket.socket,
+        sock_fd: int,
     ):
         self.instance_folder: str = self.create_instance_folder(root_folder)
         self.mapped_cwd: str = self.map_cwd(cwd, self.instance_folder)
         self.schroot_profile: Optional[str] = schroot_profile
         self.docker_container: Optional[str] = docker_container
         self.compression: Compression = compression
-        self.sock: socket.socket = sock
+        self.sock_fd: int = sock_fd
 
     def __del__(self):
         def remove_path(path: Path):
@@ -180,17 +179,20 @@ class Environment:
 
         if self.schroot_profile is not None:
             result = arguments.schroot_execute(
-                profile=self.schroot_profile, cwd=self.mapped_cwd, timeout=COMPILATION_TIMEOUT, event_socket=self.sock
+                profile=self.schroot_profile,
+                cwd=self.mapped_cwd,
+                timeout=COMPILATION_TIMEOUT,
+                event_socket_fd=self.sock_fd,
             )
         elif self.docker_container is not None:
             result = arguments.docker_execute(
                 container=self.docker_container,
                 cwd=self.mapped_cwd,
                 timeout=COMPILATION_TIMEOUT,
-                event_socket=self.sock,
+                event_socket_fd=self.sock_fd,
             )
         else:
-            result = arguments.execute(cwd=self.mapped_cwd, timeout=COMPILATION_TIMEOUT, event_socket=self.sock)
+            result = arguments.execute(cwd=self.mapped_cwd, timeout=COMPILATION_TIMEOUT, event_socket_fd=self.sock_fd)
 
         if result.stdout:
             logger.debug("Compiler gave output:\n'%s'", result.stdout)
