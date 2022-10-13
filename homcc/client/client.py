@@ -6,12 +6,12 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import random
 import signal
 import socket
 import struct
 import sys
 import time
-import random
 from abc import ABC, abstractmethod
 from enum import Enum, auto
 from pathlib import Path
@@ -279,7 +279,7 @@ class StateFile:
     filepath: Path  # equivalent functionality as: dcc_get_state_filename
     """Path to the state file."""
 
-    def __init__(self, arguments: Arguments, host: Host, slot: Optional[int] = None, state_dir: Path = HOMCC_STATE_DIR):
+    def __init__(self, arguments: Arguments, host: Host, state_dir: Path = HOMCC_STATE_DIR):
         state_dir.mkdir(exist_ok=True, parents=True)
 
         # size_t struct_size: DISTCC_TASK_STATE_STRUCT_SIZE
