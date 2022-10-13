@@ -6,12 +6,12 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
-import random
 import signal
 import socket
 import struct
 import sys
 import time
+import random
 from abc import ABC, abstractmethod
 from enum import Enum, auto
 from pathlib import Path
@@ -304,14 +304,10 @@ class StateFile:
             logger.warning("Trimming too long Hostname '%s'", self.hostname.decode())
             self.hostname = self.hostname[:127]
 
-        self.slot = slot or 0
+        self.slot = 0
 
-        # distcc uses PID instead of host and slot
-        while (filepath := state_dir / f"{self.STATE_FILE_PREFIX}_{host.id()}_{self.slot}").exists():
-            self.slot = (self.slot + 1) % host.limit
-
-        # state file path, e.g. ~/.homcc/state/binstate_homcc_tcp_remotehost_3126_16_0
-        self.filepath = filepath
+        # state file path, e.g. ~/.homcc/state/binstate_pid
+        self.filepath = state_dir / f"{self.STATE_FILE_PREFIX}_{self.pid}"
 
         # enum dcc_phase curr_phase: unassigned
         # struct dcc_task_state *next: DISTCC_NEXT_TASK_STATE
@@ -340,7 +336,7 @@ class StateFile:
         try:
             self.filepath.touch(exist_ok=False)
         except FileExistsError:
-            logger.warning("Could not create client state file '%s' as it already exists!", self.filepath.absolute())
+            logger.debug("Could not create client state file '%s' as it already exists!", self.filepath.absolute())
 
         self.filepath.write_bytes(bytes(self))
 
@@ -350,7 +346,7 @@ class StateFile:
         try:
             self.filepath.unlink()
         except FileNotFoundError:
-            logger.warning("File '%s' was already deleted!", self.filepath.absolute())
+            logger.debug("File '%s' was already deleted!", self.filepath.absolute())
 
 
 class TCPClient:
