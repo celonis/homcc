@@ -177,12 +177,10 @@ class Environment:
             result = arguments.schroot_execute(
                 profile=self.schroot_profile, cwd=self.mapped_cwd, timeout=COMPILATION_TIMEOUT
             )
-
         elif self.docker_container is not None:
             result = arguments.docker_execute(
                 container=self.docker_container, cwd=self.mapped_cwd, timeout=COMPILATION_TIMEOUT
             )
-
         else:
             result = arguments.execute(cwd=self.mapped_cwd, timeout=COMPILATION_TIMEOUT)
 
@@ -193,6 +191,7 @@ class Environment:
         if result.stderr:
             result.stderr = result.stderr.replace(self.instance_folder, "")
             logger.warning("Compiler gave error output %s:\n'%s'", self.instance_folder, result.stderr)
+
         return result
 
 
