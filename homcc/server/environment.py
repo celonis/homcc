@@ -185,9 +185,11 @@ class Environment:
             result = arguments.execute(cwd=self.mapped_cwd, timeout=COMPILATION_TIMEOUT)
 
         if result.stdout:
+            result.stdout = result.stdout.replace(self.instance_folder, "")
             logger.debug("Compiler gave output:\n'%s'", result.stdout)
 
         if result.stderr:
+            result.stderr = result.stderr.replace(self.instance_folder, "")
             logger.warning("Compiler gave error output %s:\n'%s'", self.instance_folder, result.stderr)
 
         return result
