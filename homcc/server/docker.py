@@ -3,6 +3,8 @@ import logging
 import shutil
 import subprocess
 
+from homcc.common.constants import ENCODING
+
 logger = logging.getLogger(__name__)
 
 
@@ -20,7 +22,7 @@ def is_valid_docker_container(docker_container: str) -> bool:
         result: subprocess.CompletedProcess = subprocess.run(
             args=docker_command,
             check=True,
-            encoding="utf-8",
+            encoding=ENCODING,
             capture_output=True,
             timeout=10,
         )

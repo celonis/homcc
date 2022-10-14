@@ -15,6 +15,7 @@ from functools import cached_property
 from pathlib import Path
 from typing import Any, Iterator, List, Optional, Tuple, Type
 
+from homcc.common.constants import ENCODING
 from homcc.common.errors import (
     ClientDisconnectedError,
     TargetInferationError,
@@ -44,8 +45,6 @@ class Arguments:
     Note: Most modifying methods assume sendability as modifications to the arguments are only required for remote
     compilation which implies arguments being able to be sent!
     """
-
-    ENCODING: str = "utf-8"
 
     # if the compiler is neither specified by the callee nor defined in the config file use this as fallback
     DEFAULT_COMPILER: str = "gcc"
@@ -557,7 +556,7 @@ class Arguments:
 
         if event_socket_fd is None:
             result: subprocess.CompletedProcess = subprocess.run(
-                args=args, check=check, cwd=cwd, encoding=Arguments.ENCODING, capture_output=True, timeout=timeout
+                args=args, check=check, cwd=cwd, encoding=ENCODING, capture_output=True, timeout=timeout
             )
 
             if output:
@@ -569,10 +568,10 @@ class Arguments:
             if output or check:
                 raise ValueError("Async subprocess can not be used with output or check parameters.")
 
-            return Arguments.execute_async(args, event_socket_fd, cwd, timeout)
+            return Arguments._execute_async(args, event_socket_fd, cwd, timeout)
 
     @staticmethod
-    def execute_async(
+    def _execute_async(
         args: List[str],
         event_socket_fd: int,
         cwd: Path = Path.cwd(),
@@ -611,8 +610,8 @@ class Arguments:
                         logger.debug("Process has finished (process_fd has event): %i", event)
 
                         stdout_bytes, stderr_bytes = process.communicate()
-                        stdout = stdout_bytes.decode(Arguments.ENCODING)
-                        stderr = stderr_bytes.decode(Arguments.ENCODING)
+                        stdout = stdout_bytes.decode(ENCODING)
+                        stderr = stderr_bytes.decode(ENCODING)
 
                         return ArgumentsExecutionResult(process.returncode, stdout, stderr)
                     else:

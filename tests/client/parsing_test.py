@@ -19,6 +19,7 @@ from homcc.client.parsing import (
     parse_cli_args,
     parse_config,
 )
+from homcc.common.constants import ENCODING
 from homcc.common.errors import HostParsingError
 from homcc.common.parsing import HOMCC_CONFIG_FILENAME
 
@@ -76,7 +77,7 @@ class TestCLI:
             check=True,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
-            encoding="utf-8",
+            encoding=ENCODING,
         )
 
         assert result.returncode == os.EX_OK
