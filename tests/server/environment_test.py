@@ -1,5 +1,6 @@
 """Tests for the server environment."""
 from pathlib import Path
+from unittest.mock import MagicMock
 
 import pytest
 from pytest_mock.plugin import MockerFixture
@@ -13,7 +14,7 @@ from homcc.server.environment import ArgumentsExecutionResult, Environment
 def create_mock_environment(instance_folder: str, mapped_cwd: str) -> Environment:
     Environment.__init__ = lambda *_: None  # type: ignore
     Environment.__del__ = lambda *_: None  # type: ignore
-    environment = Environment(Path(), "", None, None, NoCompression())
+    environment = Environment(Path(), "", None, None, NoCompression(), MagicMock())
 
     environment.instance_folder = instance_folder
     environment.mapped_cwd = mapped_cwd

@@ -12,7 +12,11 @@ from threading import Lock
 from typing import Dict, List, Optional, Tuple
 
 from homcc.common.arguments import Arguments
-from homcc.common.errors import ServerInitializationError, UnsupportedCompilerError
+from homcc.common.errors import (
+    ClientDisconnectedError,
+    ServerInitializationError,
+    UnsupportedCompilerError,
+)
 from homcc.common.hashing import hash_file_with_bytes
 from homcc.common.messages import (
     ArgumentMessage,
@@ -165,6 +169,7 @@ class TCPRequestHandler(socketserver.BaseRequestHandler):
             schroot_profile=schroot_profile,
             docker_container=docker_container,
             compression=compression,
+            sock_fd=self.request.fileno(),
         )
 
         if target is not None:
@@ -262,6 +267,8 @@ class TCPRequestHandler(socketserver.BaseRequestHandler):
             # no further dependencies needed, compile now
             try:
                 result_message = self.environment.do_compilation(self.compiler_arguments)
+            except ClientDisconnectedError:
+                return
             except IOError as error:
                 logger.error("Error during compilation: %s", error)
 

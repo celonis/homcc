@@ -5,6 +5,8 @@ import shutil
 import subprocess
 from typing import List
 
+from homcc.common.constants import ENCODING
+
 logger = logging.getLogger(__name__)
 
 
@@ -21,7 +23,7 @@ def get_schroot_profiles() -> List[str]:
         result: subprocess.CompletedProcess = subprocess.run(
             args=schroot_command,
             check=True,
-            encoding="utf-8",
+            encoding=ENCODING,
             capture_output=True,
             timeout=10,
         )
