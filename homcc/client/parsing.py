@@ -17,6 +17,7 @@ from typing import Any, ClassVar, Dict, List, Optional, Tuple, Union
 from homcc import client
 from homcc.common.arguments import Arguments
 from homcc.common.compression import Compression
+from homcc.common.constants import ENCODING
 from homcc.common.errors import HostParsingError, NoHostsFoundError
 from homcc.common.logging import LogLevel
 from homcc.common.parsing import HOMCC_CONFIG_FILENAME, default_locations, parse_configs
@@ -163,7 +164,7 @@ class Host:
         the SHRT_MAX constant (see https://semanchuk.com/philip/sysv_ipc).
         This may lead to collisions, but we usually do not have many hosts,
         so the probability of collisions should be acceptable."""
-        return int(hashlib.sha1(str(self).encode("utf-8")).hexdigest(), 16) % 10**4
+        return int(hashlib.sha1(str(self).encode(ENCODING)).hexdigest(), 16) % 10**4
 
     @classmethod
     def from_str(cls, host_str: str) -> Host:
@@ -520,7 +521,7 @@ def load_hosts(hosts_file_locations: Optional[List[Path]] = None) -> Tuple[str, 
             if hosts_file_location.stat().st_size == 0:
                 logger.warning("Skipping empty hosts file '%s'!", hosts_file_location)
                 continue
-            return str(hosts_file_location), filtered_lines(hosts_file_location.read_text(encoding="utf-8"))
+            return str(hosts_file_location), filtered_lines(hosts_file_location.read_text(encoding=ENCODING))
 
     raise NoHostsFoundError("No hosts information were found!")
 

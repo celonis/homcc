@@ -9,6 +9,7 @@ from typing import Dict, List, Optional, Tuple
 
 from homcc.common.arguments import ArgumentsExecutionResult
 from homcc.common.compression import CompressedBytes, Compression, NoCompression
+from homcc.common.constants import ENCODING
 
 
 class MessageType(Enum):
@@ -61,7 +62,7 @@ class Message(ABC):
 
     def to_bytes(self) -> bytearray:
         """Serializes the message as a bytearray."""
-        json_bytes: bytearray = bytearray(self.get_json_str(), "utf-8")
+        json_bytes: bytearray = bytearray(self.get_json_str(), ENCODING)
 
         json_size: int = len(json_bytes)
         json_size_bytes: bytearray = bytearray(json_size.to_bytes(length=8, byteorder="little", signed=False))
@@ -84,7 +85,9 @@ class Message(ABC):
 
     @staticmethod
     def _parse_json_field(message_bytes: bytearray, json_size: int) -> dict:
-        return json.loads(message_bytes[Message.JSON_OFFSET : Message.JSON_OFFSET + json_size].decode(encoding="utf-8"))
+        return json.loads(
+            message_bytes[Message.JSON_OFFSET : Message.JSON_OFFSET + json_size].decode(encoding=ENCODING)
+        )
 
     @staticmethod
     def _parse_message_json(json_dict: dict) -> Message:

@@ -11,6 +11,7 @@ from typing import Dict, List, Optional
 import pytest
 
 from homcc.common.compression import LZMA, LZO, Compression, NoCompression
+from homcc.common.constants import ENCODING
 
 
 class TestEndToEnd:
@@ -74,7 +75,7 @@ class TestEndToEnd:
                 basic_arguments.to_list() + args,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
-                encoding="utf-8",
+                encoding=ENCODING,
             )
 
         def __enter__(self) -> subprocess.Popen:
@@ -98,7 +99,7 @@ class TestEndToEnd:
                     "--jobs=1",
                 ],
                 bufsize=TestEndToEnd.BUF_SIZE,
-                encoding="utf-8",
+                encoding=ENCODING,
             )
 
         def __enter__(self) -> subprocess.Popen:
@@ -117,7 +118,7 @@ class TestEndToEnd:
                 check=True,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
-                encoding="utf-8",
+                encoding=ENCODING,
             )
         except subprocess.CalledProcessError as err:
             print(err.stdout)  # print stdout in case of an error
@@ -147,7 +148,7 @@ class TestEndToEnd:
         with self.ServerProcess(basic_arguments.tcp_port):
             result = self.run_client(basic_arguments, args)
             self.check_remote_compilation_assertions(result)
-            executable_stdout: str = subprocess.check_output([f"./{self.OUTPUT}"], encoding="utf-8")
+            executable_stdout: str = subprocess.check_output([f"./{self.OUTPUT}"], encoding=ENCODING)
             assert executable_stdout == "homcc\n"
 
     def cpp_end_to_end_no_linking(self, basic_arguments: BasicClientArguments):
@@ -251,7 +252,7 @@ class TestEndToEnd:
                 check=True,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
-                encoding="utf-8",
+                encoding=ENCODING,
             )
 
         assert err.value.returncode == os.EX_USAGE
@@ -268,7 +269,7 @@ class TestEndToEnd:
                 check=True,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
-                encoding="utf-8",
+                encoding=ENCODING,
                 env=env,
             )
 
