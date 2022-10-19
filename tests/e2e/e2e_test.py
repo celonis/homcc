@@ -298,7 +298,6 @@ class TestEndToEnd:
 
         # simulate ccache setup and activate homcc debug logging
         env: Dict[str, str] = os.environ.copy()
-        # env["PATH"] = f"/usr/lib/ccache:{env['PATH']}"
         env["CCACHE_PREFIX"] = str(Path("./homcc/client/main.py").absolute())
         env["HOMCC_VERBOSE"] = "True"
 
