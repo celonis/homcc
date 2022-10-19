@@ -128,6 +128,7 @@ class HostSemaphore(ABC):
 
             if self._semaphore.value == self._host_limit:
                 # remove the semaphore from the system if no other process currently holds it
+                logger.debug("Removing semaphore '%s'", self._semaphore.id)
                 self._semaphore.remove()
 
             # prevent double release while receiving signal during normal context manager exit
@@ -400,8 +401,8 @@ class TCPClient:
     async def _send(self, message: Message):
         """send a message to homcc server"""
         logger.debug("Sending %s to '%s:%i':\n%s", message.message_type, self.host, self.port, message.get_json_str())
-        self._writer.write(message.to_bytes())  # type: ignore[union-attr]
-        await self._writer.drain()  # type: ignore[union-attr]
+        self._writer.write(message.to_bytes())
+        await self._writer.drain()
 
     async def send_argument_message(
         self,

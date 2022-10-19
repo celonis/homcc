@@ -122,9 +122,6 @@ async def compile_remotely_at(
         dependency_dict: Dict[str, str] = calculate_dependency_dict(find_dependencies(arguments))
         remote_arguments: Arguments = arguments.copy().remove_local_args()
 
-        # normalize compiler (e.g. /usr/bin/g++ -> g++)
-        remote_arguments.normalize_compiler()
-
         target: Optional[str] = None
         try:
             target = arguments.get_compiler_target_triple()
@@ -134,6 +131,9 @@ async def compile_remotely_at(
                 "This may lead to unexpected results if the remote compilation host has a different architecture. %s",
                 err,
             )
+
+        # normalize compiler, e.g. /usr/bin/g++ -> g++
+        remote_arguments.normalize_compiler()
 
         await client.send_argument_message(
             arguments=remote_arguments,

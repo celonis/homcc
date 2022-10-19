@@ -240,7 +240,8 @@ def setup_client(cli_args: List[str]) -> Tuple[ClientConfig, Arguments, Host, Li
 
     # load and parse arguments and configuration information
     if Arguments.is_compiler_arg(cli_args[0]):  # e.g. when "g++" is symlinked to "homcc"
-        homcc_args_dict, compiler_arguments = {}, Arguments(Compiler.from_str(cli_args[0]).normalize(), cli_args[1:])
+        normalized_compiler: Compiler = Compiler.from_str(cli_args[0]).normalized()
+        homcc_args_dict, compiler_arguments = {}, Arguments(normalized_compiler, cli_args[1:])
     else:  # e.g. explicit "homcc ... g++ ..." call
         homcc_args_dict, compiler_arguments = parse_cli_args(cli_args)
 
