@@ -26,4 +26,3 @@ class Table:
     for i, timeElapsed in enumerate(data[3]):
         item_time_elapsed = QTableWidgetItem(timeElapsed)
         table.setItem(i, 3, item_time_elapsed)
-
