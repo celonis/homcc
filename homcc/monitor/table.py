@@ -17,9 +17,6 @@ class Table:
     column_headers: ClassVar[List[str]] = ["Host", "State", "Source File", "Time Elapsed"]
     """Relevant compilation attributes."""
 
-    data = List[RowData]
-    """Data structure of the table."""
-
     def __init__(self, data: List[RowData]):
 
         self.data = data
