@@ -1,7 +1,6 @@
 from dataclasses import dataclass
 from typing import ClassVar, List
 from PySide2.QtWidgets import QTableWidgetItem, QTableWidget, QHeaderView
-from data import data_info
 
 
 @dataclass
@@ -21,17 +20,17 @@ class Table:
     data = List[RowData]
     """Data structure of the table."""
 
-    def __init__(self, column_headers, data):
+    def __init__(self, data: List[RowData]):
 
-        self.data = data_info
+        self.data = data
         self.table = QTableWidget()
-        self.table.setRowCount(len(data_info))
-        self.table.setColumnCount(len(column_headers))
-        self.table.setHorizontalHeaderLabels(column_headers)
+        self.table.setRowCount(len(data))
+        self.table.setColumnCount(len(Table.column_headers))
+        self.table.setHorizontalHeaderLabels(Table.column_headers)
         self.table.verticalHeader().setVisible(0)
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
 
     def render(self):
-        for row in range(len(data_info)):
+        for row in range(len(self.data)):
             for col in range(4):
-                self.table.setItem(row, col, QTableWidgetItem(data_info[row][col]))
+                self.table.setItem(row, col, QTableWidgetItem(self.data[row][col]))

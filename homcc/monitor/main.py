@@ -5,12 +5,13 @@ homcc monitor
 import sys
 from PySide2.QtWidgets import QApplication
 from table import Table
+from data import data_info
 
 
 def main():
 
     app: QApplication = QApplication()
-    table: Table = Table(Table.column_headers, Table.data)
+    table: Table = Table(data_info)
     table.table.setWindowTitle("homcc Monitor")
     table.table.resize(500, 200)
     table.render()
