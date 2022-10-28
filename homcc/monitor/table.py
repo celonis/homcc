@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from typing import ClassVar, List
 from PySide2.QtWidgets import QTableWidgetItem, QTableWidget, QHeaderView
+# type: ignore
 
 
 @dataclass
