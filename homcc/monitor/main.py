@@ -3,13 +3,12 @@
 homcc monitor
 """
 import sys
-from PySide2.QtWidgets import QApplication
-# type: ignore
+from PySide2.QtWidgets import QApplication  # type: ignore
 from table import Table
 
 data_info = [
-        ("foo", "Sending", "foo.cpp", "13sec"),
-        ("bar", "Compiling", "bar.cpp", "4sec"),
+    ("foo", "Sending", "foo.cpp", "13sec"),
+    ("bar", "Compiling", "bar.cpp", "4sec"),
 ]
 
 
