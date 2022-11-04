@@ -214,7 +214,7 @@ class TestArguments:
 
         assert Arguments.from_vargs(*args).source_files == source_file_args
 
-    def test_compiler_normalized(self):
+    def test_compiler_normalization(self):
         assert Arguments.from_vargs("gcc", "foo").normalize_compiler().compiler == "gcc"
         assert Arguments.from_vargs("/usr/bin/gcc", "foo").normalize_compiler().compiler == "gcc"
         assert Arguments.from_vargs("~/bin/g++", "foo").normalize_compiler().compiler == "g++"

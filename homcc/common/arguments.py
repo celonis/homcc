@@ -127,14 +127,14 @@ class Arguments:
         return False
 
     def __iter__(self) -> Iterator[str]:
-        yield str(self.compiler)
+        yield from self.compiler
         yield from self.args
 
     def __len__(self) -> int:
         return len(self.args) + 1
 
     def __str__(self) -> str:
-        return f"[{str(self.compiler)} {' '.join(self.args)}]"
+        return f"[{' '.join(list(self.compiler) + self.args)}]"
 
     def __repr__(self) -> str:
         return f"{self.__class__}({str(self)})"
@@ -282,7 +282,7 @@ class Arguments:
 
     def normalize_compiler(self) -> Arguments:
         """normalize the compiler (remove path, keep just executable if a path is provided as compiler)"""
-        self._compiler.normalize()
+        self._compiler.normalized()
         return self
 
     @cached_property
@@ -527,6 +527,10 @@ class Arguments:
         event_socket_fd: Optional[int] = None,
         timeout: Optional[float] = None,
     ) -> ArgumentsExecutionResult:
+        """
+        Central Arguments execution function that supports some of subprocess.run parameters and adds an additional
+        output parameter that defines whether to duplicate the stdout and stderr to the callers streams.
+        """
         logger.debug("Executing: [%s]", " ".join(args))
 
         if event_socket_fd is None:
@@ -622,9 +626,15 @@ class Arguments:
 class Compiler(ABC):
     """Base class for compiler abstraction."""
 
+    _compiler_str: str
+
     def __init__(self, compiler_str: str):
         super().__init__()
-        self._compiler_str: str = compiler_str
+
+        self._compiler_str = compiler_str
+
+    def __iter__(self) -> Iterator[str]:
+        yield self._compiler_str
 
     def __eq__(self, other: Any) -> bool:
         if isinstance(other, Compiler):
@@ -649,9 +659,9 @@ class Compiler(ABC):
         # pylint: disable=invalid-name
         return any(CompilerType.is_matching_str(compiler_str) for CompilerType in Compiler.available_compilers())
 
-    def normalize(self) -> Compiler:
+    def normalized(self) -> Compiler:
         """normalize the compiler (remove path, keep just executable if a path is provided as compiler)"""
-        normalized_compiler_str: str = Path(self._compiler_str).name
+        normalized_compiler_str: str = Path(self._compiler_str).name  # e.g. /usr/bin/g++ -> g++
         logger.debug("Normalizing compiler '%s' to '%s'.", self._compiler_str, normalized_compiler_str)
         self._compiler_str = normalized_compiler_str
         return self

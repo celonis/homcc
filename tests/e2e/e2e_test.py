@@ -114,6 +114,7 @@ class TestEndToEnd:
     @staticmethod
     def run_client(args: List[str]) -> subprocess.CompletedProcess:
         time.sleep(0.5)  # wait in order to reduce the chance of trying to connect to an unavailable server
+
         try:
             return subprocess.run(
                 args,
@@ -131,6 +132,13 @@ class TestEndToEnd:
     def delay_between_tests(self):
         yield
         time.sleep(1.5)
+
+    @staticmethod
+    def check_local_fallback_compilation_assertions(result: subprocess.CompletedProcess):
+        # make sure we did not compile at the server and fell back to local compilation,
+        # i.e. look at the log messages if the compilation of the file was not performed on the server side
+        assert result.returncode == os.EX_OK
+        assert "Compiling locally instead" in result.stdout
 
     @staticmethod
     def check_remote_compilation_assertions(result: subprocess.CompletedProcess):
@@ -246,6 +254,7 @@ class TestEndToEnd:
 
         env: Dict[str, str] = os.environ.copy()
         env["HOMCC_HOSTS"] = f"127.0.0.1:{unused_tcp_port}/1"
+        env["HOMCC_VERBOSE"] = "True"
 
         args: List[str] = [
             str(shadow_compiler),
@@ -255,6 +264,18 @@ class TestEndToEnd:
             f"-o{self.OUTPUT}",
         ]
 
+        # local compilation fallback
+        result = subprocess.run(
+            args,
+            check=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            encoding=ENCODING,
+            env=env,
+        )
+        self.check_local_fallback_compilation_assertions(result)
+
+        # successful remote compilation
         with self.ServerProcess(unused_tcp_port):
             time.sleep(0.5)  # wait in order to reduce the chance of trying to connect to an unavailable server
             result = subprocess.run(
@@ -265,10 +286,7 @@ class TestEndToEnd:
                 encoding=ENCODING,
                 env=env,
             )
-            assert result.returncode == os.EX_OK
-            assert "Compiling locally instead" not in result.stdout
-            executable_stdout: str = subprocess.check_output([f"./{self.OUTPUT}"], encoding=ENCODING)
-            assert executable_stdout == "homcc\n"
+            self.check_remote_compilation_assertions(result)
 
     @pytest.fixture(autouse=True)
     def clean_up(self):
@@ -303,14 +321,14 @@ class TestEndToEnd:
             scan_includes_args.insert(1, "--scan-includes")
             self.run_client(scan_includes_args + args)
 
-        assert f"Specified compiler '{mock_compiler}' has been invoked recursively!" in scan_includes_err.value.stdout
+        assert "has been invoked recursively!" in scan_includes_err.value.stdout
 
         # fail during local compilation fallback since server was not started
         with pytest.raises(subprocess.CalledProcessError) as local_err:
             self.run_client(list(basic_arguments) + args)
 
         assert "Compiling locally instead" in local_err.value.stdout
-        assert f"Specified compiler '{mock_compiler}' has been invoked recursively!" in local_err.value.stdout
+        assert "has been invoked recursively!" in local_err.value.stdout
 
         # fail remote compilation during dependency finding after having connected to the server
         with self.ServerProcess(basic_arguments.tcp_port), pytest.raises(
@@ -319,7 +337,7 @@ class TestEndToEnd:
             self.run_client(list(basic_arguments) + args)
 
         assert "Compiling locally instead" not in try_remote_err.value.stdout
-        assert f"Specified compiler '{mock_compiler}' has been invoked recursively!" in try_remote_err.value.stdout
+        assert "has been invoked recursively!" in try_remote_err.value.stdout
 
     @pytest.mark.timeout(TIMEOUT)
     def test_end_to_end_client_multiple_sandbox(self, unused_tcp_port: int):
@@ -343,8 +361,7 @@ class TestEndToEnd:
     @pytest.mark.gplusplus
     @pytest.mark.timeout(TIMEOUT)
     def test_end_to_end_gplusplus(self, unused_tcp_port: int):
-        # self.cpp_end_to_end(self.BasicClientArguments("g++", unused_tcp_port))
-        self.cpp_end_to_end(self.BasicClientArguments("/usr/bin/g++", unused_tcp_port))
+        self.cpp_end_to_end(self.BasicClientArguments("g++", unused_tcp_port))
 
     @pytest.mark.gplusplus
     @pytest.mark.timeout(TIMEOUT)
