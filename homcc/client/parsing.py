@@ -96,7 +96,7 @@ class ShowEnvironmentVariables(ShowAndExitAction):
         if (homcc_hosts_env_var := os.getenv(HOMCC_HOSTS_ENV_VAR)) is not None:
             sys.stdout.write(f"{HOMCC_HOSTS_ENV_VAR}: {homcc_hosts_env_var}\n")
 
-        for config_env_var in iter(ClientEnvironmentVariables):
+        for config_env_var in iter(ClientEnvironmentVariables()):
             if (config := os.getenv(config_env_var)) is not None:
                 sys.stdout.write(f"{config_env_var}: {config}\n")
 
