@@ -18,6 +18,7 @@ from homcc.client.client import (
 from homcc.client.config import ClientConfig
 from homcc.client.host import Host
 from homcc.common.arguments import Arguments, ArgumentsExecutionResult, Compiler
+from homcc.common.constants import ENCODING
 from homcc.common.errors import (
     FailedHostNameResolutionError,
     RemoteCompilationError,
@@ -237,7 +238,7 @@ def find_dependencies(arguments: Arguments) -> Set[str]:
 
     # read from the dependency file if it was created as a side effect
     dependency_result: str = (
-        Path(filename).read_text(encoding="utf-8") if filename is not None and filename != "-" else result.stdout
+        Path(filename).read_text(encoding=ENCODING) if filename is not None and filename != "-" else result.stdout
     )
 
     logger.debug("Preprocessor result:\n%s", dependency_result)

@@ -68,3 +68,7 @@ class ServerInitializationError(Exception):
 
 class UnsupportedCompilerError(Exception):
     """The attempted action is currently not supported with the given compiler."""
+
+
+class ClientDisconnectedError(Exception):
+    """The client unexpectedly disconnected."""

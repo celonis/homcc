@@ -15,6 +15,7 @@ from homcc.client.config import ClientConfig, ClientEnvironmentVariables, parse_
 from homcc.client.host import Host
 from homcc.common.arguments import Arguments, Compiler
 from homcc.common.compression import Compression
+from homcc.common.constants import ENCODING
 from homcc.common.errors import HostParsingError, NoHostsFoundError
 from homcc.common.logging import (
     Formatter,
@@ -414,6 +415,6 @@ def load_hosts(hosts_file_locations: Optional[List[Path]] = None) -> Tuple[str, 
             if hosts_file_location.stat().st_size == 0:
                 logger.warning("Skipping empty hosts file '%s'!", hosts_file_location)
                 continue
-            return str(hosts_file_location), filtered_lines(hosts_file_location.read_text(encoding="utf-8"))
+            return str(hosts_file_location), filtered_lines(hosts_file_location.read_text(encoding=ENCODING))
 
     raise NoHostsFoundError

@@ -9,6 +9,7 @@ import pytest
 from homcc.client.compilation import compile_locally, find_dependencies, scan_includes
 from homcc.client.parsing import Host
 from homcc.common.arguments import Arguments
+from homcc.common.constants import ENCODING
 
 
 class TestCompilation:
@@ -108,7 +109,7 @@ class TestCompilation:
         assert compile_locally(Arguments.from_vargs(*args), Host.localhost_with_limit(1)) == os.EX_OK
         assert Path(output).exists()
 
-        executable_stdout: str = subprocess.check_output([f"./{output}"], encoding="utf-8")
+        executable_stdout: str = subprocess.check_output([f"./{output}"], encoding=ENCODING)
         assert executable_stdout == "homcc\n"
 
         Path(output).unlink(missing_ok=True)

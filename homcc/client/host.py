@@ -11,6 +11,7 @@ from enum import Enum
 from typing import Dict, Optional, Union
 
 from homcc.common.compression import Compression
+from homcc.common.constants import ENCODING
 from homcc.common.errors import HostParsingError
 
 DEFAULT_PORT: int = 3126
@@ -87,7 +88,7 @@ class Host:
         the SHRT_MAX constant (see https://semanchuk.com/philip/sysv_ipc).
         This may lead to collisions, but we usually do not have many hosts,
         so the probability of collisions should be acceptable."""
-        return int(hashlib.sha1(str(self).encode("utf-8")).hexdigest(), 16) % 10**4
+        return int(hashlib.sha1(str(self).encode(ENCODING)).hexdigest(), 16) % 10**4
 
     @classmethod
     def from_str(cls, host_str: str) -> Host:

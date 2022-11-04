@@ -123,12 +123,16 @@ class HostSemaphore(ABC):
 
     def __exit__(self, *exc):
         if self._semaphore is not None:
-            logger.debug("Exiting semaphore '%s' with value '%i'", self._semaphore.id, self._semaphore.value)
-            self._semaphore.release()  # releases the semaphore
+            try:
+                logger.debug("Exiting semaphore '%s' with value '%i'", self._semaphore.id, self._semaphore.value)
 
-            if self._semaphore.value == self._host_limit:
-                # remove the semaphore from the system if no other process currently holds it
-                self._semaphore.remove()
+                self._semaphore.release()  # releases the semaphore
+
+                if self._semaphore.value == self._host_limit:
+                    # remove the semaphore from the system if no other process currently holds it
+                    self._semaphore.remove()
+            except sysv_ipc.ExistentialError:
+                pass
 
             # prevent double release while receiving signal during normal context manager exit
             self._semaphore = None  # type: ignore
@@ -136,7 +140,7 @@ class HostSemaphore(ABC):
 
 class RemoteHostSemaphore(HostSemaphore):
     """
-    Class to track remote compilation jobs via a named posix semaphore.
+    Class to track remote compilation jobs via a SysV semaphore.
 
     Each semaphore for a host is uniquely identified by host_id which includes the host name itself and ConnectionType
     specific information like the port for TCP and the user for SSH connections. The semaphore will be acquired with a
@@ -281,7 +285,7 @@ class StateFile:
     filepath: Path  # equivalent functionality as: dcc_get_state_filename
     """Path to the state file."""
 
-    def __init__(self, arguments: Arguments, host: Host, slot: Optional[int] = None, state_dir: Path = HOMCC_STATE_DIR):
+    def __init__(self, arguments: Arguments, host: Host, state_dir: Path = HOMCC_STATE_DIR):
         state_dir.mkdir(exist_ok=True, parents=True)
 
         # size_t struct_size: DISTCC_TASK_STATE_STRUCT_SIZE
@@ -306,14 +310,10 @@ class StateFile:
             logger.warning("Trimming too long Hostname '%s'", self.hostname.decode())
             self.hostname = self.hostname[:127]
 
-        self.slot = slot or 0
+        self.slot = 0
 
-        # distcc uses PID instead of host and slot
-        while (filepath := state_dir / f"{self.STATE_FILE_PREFIX}_{host.id()}_{self.slot}").exists():
-            self.slot = (self.slot + 1) % host.limit
-
-        # state file path, e.g. ~/.homcc/state/binstate_homcc_tcp_remotehost_3126_16_0
-        self.filepath = filepath
+        # state file path, e.g. ~/.homcc/state/binstate_pid
+        self.filepath = state_dir / f"{self.STATE_FILE_PREFIX}_{self.pid}"
 
         # enum dcc_phase curr_phase: unassigned
         # struct dcc_task_state *next: DISTCC_NEXT_TASK_STATE
@@ -342,7 +342,7 @@ class StateFile:
         try:
             self.filepath.touch(exist_ok=False)
         except FileExistsError:
-            logger.warning("Could not create client state file '%s' as it already exists!", self.filepath.absolute())
+            logger.debug("Could not create client state file '%s' as it already exists!", self.filepath.absolute())
 
         self.filepath.write_bytes(bytes(self))
 
@@ -352,7 +352,7 @@ class StateFile:
         try:
             self.filepath.unlink()
         except FileNotFoundError:
-            logger.warning("File '%s' was already deleted!", self.filepath.absolute())
+            logger.debug("File '%s' was already deleted!", self.filepath.absolute())
 
 
 class TCPClient:

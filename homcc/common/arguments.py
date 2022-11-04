@@ -4,16 +4,23 @@ from __future__ import annotations
 import logging
 import os
 import re
+import select
 import shutil
 import subprocess
 import sys
+import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from functools import cached_property
 from pathlib import Path
 from typing import Any, Iterator, List, Optional, Tuple, Type
 
-from homcc.common.errors import TargetInferationError, UnsupportedCompilerError
+from homcc.common.constants import ENCODING
+from homcc.common.errors import (
+    ClientDisconnectedError,
+    TargetInferationError,
+    UnsupportedCompilerError,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -517,19 +524,75 @@ class Arguments:
         check: bool = False,
         cwd: Path = Path.cwd(),
         output: bool = False,
+        event_socket_fd: Optional[int] = None,
         timeout: Optional[float] = None,
     ) -> ArgumentsExecutionResult:
         logger.debug("Executing: [%s]", " ".join(args))
 
-        result: subprocess.CompletedProcess = subprocess.run(
-            args=args, check=check, cwd=cwd, encoding="utf-8", capture_output=True, timeout=timeout
-        )
+        if event_socket_fd is None:
+            result: subprocess.CompletedProcess = subprocess.run(
+                args=args, check=check, cwd=cwd, encoding=ENCODING, capture_output=True, timeout=timeout
+            )
 
-        if output:
-            sys.stdout.write(result.stdout)
-            sys.stderr.write(result.stderr)
+            if output:
+                sys.stdout.write(result.stdout)
+                sys.stderr.write(result.stderr)
 
-        return ArgumentsExecutionResult.from_process_result(result)
+            return ArgumentsExecutionResult.from_process_result(result)
+        else:
+            if output or check:
+                raise ValueError("Async subprocess can not be used with output or check parameters.")
+
+            return Arguments._execute_async(args, event_socket_fd, cwd, timeout)
+
+    @staticmethod
+    def _execute_async(
+        args: List[str],
+        event_socket_fd: int,
+        cwd: Path = Path.cwd(),
+        timeout: Optional[float] = None,
+    ) -> ArgumentsExecutionResult:
+        start_time = time.time()
+        with subprocess.Popen(args, cwd=cwd, stdout=subprocess.PIPE, stderr=subprocess.PIPE) as process:
+            poller = select.poll()
+            # socket is readable when TCP FIN is sended, so also check if we can read (POLLIN).
+            # As we do have the "contract" that the client should not send anything in the meantime,
+            # we can actually omit reading the socket in this case.
+            poller.register(event_socket_fd, select.POLLRDHUP | select.POLLIN)
+
+            process_fd = os.pidfd_open(process.pid)
+            poller.register(process_fd, select.POLLRDHUP | select.POLLIN)
+
+            while True:
+                now_time = time.time()
+
+                if timeout is not None and now_time - start_time >= timeout:
+                    raise TimeoutError(f"Compiler timed out. (Timeout: {timeout}s).")
+
+                events = poller.poll(1)
+                for fd, event in events:
+                    if fd == event_socket_fd:
+                        logger.info(
+                            "Terminating compilation process as socket got closed by remote. (event: %i)", event
+                        )
+
+                        process.terminate()
+                        # we need to wait for the process to terminate, so that the handle is correctly closed
+                        process.wait()
+
+                        raise ClientDisconnectedError
+                    elif fd == process_fd:
+                        logger.debug("Process has finished (process_fd has event): %i", event)
+
+                        stdout_bytes, stderr_bytes = process.communicate()
+                        stdout = stdout_bytes.decode(ENCODING)
+                        stderr = stderr_bytes.decode(ENCODING)
+
+                        return ArgumentsExecutionResult(process.returncode, stdout, stderr)
+                    else:
+                        logger.warning(
+                            "Got poll() event for fd '%i', which does neither match the socket nor the process.", fd
+                        )
 
     def execute(self, **kwargs) -> ArgumentsExecutionResult:
         """
