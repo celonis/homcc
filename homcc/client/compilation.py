@@ -63,9 +63,9 @@ async def compile_remotely(arguments: Arguments, hosts: List[Host], config: Clie
         host.compression = host.compression or config.compression
 
         try:
-            with RemoteHostSemaphore(host), StateFile(arguments, host):
+            with RemoteHostSemaphore(host), StateFile(arguments, host) as state:
                 return await asyncio.wait_for(
-                    compile_remotely_at(arguments, host, schroot_profile, docker_container), timeout=timeout
+                    compile_remotely_at(arguments, host, schroot_profile, docker_container, state), timeout=timeout
                 )
 
         # remote semaphore could not be acquired
@@ -86,11 +86,12 @@ async def compile_remotely(arguments: Arguments, hosts: List[Host], config: Clie
 
 
 async def compile_remotely_at(
-    arguments: Arguments, host: Host, schroot_profile: Optional[str], docker_container: Optional[str]
+    arguments: Arguments, host: Host, schroot_profile: Optional[str], docker_container: Optional[str], state: StateFile
 ) -> int:
     """main function for the communication between client and a remote compilation host"""
 
-    async with TCPClient(host) as client:
+    async with TCPClient(host, state) as client:
+        state.set_preprocessing()
         dependency_dict: Dict[str, str] = calculate_dependency_dict(find_dependencies(arguments))
         remote_arguments: Arguments = arguments.copy().remove_local_args()
 
@@ -112,6 +113,7 @@ async def compile_remotely_at(
                 err,
             )
 
+        state.set_compile()
         await client.send_argument_message(
             arguments=remote_arguments,
             cwd=os.getcwd(),
@@ -180,7 +182,9 @@ async def compile_remotely_at(
 def compile_locally(arguments: Arguments, localhost: Host) -> int:
     """execute local compilation"""
 
-    with LocalHostSemaphore(localhost), StateFile(arguments, localhost):
+    with LocalHostSemaphore(localhost), StateFile(arguments, localhost) as state:
+        state.set_compile()
+
         try:
             # execute compile command, e.g.: "g++ foo.cpp -o foo"
             result: ArgumentsExecutionResult = arguments.execute(check=True, output=True)
