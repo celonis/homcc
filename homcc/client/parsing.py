@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import logging
 import os
+import subprocess
 import sys
 from abc import ABC, abstractmethod
 from argparse import Action, ArgumentParser, RawTextHelpFormatter
@@ -51,6 +52,18 @@ class ShowAndExitAction(ABC, Action):
     @abstractmethod
     def __call__(self, *_):
         pass
+
+
+class ShowVersion(ShowAndExitAction):
+    """show version and exit"""
+
+    def __call__(self, *_):
+        sys.stdout.write(f"homcc {client.__version__}\n")
+        # TODO(s.pirsch): TEMP
+        subprocess.run(args=["uname", "-r"], check=True)
+        subprocess.run(args=["cat", "/proc/version"], check=True)
+        subprocess.run(args=["python", "--version"], check=True)
+        sys.exit(os.EX_OK)
 
 
 class ShowHosts(ShowAndExitAction):
@@ -113,7 +126,7 @@ def parse_cli_args(cli_args: List[str]) -> Tuple[Dict[str, Any], Arguments]:
 
     show_and_exit = parser.add_mutually_exclusive_group()
     show_and_exit.add_argument("--help", action="help", help="show this help message and exit")
-    show_and_exit.add_argument("--version", action="version", version=f"homcc {client.__version__}")
+    show_and_exit.add_argument("--version", action=ShowVersion)
     show_and_exit.add_argument("--show-hosts", action=ShowHosts)
     show_and_exit.add_argument("-j", "--show-concurrency", action=ShowConcurrencyLevel)
     show_and_exit.add_argument("--show-variables", action=ShowEnvironmentVariables)
