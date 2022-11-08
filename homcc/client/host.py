@@ -45,9 +45,9 @@ class Host:
         *,
         type: ConnectionType,  # pylint: disable=redefined-builtin
         name: str,
-        limit: Union[int, str] = None,
+        limit: Union[int, str, None] = None,
         compression: Optional[str] = None,
-        port: Union[int, str] = None,
+        port: Union[int, str, None] = None,
         user: Optional[str] = None,
     ):
         self.type = ConnectionType.LOCAL if name == ConnectionType.LOCAL else type

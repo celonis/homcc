@@ -242,7 +242,7 @@ def parse_cli_args(cli_args: List[str]) -> Tuple[Dict[str, Any], Arguments]:
         sys.exit(os.EX_OK)
 
     # remove all args that are already implicitly handled via their actions or are compiler related
-    for key in ("COMPILER_ARGUMENTS", "show_hosts", "show_concurrency", "show_variables"):
+    for key in ("COMPILER_ARGUMENTS", "show_hosts", "show_concurrency", "show_variables", "version"):
         homcc_args_dict.pop(key)
 
     return homcc_args_dict, compiler_arguments

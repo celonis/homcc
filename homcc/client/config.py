@@ -211,7 +211,7 @@ class ClientConfig:
         self.log_level = LogLevel.DEBUG
 
 
-def parse_config(filenames: List[Path] = None) -> ClientConfig:
+def parse_config(filenames: Optional[List[Path]] = None) -> ClientConfig:
     try:
         files, cfg = parse_configs(filenames or default_locations(HOMCC_CONFIG_FILENAME))
     except configparser.Error as err:
