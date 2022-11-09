@@ -4,8 +4,9 @@ sysv_ipc==1.0.0 # see https://packages.ubuntu.com/jammy/python3-sysv-ipc
 # test, CI, package, formatting, linting, ...
 black
 isort[colors]
-mypy>=0.931
+mypy==0.990
 pylint
+PySide2~=5.15
 pytest
 pytest-asyncio
 pytest-cov
