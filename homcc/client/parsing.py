@@ -431,4 +431,4 @@ def load_hosts(hosts_file_locations: Optional[List[Path]] = None) -> Tuple[str, 
                 continue
             return str(hosts_file_location), filtered_lines(hosts_file_location.read_text(encoding=ENCODING))
 
-    raise NoHostsFoundError
+    raise NoHostsFoundError("No hosts information were found!")

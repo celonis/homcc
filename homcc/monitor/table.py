@@ -1,11 +1,8 @@
+"""Table for currently running compilation jobs"""
 from dataclasses import dataclass
 from typing import ClassVar, List
 
-from PySide2.QtWidgets import (  # type: ignore
-    QHeaderView,
-    QTableWidget,
-    QTableWidgetItem,
-)
+from PySide2.QtWidgets import QHeaderView, QTableWidget, QTableWidgetItem
 
 
 @dataclass
@@ -29,7 +26,7 @@ class Table:
         self.table.setRowCount(len(data))
         self.table.setColumnCount(len(Table.column_headers))
         self.table.setHorizontalHeaderLabels(Table.column_headers)
-        self.table.verticalHeader().setVisible(0)
+        self.table.verticalHeader().setVisible(False)
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
 
     def render(self):

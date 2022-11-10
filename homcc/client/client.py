@@ -241,10 +241,10 @@ class StateFile:
     class ClientPhase(int, Enum):
         """Client compilation phases equivalent to dcc_phase."""
 
-        _STARTUP = 0  # unused
+        STARTUP = 0
         _BLOCKED = auto()  # unused
-        _CONNECT = auto()  # unused
-        _CPP = auto()  # unused
+        CONNECT = auto()
+        CPP = auto()  # Preprocessing
         _SEND = auto()  # unused
         COMPILE = auto()
         _RECEIVE = auto()  # unused
@@ -318,9 +318,6 @@ class StateFile:
         # enum dcc_phase curr_phase: unassigned
         # struct dcc_task_state *next: DISTCC_NEXT_TASK_STATE
 
-        # we currently show the whole interaction as a COMPILE phase as we can not discern between sending and receiving
-        self.phase = self.ClientPhase.COMPILE
-
     def __bytes__(self) -> bytes:
         # fmt: off
         return struct.pack(
@@ -344,7 +341,7 @@ class StateFile:
         except FileExistsError:
             logger.debug("Could not create client state file '%s' as it already exists!", self.filepath.absolute())
 
-        self.filepath.write_bytes(bytes(self))
+        self.set_startup()
 
         return self
 
@@ -354,13 +351,29 @@ class StateFile:
         except FileNotFoundError:
             logger.debug("File '%s' was already deleted!", self.filepath.absolute())
 
+    def _set_phase(self, phase: ClientPhase):
+        self.phase = phase
+        self.filepath.write_bytes(bytes(self))
+
+    def set_startup(self):
+        self._set_phase(self.ClientPhase.STARTUP)
+
+    def set_connect(self):
+        self._set_phase(self.ClientPhase.CONNECT)
+
+    def set_preprocessing(self):
+        self._set_phase(self.ClientPhase.CPP)
+
+    def set_compile(self):
+        self._set_phase(self.ClientPhase.COMPILE)
+
 
 class TCPClient:
     """Wrapper class to exchange homcc protocol messages via TCP"""
 
     DEFAULT_BUFFER_SIZE_LIMIT: int = 65_536  # default buffer size limit of StreamReader is 64 KiB
 
-    def __init__(self, host: Host, timeout: float):
+    def __init__(self, host: Host, timeout: float, state: StateFile):
         connection_type: ConnectionType = host.type
 
         if connection_type != ConnectionType.TCP:
@@ -375,6 +388,8 @@ class TCPClient:
         self._data: bytes = bytes()
         self._reader: asyncio.StreamReader
         self._writer: asyncio.StreamWriter
+
+        state.set_connect()
 
     async def __aenter__(self) -> TCPClient:
         """connect to specified server at host:port"""

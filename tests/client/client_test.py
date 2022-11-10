@@ -171,7 +171,7 @@ class TestLocalHostSemaphore:
     def test_release(self):
         localhost: Host = Host.localhost_with_limit(1)
         localhost.name = self.test_localhosts.__name__  # overwrite name to create dedicated test semaphore
-        host_id: str = localhost.id()
+        host_id: int = localhost.id()
 
         with pytest.raises(SystemExit):
             with LocalHostSemaphore(localhost, 2):
