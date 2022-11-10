@@ -59,10 +59,6 @@ class ShowVersion(ShowAndExitAction):
 
     def __call__(self, *_):
         sys.stdout.write(f"homcc {client.__version__}\n")
-        # TODO(s.pirsch): TEMP
-        subprocess.run(args=["uname", "-r"], check=True)
-        subprocess.run(args=["cat", "/proc/version"], check=True)
-        subprocess.run(args=["python", "--version"], check=True)
         sys.exit(os.EX_OK)
 
 
@@ -336,6 +332,14 @@ def setup_client(cli_args: List[str]) -> Tuple[ClientConfig, Arguments, Host, Li
                 localhost = host
             else:
                 remote_hosts.append(host)
+
+    if homcc_config.verbose or homcc_config.log_level == LogLevel.DEBUG:
+        print("uname -r")
+        subprocess.run(args=["uname", "-r"], check=True)
+        print("cat /proc/version")
+        subprocess.run(args=["cat", "/proc/version"], check=True)
+        print("python --version")
+        subprocess.run(args=["python", "--version"], check=True)
 
     logger.debug(
         "%s - %s\n"  # homcc location and version
