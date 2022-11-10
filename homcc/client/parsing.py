@@ -131,9 +131,9 @@ class Host:
         *,
         type: ConnectionType,  # pylint: disable=redefined-builtin
         name: str,
-        limit: Union[int, str] = None,
+        limit: Union[int, str, None] = None,
         compression: Optional[str] = None,
-        port: Union[int, str] = None,
+        port: Union[int, str, None] = None,
         user: Optional[str] = None,
     ):
         self.type = ConnectionType.LOCAL if name == ConnectionType.LOCAL else type
@@ -526,7 +526,7 @@ def load_hosts(hosts_file_locations: Optional[List[Path]] = None) -> Tuple[str, 
     raise NoHostsFoundError("No hosts information were found!")
 
 
-def parse_config(filenames: List[Path] = None) -> ClientConfig:
+def parse_config(filenames: Optional[List[Path]] = None) -> ClientConfig:
     try:
         files, cfg = parse_configs(filenames or default_locations(HOMCC_CONFIG_FILENAME))
     except Error as err:

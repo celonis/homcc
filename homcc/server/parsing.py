@@ -238,7 +238,7 @@ def parse_cli_args(args: List[str]) -> Dict[str, Any]:
     return vars(parser.parse_args(args))
 
 
-def parse_config(filenames: List[Path] = None) -> ServerConfig:
+def parse_config(filenames: Optional[List[Path]] = None) -> ServerConfig:
     try:
         files, cfg = parse_configs(filenames or default_locations(HOMCC_CONFIG_FILENAME))
     except Error as err:
