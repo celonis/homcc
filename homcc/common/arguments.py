@@ -141,7 +141,7 @@ class Arguments:
 
     def copy(self) -> Arguments:
         """return an arguments copy"""
-        return Arguments(self.compiler, self.args.copy())
+        return Arguments(self.compiler.copy(), self.args.copy())
 
     @classmethod
     def from_vargs(cls, *vargs: str) -> Arguments:
@@ -645,6 +645,9 @@ class Compiler(ABC):
 
     def __str__(self) -> str:
         return self._compiler_str
+
+    def copy(self) -> Compiler:
+        return Compiler.from_str(self._compiler_str)
 
     @classmethod
     def from_str(cls, compiler_str: str) -> Compiler:
