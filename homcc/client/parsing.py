@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import logging
 import os
-import subprocess
 import sys
 from abc import ABC, abstractmethod
 from argparse import Action, ArgumentParser, RawTextHelpFormatter
