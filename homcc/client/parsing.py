@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import logging
 import os
+import subprocess
 import sys
 from abc import ABC, abstractmethod
 from argparse import Action, ArgumentParser, RawTextHelpFormatter
@@ -331,6 +332,11 @@ def setup_client(cli_args: List[str]) -> Tuple[ClientConfig, Arguments, Host, Li
                 localhost = host
             else:
                 remote_hosts.append(host)
+
+    if homcc_config.verbose or homcc_config.log_level == LogLevel.DEBUG:
+        print(f"python version: {sys.version}")
+        print("uname -r")
+        subprocess.run(args=["uname", "-r"], check=True)
 
     logger.debug(
         "%s - %s\n"  # homcc location and version
