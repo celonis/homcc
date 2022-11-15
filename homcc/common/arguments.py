@@ -544,24 +544,6 @@ class Arguments:
         raise TargetInferationError("No compiler to ask for targets")
 
     @staticmethod
-    def _execute_args_sync(
-        args: List[str],
-        check: bool = False,
-        cwd: Path = Path.cwd(),
-        output: bool = False,
-        timeout: Optional[float] = None,
-    ):
-        result: subprocess.CompletedProcess = subprocess.run(
-            args=args, check=check, cwd=cwd, encoding=ENCODING, capture_output=True, timeout=timeout
-        )
-
-        if output:
-            sys.stdout.write(result.stdout)
-            sys.stderr.write(result.stderr)
-
-        return ArgumentsExecutionResult.from_process_result(result)
-
-    @staticmethod
     def _execute_args(
         args: List[str],
         check: bool = False,
@@ -581,9 +563,27 @@ class Arguments:
             except OSError as err:
                 if err.errno != 38:
                     raise err
-                logger.info("Sys call pidfd_open not supported, falling back to synchronous execution")
+                logger.warning("Sys call pidfd_open not supported, falling back to synchronous execution")
 
         return Arguments._execute_args_sync(args, check, cwd, output, timeout)
+
+    @staticmethod
+    def _execute_args_sync(
+        args: List[str],
+        check: bool = False,
+        cwd: Path = Path.cwd(),
+        output: bool = False,
+        timeout: Optional[float] = None,
+    ):
+        result: subprocess.CompletedProcess = subprocess.run(
+            args=args, check=check, cwd=cwd, encoding=ENCODING, capture_output=True, timeout=timeout
+        )
+
+        if output:
+            sys.stdout.write(result.stdout)
+            sys.stderr.write(result.stderr)
+
+        return ArgumentsExecutionResult.from_process_result(result)
 
     @staticmethod
     def _execute_async(
