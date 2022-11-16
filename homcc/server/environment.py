@@ -127,14 +127,12 @@ class Environment:
     @staticmethod
     def compiler_exists(arguments: Arguments) -> bool:
         """Returns true if the compiler specified in the arguments exists on the system, else false."""
-        compiler = arguments.compiler
-        return compiler is not None and shutil.which(compiler) is not None
+        return shutil.which(str(arguments.compiler)) is not None
 
     @staticmethod
     def compiler_supports_target(arguments: Arguments, target: str) -> bool:
         """Returns true if the compiler supports cross-compiling for the given target."""
-        compiler = arguments.compiler_object()
-        return compiler.supports_target(target)
+        return arguments.compiler.supports_target(target)
 
     def do_compilation(self, arguments: Arguments) -> CompilationResultMessage:
         """Does the compilation and returns the filled result message."""

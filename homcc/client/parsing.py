@@ -1,40 +1,36 @@
 """Parsing related functionality regarding the homcc client"""
 from __future__ import annotations
 
-import hashlib
 import logging
 import os
-import re
 import sys
 from abc import ABC, abstractmethod
 from argparse import Action, ArgumentParser, RawTextHelpFormatter
-from configparser import Error, SectionProxy
-from dataclasses import dataclass
-from enum import Enum
 from pathlib import Path
-from typing import Any, ClassVar, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple
 
 from homcc import client
-from homcc.common.arguments import Arguments
+from homcc.client.compilation import scan_includes
+from homcc.client.config import ClientConfig, ClientEnvironmentVariables, parse_config
+from homcc.client.host import Host
+from homcc.common.arguments import Arguments, Compiler
 from homcc.common.compression import Compression
 from homcc.common.constants import ENCODING
 from homcc.common.errors import HostParsingError, NoHostsFoundError
-from homcc.common.logging import LogLevel
-from homcc.common.parsing import HOMCC_CONFIG_FILENAME, default_locations, parse_configs
+from homcc.common.logging import (
+    Formatter,
+    FormatterConfig,
+    FormatterDestination,
+    LoggingConfig,
+    LogLevel,
+    setup_logging,
+)
+from homcc.common.parsing import default_locations
 
 logger = logging.getLogger(__name__)
 
 HOMCC_HOSTS_ENV_VAR: str = "HOMCC_HOSTS"
 HOMCC_HOSTS_FILENAME: str = "hosts"
-HOMCC_CLIENT_CONFIG_SECTION: str = "homcc"
-
-
-class ConnectionType(str, Enum):
-    """Helper class to distinguish between different host connection types"""
-
-    LOCAL = "localhost"
-    TCP = "TCP"
-    SSH = "SSH"
 
 
 class ShowAndExitAction(ABC, Action):
@@ -50,7 +46,7 @@ class ShowAndExitAction(ABC, Action):
         if nargs != 0:
             raise ValueError(f"nargs is {nargs}, but {self.__class__.__name__} requires nargs to be 0")
 
-        super().__init__(nargs=nargs, help=kwargs.pop("help", self.__doc__), **kwargs)
+        super().__init__(nargs=0, help=kwargs.pop("help", self.__doc__), **kwargs)
 
     @abstractmethod
     def __call__(self, *_):
@@ -61,7 +57,7 @@ class ShowVersion(ShowAndExitAction):
     """show version and exit"""
 
     def __call__(self, *_):
-        print(f"homcc {client.__version__}")
+        sys.stdout.write(f"homcc {client.__version__}\n")
         sys.exit(os.EX_OK)
 
 
@@ -72,12 +68,12 @@ class ShowHosts(ShowAndExitAction):
         try:
             _, hosts = load_hosts()
 
-        except NoHostsFoundError:
-            print("Failed to get hosts list")
-            sys.exit(os.EX_NOINPUT)
+        except NoHostsFoundError as error:
+            sys.stderr.write(f"{error.message}\n")
+            raise SystemExit(os.EX_NOINPUT) from error
 
         for host in hosts:
-            print(host)
+            sys.stdout.write(f"{host}\n")
 
         sys.exit(os.EX_OK)
 
@@ -89,15 +85,15 @@ class ShowConcurrencyLevel(ShowAndExitAction):
         try:
             _, hosts = load_hosts()
 
-        except NoHostsFoundError:
-            print("Failed to get hosts list")
-            sys.exit(os.EX_NOINPUT)
+        except NoHostsFoundError as error:
+            sys.stderr.write("Failed to get hosts list\n")
+            raise SystemExit(os.EX_NOINPUT) from error
 
         concurrency_level: int = 0
         for host in hosts:
             concurrency_level += Host.from_str(host).limit or 0
 
-        print(concurrency_level)
+        sys.stdout.write(f"{concurrency_level}\n")
         sys.exit(os.EX_OK)
 
 
@@ -106,222 +102,20 @@ class ShowEnvironmentVariables(ShowAndExitAction):
 
     def __call__(self, *_):
         if (homcc_hosts_env_var := os.getenv(HOMCC_HOSTS_ENV_VAR)) is not None:
-            print(f"{HOMCC_HOSTS_ENV_VAR}: {homcc_hosts_env_var}")
+            sys.stdout.write(f"{HOMCC_HOSTS_ENV_VAR}: {homcc_hosts_env_var}\n")
 
-        for config_env_var in ClientConfig.EnvironmentVariables.to_list():
+        for config_env_var in iter(ClientEnvironmentVariables()):
             if (config := os.getenv(config_env_var)) is not None:
-                print(f"{config_env_var}: {config}")
+                sys.stdout.write(f"{config_env_var}: {config}\n")
 
         sys.exit(os.EX_OK)
 
 
-@dataclass
-class Host:
-    """Class to encapsulate host information"""
-
-    type: ConnectionType
-    name: str
-    limit: int
-    compression: Compression
-    port: Optional[int]
-    user: Optional[str]
-
-    def __init__(
-        self,
-        *,
-        type: ConnectionType,  # pylint: disable=redefined-builtin
-        name: str,
-        limit: Union[int, str, None] = None,
-        compression: Optional[str] = None,
-        port: Union[int, str, None] = None,
-        user: Optional[str] = None,
-    ):
-        self.type = ConnectionType.LOCAL if name == ConnectionType.LOCAL else type
-        self.name = name
-        self.limit = int(limit) if limit is not None else 2  # enable minor level of concurrency on default
-        self.compression = Compression.from_name(compression)
-        self.port = int(port) if port is not None else None  # TCP
-        self.user = user  # SSH
-
-    def __str__(self) -> str:
-        if self.type == ConnectionType.LOCAL:
-            return f"{self.name}_{self.limit}"  # not hardcoded to localhost_limit for testing purposes
-
-        if self.type == ConnectionType.TCP:
-            return f"tcp_{self.name}_{self.port}_{self.limit}"
-
-        if self.type == ConnectionType.SSH:
-            return f"ssh_{f'{self.user}_' or '_'}{self.name}_{self.limit}"
-
-        raise ValueError(f"Erroneous connection type '{self.type}'")
-
-    def __int__(self) -> int:
-        return self.id()
-
-    def id(self) -> int:
-        """Generates an ID for a certain host by hashing a string representation and
-        cutting it to 4 digits. We can use max. 4 digits because we can not exceed
-        the SHRT_MAX constant (see https://semanchuk.com/philip/sysv_ipc).
-        This may lead to collisions, but we usually do not have many hosts,
-        so the probability of collisions should be acceptable."""
-        return int(hashlib.sha1(str(self).encode(ENCODING)).hexdigest(), 16) % 10**4
-
-    @classmethod
-    def from_str(cls, host_str: str) -> Host:
-        return parse_host(host_str)
-
-    @classmethod
-    def localhost_with_limit(cls, limit: int) -> Host:
-        return Host(type=ConnectionType.LOCAL, name="localhost", limit=limit)
-
-    def is_local(self) -> bool:
-        return self.type == ConnectionType.LOCAL
-
-
-@dataclass
-class ClientConfig:
-    """Class to encapsulate and default client configuration information"""
-
-    class EnvironmentVariables:
-        """Encapsulation of all environment variables relevant to client configuration"""
-
-        HOMCC_COMPILER_ENV_VAR: ClassVar[str] = "HOMCC_COMPILER"
-        HOMCC_COMPRESSION_ENV_VAR: ClassVar[str] = "HOMCC_COMPRESSION"
-        HOMCC_SCHROOT_PROFILE_ENV_VAR: ClassVar[str] = "HOMCC_SCHROOT_PROFILE"
-        HOMCC_DOCKER_CONTAINER_ENV_VAR: ClassVar[str] = "HOMCC_DOCKER_CONTAINER"
-        HOMCC_TIMEOUT_ENV_VAR: ClassVar[str] = "HOMCC_TIMEOUT"
-        HOMCC_LOG_LEVEL_ENV_VAR: ClassVar[str] = "HOMCC_LOG_LEVEL"
-        HOMCC_VERBOSE_ENV_VAR: ClassVar[str] = "HOMCC_VERBOSE"
-
-        @classmethod
-        def to_list(cls) -> List[str]:
-            return [
-                cls.HOMCC_COMPILER_ENV_VAR,
-                cls.HOMCC_COMPRESSION_ENV_VAR,
-                cls.HOMCC_SCHROOT_PROFILE_ENV_VAR,
-                cls.HOMCC_DOCKER_CONTAINER_ENV_VAR,
-                cls.HOMCC_TIMEOUT_ENV_VAR,
-                cls.HOMCC_LOG_LEVEL_ENV_VAR,
-                cls.HOMCC_VERBOSE_ENV_VAR,
-            ]
-
-        @classmethod
-        def get_compiler(cls) -> Optional[str]:
-            return os.getenv(cls.HOMCC_COMPILER_ENV_VAR)
-
-        @classmethod
-        def get_compression(cls) -> Optional[str]:
-            return os.getenv(cls.HOMCC_COMPRESSION_ENV_VAR)
-
-        @classmethod
-        def get_schroot_profile(cls) -> Optional[str]:
-            return os.getenv(cls.HOMCC_SCHROOT_PROFILE_ENV_VAR)
-
-        @classmethod
-        def get_docker_container(cls) -> Optional[str]:
-            return os.getenv(cls.HOMCC_DOCKER_CONTAINER_ENV_VAR)
-
-        @classmethod
-        def get_timeout(cls) -> Optional[float]:
-            if timeout := os.getenv(cls.HOMCC_TIMEOUT_ENV_VAR):
-                return float(timeout)
-            return None
-
-        @classmethod
-        def get_log_level(cls) -> Optional[str]:
-            return os.getenv(cls.HOMCC_LOG_LEVEL_ENV_VAR)
-
-        @classmethod
-        def get_verbose(cls) -> Optional[bool]:
-            if (verbose := os.getenv(cls.HOMCC_VERBOSE_ENV_VAR)) is not None:
-                # parse analogously to configparser.getboolean
-                return re.match(r"^(1)|(yes)|(true)|(on)$", verbose, re.IGNORECASE) is not None
-            return None
-
-    files: List[str]
-    compiler: str
-    compression: Compression
-    schroot_profile: Optional[str]
-    docker_container: Optional[str]
-    timeout: Optional[float]
-    log_level: Optional[LogLevel]
-    verbose: bool
-
-    def __init__(
-        self,
-        *,
-        files: List[str],
-        compiler: Optional[str] = None,
-        compression: Optional[str] = None,
-        schroot_profile: Optional[str] = None,
-        docker_container: Optional[str] = None,
-        timeout: Optional[float] = None,
-        log_level: Optional[str] = None,
-        verbose: Optional[bool] = None,
-    ):
-        self.files = files
-
-        # configurations via environmental variables have higher precedence than those specified via config files
-        self.compiler = self.EnvironmentVariables.get_compiler() or compiler or Arguments.DEFAULT_COMPILER
-        self.compression = Compression.from_name(self.EnvironmentVariables.get_compression() or compression)
-        self.schroot_profile = self.EnvironmentVariables.get_schroot_profile() or schroot_profile
-        self.docker_container = self.EnvironmentVariables.get_docker_container() or docker_container
-        self.timeout = self.EnvironmentVariables.get_timeout() or timeout
-        self.log_level = LogLevel.from_str(self.EnvironmentVariables.get_log_level() or log_level)
-
-        verbose = self.EnvironmentVariables.get_verbose() or verbose
-        self.verbose = verbose is not None and verbose
-
-    @classmethod
-    def empty(cls):
-        return cls(files=[])
-
-    @classmethod
-    def from_config_section(cls, files: List[str], homcc_config: SectionProxy) -> ClientConfig:
-        compiler: Optional[str] = homcc_config.get("compiler")
-        compression: Optional[str] = homcc_config.get("compression")
-        schroot_profile: Optional[str] = homcc_config.get("schroot_profile")
-        docker_container: Optional[str] = homcc_config.get("docker_container")
-        timeout: Optional[float] = homcc_config.getfloat("timeout")
-        log_level: Optional[str] = homcc_config.get("log_level")
-        verbose: Optional[bool] = homcc_config.getboolean("verbose")
-
-        return ClientConfig(
-            files=files,
-            compiler=compiler,
-            compression=compression,
-            schroot_profile=schroot_profile,
-            docker_container=docker_container,
-            timeout=timeout,
-            log_level=log_level,
-            verbose=verbose,
-        )
-
-    def __str__(self):
-        return (
-            f"Configuration (from [{', '.join(self.files)}]):\n"
-            f"\tcompiler:\t\t{self.compiler}\n"
-            f"\tcompression:\t\t{self.compression}\n"
-            f"\tschroot_profile:\t{self.schroot_profile}\n"
-            f"\tdocker_container:\t{self.docker_container}\n"
-            f"\ttimeout:\t\t{self.timeout}\n"
-            f"\tlog_level:\t\t{self.log_level.name}\n"
-            f"\tverbose:\t\t{str(self.verbose)}\n"
-        )
-
-    def set_verbose(self):
-        self.log_level = LogLevel.DEBUG
-        self.verbose = True
-
-    def set_debug(self):
-        self.log_level = LogLevel.DEBUG
-
-
-def parse_cli_args(args: List[str]) -> Tuple[Dict[str, Any], str, List[str]]:
+def parse_cli_args(cli_args: List[str]) -> Tuple[Dict[str, Any], Arguments]:
     parser: ArgumentParser = ArgumentParser(
         description="homcc - Home-Office friendly distcc replacement",
         allow_abbrev=False,
-        add_help=False,
+        add_help=False,  # no default help argument in order to disable "-h" abbreviation
         formatter_class=RawTextHelpFormatter,
     )
 
@@ -340,12 +134,6 @@ def parse_cli_args(args: List[str]) -> Tuple[Dict[str, Any], str, List[str]]:
     )
 
     parser.add_argument(
-        "--no-config",
-        action="store_true",
-        help="enforce that only configurations provided via the CLI are used",
-    )
-
-    parser.add_argument(
         "--log-level",
         required=False,
         type=str,
@@ -357,6 +145,18 @@ def parse_cli_args(args: List[str]) -> Tuple[Dict[str, Any], str, List[str]]:
         "--verbose",
         action="store_true",
         help="enable a verbose mode which implies detailed and colored logging of debug messages",
+    )
+
+    parser.add_argument(
+        "--no-config",
+        action="store_true",
+        help="enforce that only configurations provided via the CLI are used",
+    )
+
+    parser.add_argument(
+        "--no-local-compilation",
+        action="store_true",
+        help="enforce that even on recoverable failures no local compilation is executed",
     )
 
     indented_newline: str = "\n\t"
@@ -395,95 +195,198 @@ def parse_cli_args(args: List[str]) -> Tuple[Dict[str, Any], str, List[str]]:
     )
 
     parser.add_argument(
-        "--timeout",
+        "--compilation_request_timeout",
+        metavar="TIMEOUT",
         type=float,
         help="TIMEOUT in seconds to wait for a response from the remote compilation server",
     )
 
-    # capturing all remaining (compiler) arguments via nargs=argparse.REMAINDER and argparse.parse_args() is sadly not
-    # working as intended, so we use the dummy "COMPILER_OR_ARGUMENT" argument for the automatically generated user-
-    # facing strings instead and handle the remaining, unknown arguments separately
     parser.add_argument(
-        "COMPILER_OR_ARGUMENT",
-        type=str,
-        metavar="[COMPILER] ARGUMENTS ...",
-        help="COMPILER, if not specified explicitly, is either read from the config file or defaults to "
-        f"'{Arguments.DEFAULT_COMPILER}'\n"
-        "dependant on remote execution, the remaining ARGUMENTS may be altered before being forwarded to the COMPILER",
+        "--establish_connection_timeout",
+        metavar="TIMEOUT",
+        type=float,
+        help="TIMEOUT in seconds for establishing a connection to a remote compilation server",
     )
 
-    # known args (used for homcc), unknown args (used as and forwarded to the compiler)
-    homcc_args_namespace, compiler_args = parser.parse_known_args(args)
-    homcc_args_dict = vars(homcc_args_namespace)
+    parser.add_argument(
+        "--remote_compilation_tries",
+        metavar="AMOUNT",
+        type=int,
+        help="maximal AMOUNT of remote compilation servers that are requested from for a single compilation",
+    )
 
-    compiler_or_argument: str = homcc_args_dict.pop("COMPILER_OR_ARGUMENT")  # either compiler or very first argument
+    # this argument will only be used to automatically generate user-facing strings
+    parser.add_argument(
+        "COMPILER_ARGUMENTS",
+        type=str,
+        metavar="COMPILER ARGUMENTS ...",
+        help="COMPILER which should be used for local and remote compilation, dependant on the remote configuration, "
+        "the COMPILER might be adapted to match the target architecture and the remaining ARGUMENTS may be altered "
+        "before being forwarded to and executed by the actual COMPILER",
+    )
 
-    return homcc_args_dict, compiler_or_argument, compiler_args
-
-
-def parse_host(host: str) -> Host:
-    """
-    Try to categorize and extract the following information from the host in the general order of:
-    - Compression
-    - ConnectionType:
-        - TCP:
-            - NAME
-            - [PORT]
-        - SSH:
-            - NAME
-            - [USER]
-    - Limit
-    """
-    # the following regexes are intentionally simple and contain a lot of false positives for IPv4 and IPv6 addresses,
-    # matches are however merely used for rough categorization and don't test the validity of the actual host values,
-    # since a single host line is usually short we parse over it multiple times for readability and maintainability,
-    # meaningful failures on erroneous values will arise later on when the client tries to connect to the specified host
-
-    host_dict: Dict[str, str] = {}
-    connection_type: ConnectionType
-
-    # trim trailing comment: HOST_FORMAT#COMMENT
-    if (host_comment_match := re.match(r"^(\S+)#(\S+)$", host)) is not None:
-        host, _ = host_comment_match.groups()
-
-    # use trailing compression info: HOST_FORMAT,COMPRESSION
-    if (host_compression_match := re.match(r"^(\S+),(\S+)$", host)) is not None:
-        host, compression = host_compression_match.groups()
-        host_dict["compression"] = compression
-
-    # NAME:PORT/LIMIT
-    if (host_port_limit_match := re.match(r"^(([\w./]+)|\[(\S+)]):(\d+)(/(\d+))?$", host)) is not None:
-        _, name_or_ipv4, ipv6, port, _, limit = host_port_limit_match.groups()
-        host = name_or_ipv4 or ipv6
-        connection_type = ConnectionType.TCP
-        host_dict["port"] = port
-        host_dict["limit"] = limit
-        return Host(type=connection_type, name=host, **host_dict)
-
-    # USER@HOST_FORMAT
-    elif (user_at_host_match := re.match(r"^(\w+)@([\w.:/]+)$", host)) is not None:
-        user, host = user_at_host_match.groups()
-        connection_type = ConnectionType.SSH
-        host_dict["user"] = user
-
-    # @HOST_FORMAT
-    elif (at_host_match := re.match(r"^@([\w.:/]+)$", host)) is not None:
-        host = at_host_match.group(1)
-        connection_type = ConnectionType.SSH
-
-    # HOST_FORMAT
-    elif re.match(r"^([\w.:/]+)$", host) is not None:
-        connection_type = ConnectionType.TCP
-
+    # split cli_args in order to respectively use them for homcc client or the specified compiler
+    for i, arg in enumerate(cli_args[1:]):  # skip first arg since it's always homcc itself
+        if Arguments.is_compiler_arg(arg):
+            homcc_args_dict: Dict[str, Any] = vars(parser.parse_args(cli_args[: i + 1]))
+            compiler_arguments: Arguments = Arguments(Compiler.from_str(arg), cli_args[i + 2 :])
+            break
     else:
-        raise HostParsingError(f"Host '{host}' could not be parsed correctly, please provide it in the correct format!")
+        # no compiler invocation, all cli_args are handled implicitly via argparse
+        parser.parse_args(cli_args)
+        sys.exit(os.EX_OK)
 
-    # extract remaining limit info: HOST_FORMAT/LIMIT
-    if (host_limit_match := re.match(r"^(\S+)/(\d+)$", host)) is not None:
-        host, limit = host_limit_match.groups()
-        host_dict["limit"] = limit
+    # remove all args that are already implicitly handled via their actions or are compiler related
+    for key in ("COMPILER_ARGUMENTS", "show_hosts", "show_concurrency", "show_variables", "version"):
+        homcc_args_dict.pop(key)
 
-    return Host(type=connection_type, name=host, **host_dict)
+    return homcc_args_dict, compiler_arguments
+
+
+def setup_client(cli_args: List[str]) -> Tuple[ClientConfig, Arguments, Host, List[Host]]:
+    homcc_args_dict: Dict[str, Any]
+    compiler_arguments: Arguments
+
+    # load and parse arguments and configuration information
+    if Arguments.is_compiler_arg(cli_args[0]):  # e.g. when "g++" is symlinked to "homcc"
+        normalized_compiler: Compiler = Compiler.from_str(cli_args[0]).normalized()
+        homcc_args_dict, compiler_arguments = {}, Arguments(normalized_compiler, cli_args[1:])
+    else:  # e.g. explicit "homcc ... g++ ..." call
+        homcc_args_dict, compiler_arguments = parse_cli_args(cli_args)
+
+    # prevent config loading and parsing if --no-config was specified
+    homcc_config: ClientConfig = ClientConfig.empty() if homcc_args_dict.pop("no_config", False) else parse_config()
+    logging_config: LoggingConfig = LoggingConfig(
+        config=FormatterConfig.COLORED,
+        formatter=Formatter.CLIENT,
+        destination=FormatterDestination.STREAM,
+        level=LogLevel.INFO,
+    )
+
+    # if the compiler output must be parsable we explicitly disable verbose logging and default to INFO logs
+    if compiler_arguments.must_be_parsable():
+        homcc_args_dict["verbose"] = False
+        homcc_config.verbose = False
+        homcc_args_dict["log_level"] = LogLevel.INFO.name
+        homcc_config.log_level = LogLevel.INFO
+
+    # LOG_LEVEL and VERBOSITY
+    log_level: Optional[str] = homcc_args_dict.pop("log_level", None)
+
+    # verbosity implies debug mode
+    if homcc_args_dict.pop("verbose", False) or homcc_config.verbose:
+        logging_config.set_verbose()
+        homcc_config.set_verbose()
+    elif log_level == "DEBUG" or homcc_config.log_level == LogLevel.DEBUG:
+        logging_config.set_debug()
+        homcc_config.set_debug()
+
+    # overwrite verbose debug logging level
+    if log_level is not None:
+        logging_config.level = LogLevel[log_level].value
+        homcc_config.log_level = LogLevel[log_level]
+    elif homcc_config.log_level is not None:
+        logging_config.level = int(homcc_config.log_level)
+
+    setup_logging(logging_config)
+
+    # SCAN-INCLUDES; and exit
+    if homcc_args_dict.pop("scan_includes", False):
+        for include in scan_includes(compiler_arguments):
+            sys.stdout.write(f"{include}\n")
+
+        sys.exit(os.EX_OK)
+
+    # HOST; get singular host from cli parameter or load hosts from $HOMCC_HOSTS env var or hosts file
+    remote_hosts: List[Host] = []
+    hosts_file: Optional[str] = None
+
+    # use the default localhost if no localhost is provided by the user explicitly
+    # this dedicated host will limit the amount of locally running compilation jobs
+    localhost: Host = Host.default_localhost()
+
+    if (host_str := homcc_args_dict.pop("host", None)) is not None:
+        remote_hosts = [Host.from_str(host_str)]
+    else:
+        try:
+            hosts_file, hosts_str = load_hosts()
+        except NoHostsFoundError as error:
+            logger.error("%s", error)
+            raise SystemExit(os.EX_NOINPUT) from error
+
+        has_local: bool = False
+
+        for host_str in hosts_str:
+            try:
+                host: Host = Host.from_str(host_str)
+            except HostParsingError as error:
+                logger.warning("%s", error)
+                continue
+
+            if host.is_local():
+                if has_local:
+                    logger.warning("Multiple localhosts provided, using %s", localhost)
+
+                has_local = True
+                localhost = host
+            else:
+                remote_hosts.append(host)
+
+    logger.debug(
+        "%s - %s\n"  # homcc location and version
+        "Caller:\t%s\n"  # homcc caller
+        "%s"  # config info
+        "Hosts ('%s'):\n\t%s",  # hosts info
+        sys.argv[0],
+        client.__version__,
+        sys.executable,
+        homcc_config,
+        hosts_file or f"--host={host_str}",
+        "\n\t".join(str(host) for host in [localhost] + remote_hosts),
+    )
+
+    # NO-LOCAL-COMPILATION
+    if local_compilation_enabled := not homcc_args_dict.pop("no_local_compilation", False):
+        homcc_config.local_compilation_enabled = local_compilation_enabled
+
+    # SCHROOT_PROFILE; DOCKER_CONTAINER; if --no-sandbox is specified do not use any specified sandbox configurations
+    if homcc_args_dict.pop("no_sandbox", False):
+        homcc_args_dict.pop("schroot_profile")
+        homcc_config.schroot_profile = None
+        homcc_args_dict.pop("docker_container")
+        homcc_config.docker_container = None
+    else:
+        if (schroot_profile := homcc_args_dict.pop("schroot_profile", None)) is not None:
+            homcc_config.schroot_profile = schroot_profile
+
+        if (docker_container := homcc_args_dict.pop("docker_container", None)) is not None:
+            homcc_config.docker_container = docker_container
+
+        if homcc_config.schroot_profile is not None and homcc_config.docker_container is not None:
+            logger.error(
+                "Can not specify a schroot profile and a docker container to be used simultaneously. "
+                "Please specify only one of these config options."
+            )
+            sys.exit(os.EX_USAGE)
+
+    # COMPILATION_REQUEST_TIMEOUT
+    if (compilation_request_timeout := homcc_args_dict.pop("compilation_request_timeout", None)) is not None:
+        homcc_config.compilation_request_timeout = compilation_request_timeout
+
+    # ESTABLISH_CONNECTION_TIMEOUT
+    if (establish_connection_timeout := homcc_args_dict.pop("establish_connection_timeout", None)) is not None:
+        homcc_config.establish_connection_timeout = establish_connection_timeout
+
+    # REMOTE_COMPILATION_TRIES
+    if (remote_compilation_tries := homcc_args_dict.pop("remote_compilation_tries", None)) is not None:
+        homcc_config.remote_compilation_tries = remote_compilation_tries
+
+    # verify that all homcc cli args were handled
+    if homcc_args_dict:
+        logger.error("Unhandled arguments: %s", homcc_args_dict)
+        sys.exit(os.EX_SOFTWARE)
+
+    return homcc_config, compiler_arguments, localhost, remote_hosts
 
 
 def load_hosts(hosts_file_locations: Optional[List[Path]] = None) -> Tuple[str, List[str]]:
@@ -524,16 +427,3 @@ def load_hosts(hosts_file_locations: Optional[List[Path]] = None) -> Tuple[str, 
             return str(hosts_file_location), filtered_lines(hosts_file_location.read_text(encoding=ENCODING))
 
     raise NoHostsFoundError("No hosts information were found!")
-
-
-def parse_config(filenames: Optional[List[Path]] = None) -> ClientConfig:
-    try:
-        files, cfg = parse_configs(filenames or default_locations(HOMCC_CONFIG_FILENAME))
-    except Error as err:
-        print(f"{err}; using default configuration instead")
-        return ClientConfig.empty()
-
-    if HOMCC_CLIENT_CONFIG_SECTION not in cfg.sections():
-        return ClientConfig(files=files)
-
-    return ClientConfig.from_config_section(files, cfg[HOMCC_CLIENT_CONFIG_SECTION])

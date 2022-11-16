@@ -5,26 +5,25 @@ import asyncio
 import logging
 import os
 import subprocess
-import sys
 from pathlib import Path
 from typing import Dict, List, Optional, Set, Tuple
 
 from homcc.client.client import (
-    HostSelector,
     LocalHostSemaphore,
+    RemoteHostSelector,
     RemoteHostSemaphore,
     StateFile,
     TCPClient,
 )
-from homcc.client.parsing import ClientConfig, Host
-from homcc.common.arguments import Arguments, ArgumentsExecutionResult
+from homcc.client.config import ClientConfig
+from homcc.client.host import Host
+from homcc.common.arguments import Arguments, ArgumentsExecutionResult, Compiler
 from homcc.common.constants import ENCODING
 from homcc.common.errors import (
     FailedHostNameResolutionError,
-    HostsExhaustedError,
-    PreprocessorError,
     RemoteCompilationError,
     RemoteCompilationTimeoutError,
+    RemoteHostsFailure,
     SlotsExhaustedError,
     TargetInferationError,
     UnexpectedMessageTypeError,
@@ -40,22 +39,27 @@ from homcc.common.messages import (
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_COMPILATION_REQUEST_TIMEOUT: float = 120
-DEFAULT_LOCALHOST_LIMIT: int = (
-    len(os.sched_getaffinity(0))  # number of available CPUs for this process
-    or os.cpu_count()  # total number of physical CPUs on the machine
-    or 4  # fallback value to enable minor level of concurrency
-)
-DEFAULT_LOCALHOST: Host = Host.localhost_with_limit(DEFAULT_LOCALHOST_LIMIT)
+RECURSIVE_ERROR_MESSAGE: str = "_HOMCC_CALLED_RECURSIVELY"
+
 EXCLUDED_DEPENDENCY_PREFIXES: Tuple = ("/usr/include", "/usr/lib")
+
+
+def check_recursive_call(compiler: Compiler, error: subprocess.CalledProcessError):
+    """check if homcc was called recursively"""
+    if f"{RECURSIVE_ERROR_MESSAGE}\n" == error.stderr:
+        logger.error("Specified compiler '%s' has been invoked recursively!", compiler)
+        raise SystemExit(os.EX_USAGE) from error
 
 
 async def compile_remotely(arguments: Arguments, hosts: List[Host], config: ClientConfig) -> int:
     """main function to control remote compilation"""
 
-    # try to connect to 3 different remote hosts before falling back to local compilation
-    for host in HostSelector(hosts, 3):
-        timeout: float = config.timeout or DEFAULT_COMPILATION_REQUEST_TIMEOUT
+    # try to connect to remote hosts before falling back to local compilation and track which hosts we failed at
+    failed_hosts: List[Host] = []
+
+    for host in RemoteHostSelector(hosts, config.remote_compilation_tries):
+        compilation_request_timeout: float = config.compilation_request_timeout
+        establish_connection_timeout: float = config.establish_connection_timeout
         schroot_profile: Optional[str] = config.schroot_profile
         docker_container: Optional[str] = config.docker_container
 
@@ -65,43 +69,62 @@ async def compile_remotely(arguments: Arguments, hosts: List[Host], config: Clie
         try:
             with RemoteHostSemaphore(host), StateFile(arguments, host) as state:
                 return await asyncio.wait_for(
-                    compile_remotely_at(arguments, host, schroot_profile, docker_container, state), timeout=timeout
+                    compile_remotely_at(
+                        arguments=arguments,
+                        host=host,
+                        timeout=establish_connection_timeout,
+                        schroot_profile=schroot_profile,
+                        docker_container=docker_container,
+                        state=state,
+                    ),
+                    timeout=compilation_request_timeout,
                 )
 
-        # remote semaphore could not be acquired
+        # arguments execution error during local pre-steps, unrecoverable failure
+        except subprocess.CalledProcessError as error:
+            check_recursive_call(arguments.compiler, error)
+            logger.error("%s", error)
+            raise SystemExit(error.returncode) from error
+
+        # compilation request timed out, local compilation fallback
+        except asyncio.TimeoutError as error:
+            raise RemoteCompilationTimeoutError(
+                f"Compilation request for {' '.join(arguments.source_files)} at host '{host}' timed out."
+            ) from error
+
+        # remote semaphore could not be acquired, retry with different host
         except SlotsExhaustedError as error:
             logger.debug("%s", error)
 
-        # client could not connect
+        # client could not connect, retry with different host
         except (ConnectionError, FailedHostNameResolutionError) as error:
             logger.warning("%s", error)
 
-        # compilation request timed out
-        except asyncio.TimeoutError as error:
-            raise RemoteCompilationTimeoutError(
-                f"Compilation request {arguments} at host '{host}' timed out."
-            ) from error
+        # track all failing hosts
+        finally:
+            failed_hosts.append(host)
 
-    raise HostsExhaustedError(f"All hosts '{', '.join(str(host) for host in hosts)}' are exhausted.")
+    # all selected hosts failed, local compilation fallback
+    raise RemoteHostsFailure(
+        f"Failed to compile {' '.join(arguments.source_files)} remotely on hosts: "
+        f"'{', '.join(str(host) for host in failed_hosts)}'."
+    )
 
 
 async def compile_remotely_at(
-    arguments: Arguments, host: Host, schroot_profile: Optional[str], docker_container: Optional[str], state: StateFile
+    arguments: Arguments,
+    host: Host,
+    timeout: float,
+    schroot_profile: Optional[str],
+    docker_container: Optional[str],
+    state: StateFile,
 ) -> int:
     """main function for the communication between client and a remote compilation host"""
 
-    async with TCPClient(host, state) as client:
+    async with TCPClient(host, timeout=timeout, state=state) as client:
         state.set_preprocessing()
         dependency_dict: Dict[str, str] = calculate_dependency_dict(find_dependencies(arguments))
         remote_arguments: Arguments = arguments.copy().remove_local_args()
-
-        logger.debug(
-            "Normalizing compiler '%s' to '%s' for the server.",
-            remote_arguments.compiler,
-            remote_arguments.compiler_normalized(),
-        )
-        # normalize compiler (e.g. /usr/bin/g++ -> g++)
-        remote_arguments.compiler = remote_arguments.compiler_normalized()
 
         target: Optional[str] = None
         try:
@@ -112,6 +135,9 @@ async def compile_remotely_at(
                 "This may lead to unexpected results if the remote compilation host has a different architecture. %s",
                 err,
             )
+
+        # normalize compiler, e.g. /usr/bin/g++ -> g++
+        remote_arguments.normalize_compiler()
 
         state.set_compile()
         await client.send_argument_message(
@@ -189,39 +215,37 @@ def compile_locally(arguments: Arguments, localhost: Host) -> int:
             # execute compile command, e.g.: "g++ foo.cpp -o foo"
             result: ArgumentsExecutionResult = arguments.execute(check=True, output=True)
         except subprocess.CalledProcessError as error:
-            logger.error("Compiler error:\n%s", error.stderr)
-            return error.returncode
-
-        if result.stdout:
-            logger.debug("Compiler result:\n%s", result.stdout)
+            check_recursive_call(arguments.compiler, error)
+            logger.error("%s", error)
+            raise SystemExit(error.returncode) from error
 
         return result.return_code
 
 
 def scan_includes(arguments: Arguments) -> List[str]:
     """find all included dependencies"""
-    dependencies: Set[str] = find_dependencies(arguments)
+
+    try:
+        dependencies: Set[str] = find_dependencies(arguments)
+    except subprocess.CalledProcessError as error:
+        check_recursive_call(arguments.compiler, error)
+        logger.error("%s", error)
+        raise SystemExit(error.returncode) from error
+
     return [dependency for dependency in dependencies if not Arguments.is_source_file_arg(dependency)]
 
 
 def find_dependencies(arguments: Arguments) -> Set[str]:
     """get unique set of dependencies by calling the preprocessor and filtering the result"""
 
+    # execute preprocessor command, e.g.: "g++ foo.cpp -M"
     arguments, filename = arguments.dependency_finding()
-    try:
-        # execute preprocessor command, e.g.: "g++ foo.cpp -M -MT $(homcc)"
-        result: ArgumentsExecutionResult = arguments.execute(check=True)
-    except subprocess.CalledProcessError as error:
-        logger.error("Preprocessor error:\n%s", error.stderr)
-        sys.exit(error.returncode)
+    result: ArgumentsExecutionResult = arguments.execute(check=True)
 
     # read from the dependency file if it was created as a side effect
     dependency_result: str = (
         Path(filename).read_text(encoding=ENCODING) if filename is not None and filename != "-" else result.stdout
     )
-
-    if not dependency_result:
-        raise PreprocessorError("Empty preprocessor result.")
 
     logger.debug("Preprocessor result:\n%s", dependency_result)
 
@@ -261,14 +285,7 @@ def link_object_files(arguments: Arguments, object_files: List[ObjectFile]) -> i
     for object_file in object_files:
         arguments.add_arg(object_file.file_name)
 
-    try:
-        # execute linking command, e.g.: "g++ foo.o bar.o -ofoobar"
-        result: ArgumentsExecutionResult = arguments.execute(check=True, output=True)
-    except subprocess.CalledProcessError as error:
-        logger.error("Linker error:\n%s", error.stderr)
-        return error.returncode
-
-    if result.stdout:
-        logger.debug("Linker result:\n%s", result.stdout)
+    # execute linking command, e.g.: "g++ foo.o bar.o -ofoobar"
+    result: ArgumentsExecutionResult = arguments.execute(check=True, output=True)
 
     return result.return_code

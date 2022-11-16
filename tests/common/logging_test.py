@@ -6,6 +6,7 @@ from homcc.common.logging import (
     FormatterConfig,
     FormatterDestination,
     LoggingConfig,
+    LogLevel,
     MissingLogFileError,
     setup_logging,
 )
@@ -42,5 +43,6 @@ class TestLogging:
                     formatter=Formatter.CLIENT,
                     config=FormatterConfig.ALL,
                     destination=FormatterDestination.FILE,
+                    level=LogLevel.INFO,
                 )
             )

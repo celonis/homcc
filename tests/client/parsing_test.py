@@ -9,15 +9,15 @@ from pytest import CaptureFixture
 from pytest_mock.plugin import MockerFixture
 
 from homcc import client
+from homcc.client.config import parse_config
+from homcc.client.host import ConnectionType
 from homcc.client.parsing import (
     HOMCC_HOSTS_ENV_VAR,
     HOMCC_HOSTS_FILENAME,
     ClientConfig,
-    ConnectionType,
     Host,
     load_hosts,
     parse_cli_args,
-    parse_config,
 )
 from homcc.common.constants import ENCODING
 from homcc.common.errors import HostParsingError
@@ -38,7 +38,7 @@ class TestCLI:
 
     def test_version(self, capfd: CaptureFixture):
         with pytest.raises(SystemExit) as sys_exit:
-            parse_cli_args(["--version"])
+            parse_cli_args(["./homcc/client/main.py", "--version"])
 
         cap = capfd.readouterr()
 
@@ -48,7 +48,7 @@ class TestCLI:
 
     def test_show_hosts(self, capfd: CaptureFixture):
         with pytest.raises(SystemExit) as sys_exit:
-            parse_cli_args(["--show-hosts"])
+            parse_cli_args(["./homcc/client/main.py", "--show-hosts"])
 
         cap = capfd.readouterr()
 
@@ -60,7 +60,7 @@ class TestCLI:
 
     def test_show_concurrency_level(self, capfd: CaptureFixture):
         with pytest.raises(SystemExit) as sys_exit:
-            parse_cli_args(["-j"])
+            parse_cli_args(["./homcc/client/main.py", "-j"])
 
         cap = capfd.readouterr()
 
@@ -247,9 +247,8 @@ class TestParsingConfig:
     config: List[str] = [
         "[homcc]",
         "# Client global config",
-        "COMPILER=g++",
         "CoMpReSsIoN=lzo",
-        "TIMEOUT=180",
+        "COMPILATION_REQUEST_TIMEOUT=180",
         "schroot_profile=foobar",
         "docker_container=some_container",
         "log_level=INFO",
@@ -262,7 +261,6 @@ class TestParsingConfig:
 
     config_overwrite: List[str] = [
         "[homcc]",
-        "COMPILER=clang++",
         "verbose=FALSE",
     ]
 
@@ -272,9 +270,8 @@ class TestParsingConfig:
 
         assert parse_config([tmp_config_file]) == ClientConfig(
             files=[str(tmp_config_file.absolute())],
-            compiler="g++",
             compression="lzo",
-            timeout=180,
+            compilation_request_timeout=180,
             log_level="INFO",
             verbose=True,
             schroot_profile="foobar",
@@ -290,9 +287,8 @@ class TestParsingConfig:
 
         assert parse_config([tmp_config_file_overwrite, tmp_config_file]) == ClientConfig(
             files=[str(file.absolute()) for file in [tmp_config_file, tmp_config_file_overwrite]],
-            compiler="clang++",
             compression="lzo",
-            timeout=180,
+            compilation_request_timeout=180,
             schroot_profile="foobar",
             docker_container="some_container",
             log_level="INFO",

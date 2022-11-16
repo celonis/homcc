@@ -149,15 +149,18 @@ Additionally, `HOMCC` provides sandboxed compiler execution for remote compilati
     <tr align="center"><th>Environmental Variable</th><th>Example: <code>homcc.conf</code></th><th>Explanation</th></tr>
     <tr valign="top">
     <td><sub><pre lang="ini">
-     
-    HOMCC_COMPILER
-    HOMCC_TIMEOUT
+    # homcc
     HOMCC_COMPRESSION
     HOMCC_SCHROOT_PROFILE
     HOMCC_DOCKER_CONTAINER
+    HOMCC_COMPILATION_REQUEST_TIMEOUT
+    HOMCC_ESTABLISH_CONNECTION_TIMEOUT
+    HOMCC_REMOTE_COMPILATION_TRIES
     HOMCC_LOG_LEVEL
     HOMCC_VERBOSE
+    HOMCC_NO_LOCAL_COMPILATION
      
+    # homccd
     HOMCCD_LIMIT
     HOMCCD_PORT
     HOMCCD_ADDRESS
@@ -166,13 +169,16 @@ Additionally, `HOMCC` provides sandboxed compiler execution for remote compilati
     </pre></sub></td>
     <td><sub><pre lang="ini">
     [homcc]
-    compiler=g++
-    timeout=120
     compression=lzo
     schroot_profile=jammy
     docker_container=example_container
+    compilation_request_timeout=120
+    establish_connection_timeout=10
+    remote_compilation_tries=3
     log_level=DEBUG
     verbose=True
+    no_local_compilation=True
+     
     [homccd]
     limit=64
     port=3126
@@ -182,13 +188,16 @@ Additionally, `HOMCC` provides sandboxed compiler execution for remote compilati
     </pre></sub></td>
     <td><sub><pre>
     # Client configuration
-    Default compiler
-    Default timeout value in seconds
     Default compression algorithm: {lzo, lzma}
     Profile to specify the schroot environment for remote compilations
     Docker container that should be used on the server for remote compilations
+    Total timeout value to wait for a remote compilation request in seconds
+    Timeout value to wait for establishing a connection to a remote compilation server
+    Maximal amount of remote compilation servers that are requested from for a single compilation
     Detail level for log messages: {DEBUG, INFO, WARNING, ERROR, CRITICAL}
     Enable verbosity mode which implies detailed and colored logging
+    Enforce that even on recoverable failures no local compilation is executed
+     
     # Server configuration
     Maximum limit of concurrent compilations
     TCP port to listen on
@@ -304,7 +313,7 @@ Additionally, `HOMCC` provides sandboxed compiler execution for remote compilati
 ### `docker` testing setup
 - Create a docker container with a working `gcc` compiler, the easiest image to get is probably the official `ubuntu` docker image:
   ```sh
-  docker run -dit --name gcc -v /tmp:/tmp ubuntu:jammy
+  docker run -dit --name jammy -v /tmp:/tmp ubuntu:jammy
   ```
 - Execute all tests (including the docker tests by specifying `--rundocker=jammy`) and perform test coverage:
   ```sh

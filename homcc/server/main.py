@@ -4,7 +4,7 @@ import logging
 import os
 import signal
 import sys
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 sys.path.append(os.path.join(os.path.dirname(__file__), "../.."))
 
@@ -43,10 +43,11 @@ def main():
         config=FormatterConfig.COLORED,
         formatter=Formatter.SERVER,
         destination=FormatterDestination.STREAM,
+        level=LogLevel.INFO,
     )
 
     # LOG_LEVEL and VERBOSITY
-    log_level: str = homccd_args_dict["log_level"]
+    log_level: Optional[str] = homccd_args_dict["log_level"]
 
     # verbosity implies debug mode
     if (
@@ -90,9 +91,9 @@ def main():
     # start server
     try:
         tcp_server, server_thread = start_server(homccd_config)
-    except ServerInitializationError:
+    except ServerInitializationError as error:
         logger.error("Could not start homccd, terminating.")
-        sys.exit(os.EX_OSERR)
+        raise SystemExit(os.EX_OSERR) from error
 
     def signal_handler(*_):
         stop_server(tcp_server)
