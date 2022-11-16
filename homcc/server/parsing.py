@@ -9,7 +9,7 @@ from argparse import Action, ArgumentParser, ArgumentTypeError, RawTextHelpForma
 from configparser import Error, SectionProxy
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, ClassVar, Dict, List, Optional, Union
+from typing import Any, ClassVar, Dict, Iterator, List, Optional, Union
 
 from homcc import server
 from homcc.common.logging import LogLevel
@@ -36,7 +36,7 @@ class ShowVersion(Action):
         super().__init__(nargs=0, help=self.__doc__, **kwargs)
 
     def __call__(self, *_):
-        print(f"homccd {server.__version__}")
+        sys.stdout.write(f"homccd {server.__version__}\n")
         sys.exit(os.EX_OK)
 
 
@@ -50,10 +50,10 @@ class ShowProfiles(Action):
         profiles: List[str] = get_schroot_profiles()
 
         if not profiles:
-            print("No chroots found. Run 'schroot -l' to verify their existence.")
+            sys.stderr.write("No chroots found. Run 'schroot -l' to verify their existence.\n")
 
         for profile in profiles:
-            print(profile)
+            sys.stdout.write(f"{profile}\n")
 
         sys.exit(os.EX_OK)
 
@@ -72,14 +72,14 @@ class ServerConfig:
         HOMCCD_VERBOSE_ENV_VAR: ClassVar[str] = "HOMCCD_VERBOSE"
 
         @classmethod
-        def to_list(cls) -> List[str]:
-            return [
+        def __iter__(cls) -> Iterator[str]:
+            yield from (
                 cls.HOMCCD_LIMIT_ENV_VAR,
                 cls.HOMCCD_PORT_ENV_VAR,
                 cls.HOMCCD_ADDRESS_ENV_VAR,
                 cls.HOMCCD_LOG_LEVEL_ENV_VAR,
                 cls.HOMCCD_VERBOSE_ENV_VAR,
-            ]
+            )
 
         @classmethod
         def get_limit(cls) -> Optional[int]:
@@ -153,11 +153,11 @@ class ServerConfig:
     def __str__(self):
         return (
             f'Configuration (from [{", ".join(self.files)}]):\n'
-            f"\tlimit:\t{self.limit}\n"
-            f"\tport:\t{self.port}\n"
+            f"\tlimit:\t\t{self.limit}\n"
+            f"\tport:\t\t{self.port}\n"
             f"\taddress:\t{self.address}\n"
-            f"\tlog_level:\t{self.log_level.name}\n"
-            f"\tverbose:\t{str(self.verbose)}\n"
+            f"\tlog_level:\t{self.log_level}\n"
+            f"\tverbose:\t{self.verbose}\n"
         )
 
 
@@ -242,7 +242,7 @@ def parse_config(filenames: Optional[List[Path]] = None) -> ServerConfig:
     try:
         files, cfg = parse_configs(filenames or default_locations(HOMCC_CONFIG_FILENAME))
     except Error as err:
-        print(f"{err}; using default configuration instead")
+        sys.stderr.write(f"{err}; using default configuration instead\n")
         return ServerConfig(files=[])
 
     if HOMCC_SERVER_CONFIG_SECTION not in cfg.sections():

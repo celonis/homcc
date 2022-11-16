@@ -1,5 +1,6 @@
 """Tests for the server environment."""
 from pathlib import Path
+from typing import List
 from unittest.mock import MagicMock
 
 import pytest
@@ -42,7 +43,7 @@ class TestServerEnvironment:
             "/opt/src/absolute.cpp",
         ]
         environment = create_mock_environment("/client1", "/client1/test/xyz")
-        mapped_args = list(environment.map_args(Arguments.from_args(args)))
+        mapped_args: List[str] = list(environment.map_args(Arguments.from_vargs(*args)))
 
         assert mapped_args.pop(0) == "gcc"
         assert mapped_args.pop(0) == f"-I{environment.mapped_cwd}/relative_path/relative.h"
@@ -74,7 +75,7 @@ class TestServerEnvironment:
         ]
 
         environment = create_mock_environment("/client1", "/client1/test/xyz")
-        mapped_args = list(environment.map_args(Arguments.from_args(args)))
+        mapped_args: List[str] = list(environment.map_args(Arguments.from_vargs(*args)))
 
         assert mapped_args.pop(0) == "gcc"
         assert mapped_args.pop(0) == "-BsomeOtherArgument"
@@ -148,13 +149,11 @@ class TestServerCompilation:
     def test_multiple_files(self):
         instance_path = "/tmp/homcc/test-id"
         mapped_cwd = "/tmp/homcc/test-id/home/user/cwd"
-        arguments = Arguments.from_args(
-            [
-                "gcc",
-                "-I../abc/include/foo.h",
-                f"{mapped_cwd}/src/main.cpp",
-                f"{mapped_cwd}/other.cpp",
-            ]
+        arguments: Arguments = Arguments.from_vargs(
+            "gcc",
+            "-I../abc/include/foo.h",
+            f"{mapped_cwd}/src/main.cpp",
+            f"{mapped_cwd}/other.cpp",
         )
 
         environment = create_mock_environment(instance_path, mapped_cwd)
@@ -167,12 +166,10 @@ class TestServerCompilation:
     def test_single_file(self):
         instance_path = "/tmp/homcc/test-id"
         mapped_cwd = "/tmp/homcc/test-id/home/user/cwd"
-        arguments = Arguments.from_args(
-            [
-                "gcc",
-                "-I../abc/include/foo.h",
-                f"{mapped_cwd}/src/this_is_a_source_file.cpp",
-            ]
+        arguments: Arguments = Arguments.from_vargs(
+            "gcc",
+            "-I../abc/include/foo.h",
+            f"{mapped_cwd}/src/this_is_a_source_file.cpp",
         )
 
         environment = create_mock_environment(instance_path, mapped_cwd)
@@ -190,12 +187,10 @@ class TestServerCompilation:
         mapped_cwd = "/tmp/homcc/test-id/home/user/cwd"
         environment = create_mock_environment(instance_path, mapped_cwd)
 
-        debug_arguments = Arguments.from_args(
-            [
-                "gcc",
-                "-g",
-                f"{mapped_cwd}/src/foo.cpp",
-            ]
+        debug_arguments: Arguments = Arguments.from_vargs(
+            "gcc",
+            "-g",
+            f"{mapped_cwd}/src/foo.cpp",
         )
         environment.do_compilation(debug_arguments)
 
@@ -205,8 +200,5 @@ class TestServerCompilation:
 
     @pytest.mark.gplusplus
     def test_compiler_exists(self):
-        gplusplus_args = Arguments.from_args(["g++", "foo"])
-        assert Environment.compiler_exists(gplusplus_args)
-
-        failing_args = Arguments.from_args(["non-existing-compiler", "foo"])
-        assert not Environment.compiler_exists(failing_args)
+        assert Environment.compiler_exists(Arguments.from_vargs("g++", "foo"))
+        assert not Environment.compiler_exists(Arguments.from_vargs("clang-HOMCC_TEST_COMPILER_EXISTS", "foo"))

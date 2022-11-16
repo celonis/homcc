@@ -1,14 +1,11 @@
 """Central collection of Client specific Error types"""
 
 from dataclasses import dataclass
+from typing import ClassVar
 
 
 class RecoverableClientError(Exception):
     """Base class for TCPClient exceptions to indicate recoverability for the client main function"""
-
-
-class PreprocessorError(RecoverableClientError):
-    """Exception for errors during the preprocessor stage"""
 
 
 class TargetInferationError(RecoverableClientError):
@@ -27,7 +24,7 @@ class UnexpectedMessageTypeError(RecoverableClientError):
     """Exception for receiving a message with an unexpected type"""
 
 
-class HostsExhaustedError(RecoverableClientError):
+class RemoteHostsFailure(RecoverableClientError):
     """Error class to indicate that the compilation request was refused by all hosts"""
 
 
@@ -36,6 +33,11 @@ class NoHostsFoundError(RecoverableClientError):
     Error class to indicate a recoverable error when hosts could neither be determined from the environment variable nor
     from the default hosts file locations
     """
+
+    message: ClassVar[str] = (
+        "No hosts were found! Please specify them via the HOMCC_HOSTS environmental variable or a dedicated hosts file "
+        "like '~/.homcc/hosts'."
+    )
 
 
 class HostParsingError(RecoverableClientError):

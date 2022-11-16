@@ -19,12 +19,12 @@ from typing import Dict, Iterator, List, Optional
 
 import sysv_ipc
 
-from homcc.client.parsing import ConnectionType, Host
+from homcc.client.host import ConnectionType, Host
 from homcc.common.arguments import Arguments
 from homcc.common.errors import (
     ClientParsingError,
     FailedHostNameResolutionError,
-    HostsExhaustedError,
+    RemoteHostsFailure,
     SlotsExhaustedError,
 )
 from homcc.common.messages import ArgumentMessage, DependencyReplyMessage, Message
@@ -32,22 +32,22 @@ from homcc.common.messages import ArgumentMessage, DependencyReplyMessage, Messa
 logger = logging.getLogger(__name__)
 
 
-class HostSelector:
+class RemoteHostSelector:
     """
     Class to enable random but weighted host selection on a load balancing principle. Hosts with more capacity have a
     higher probability of being chosen for remote compilation. The selection policy is agnostic to the server job
-    limit and only relies on the limit information provided on the client side via the host format. If parameter tries
-    is not provided, a host will be randomly selected until all hosts are exhausted. Parameter allow_localhost toggles
-    whether localhost is added to the list of possible selections.
+    limit and only relies on the limit information provided on the client side via the host format. If parameter "tries"
+    is not provided, a host will be randomly selected until all hosts are exhausted.
     """
 
-    def __init__(self, hosts: List[Host], tries: Optional[int] = None, allow_localhost: bool = False):
+    def __init__(self, hosts: List[Host], tries: Optional[int] = None):
+        if any(host.is_local() for host in hosts):
+            raise ValueError("Selecting localhost is not permitted")
+
         if tries is not None and tries <= 0:
             raise ValueError(f"Amount of tries must be greater than 0, but was {tries}")
 
-        self._hosts: List[Host] = [
-            host for host in hosts if host.limit > 0 and (not host.is_local() or allow_localhost)
-        ]
+        self._hosts: List[Host] = [host for host in hosts if host.limit > 0]
         self._limits: List[int] = [host.limit for host in self._hosts]
 
         self._count: int = 0
@@ -68,7 +68,7 @@ class HostSelector:
         """return a random host where hosts with higher limits are more likely to be selected"""
         self._count += 1
         if self._tries is not None and self._count > self._tries:
-            raise HostsExhaustedError(f"{self._tries} hosts refused the connection")
+            raise RemoteHostsFailure(f"{self._tries} hosts refused the connection")
 
         # select one host and find its index
         host: Host = random.choices(population=self._hosts, weights=self._limits, k=1)[0]
@@ -134,10 +134,13 @@ class HostSemaphore(ABC):
             except sysv_ipc.ExistentialError:
                 pass
 
+            # prevent double release while receiving signal during normal context manager exit
+            self._semaphore = None  # type: ignore
+
 
 class RemoteHostSemaphore(HostSemaphore):
     """
-    Class to track remote compilation jobs via a SysV  semaphore.
+    Class to track remote compilation jobs via a SysV semaphore.
 
     Each semaphore for a host is uniquely identified by host_id which includes the host name itself and ConnectionType
     specific information like the port for TCP and the user for SSH connections. The semaphore will be acquired with a
@@ -368,19 +371,19 @@ class StateFile:
 class TCPClient:
     """Wrapper class to exchange homcc protocol messages via TCP"""
 
-    DEFAULT_PORT: int = 3126
     DEFAULT_BUFFER_SIZE_LIMIT: int = 65_536  # default buffer size limit of StreamReader is 64 KiB
-    DEFAULT_OPEN_CONNECTION_TIMEOUT: float = 5
 
-    def __init__(self, host: Host, state: StateFile):
+    def __init__(self, host: Host, timeout: float, state: StateFile):
         connection_type: ConnectionType = host.type
 
         if connection_type != ConnectionType.TCP:
             raise ValueError(f"TCPClient cannot be initialized with {connection_type}!")
 
         self.host: str = host.name
-        self.port: int = host.port or self.DEFAULT_PORT
+        self.port: int = host.port
         self.compression = host.compression
+
+        self.timeout: float = timeout
 
         self._data: bytes = bytes()
         self._reader: asyncio.StreamReader
@@ -394,7 +397,7 @@ class TCPClient:
         try:
             self._reader, self._writer = await asyncio.wait_for(
                 asyncio.open_connection(host=self.host, port=self.port, limit=self.DEFAULT_BUFFER_SIZE_LIMIT),
-                timeout=self.DEFAULT_OPEN_CONNECTION_TIMEOUT,
+                timeout=self.timeout,
             )
         except asyncio.TimeoutError as error:
             logger.warning("Connection establishment to '%s:%s' timed out.", self.host, self.port)
@@ -412,8 +415,8 @@ class TCPClient:
     async def _send(self, message: Message):
         """send a message to homcc server"""
         logger.debug("Sending %s to '%s:%i':\n%s", message.message_type, self.host, self.port, message.get_json_str())
-        self._writer.write(message.to_bytes())  # type: ignore[union-attr]
-        await self._writer.drain()  # type: ignore[union-attr]
+        self._writer.write(message.to_bytes())
+        await self._writer.drain()
 
     async def send_argument_message(
         self,
