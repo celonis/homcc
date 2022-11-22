@@ -83,7 +83,7 @@ async def compile_remotely(arguments: Arguments, hosts: List[Host], config: Clie
         # arguments execution error during local pre-steps, unrecoverable failure
         except subprocess.CalledProcessError as error:
             check_recursive_call(arguments.compiler, error)
-            logger.error("%s", error)
+            logger.error(error.stderr)
             raise SystemExit(error.returncode) from error
 
         # compilation request timed out, local compilation fallback
