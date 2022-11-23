@@ -549,10 +549,10 @@ class Arguments:
     @staticmethod
     def _execute_args_sync(
         args: List[str],
-        check: bool = False,
-        cwd: Path = Path.cwd(),
-        output: bool = False,
-        timeout: Optional[float] = None,
+        check: bool,
+        cwd: Path,
+        output: bool,
+        timeout: Optional[float],
     ):
         result: subprocess.CompletedProcess = subprocess.run(
             args=args, check=check, cwd=cwd, encoding=ENCODING, capture_output=True, timeout=timeout
@@ -568,8 +568,8 @@ class Arguments:
     def _execute_async(
         args: List[str],
         event_socket_fd: int,
-        cwd: Path = Path.cwd(),
-        timeout: Optional[float] = None,
+        cwd: Path,
+        timeout: Optional[float],
     ) -> ArgumentsExecutionResult:
         start_time = time.time()
         with subprocess.Popen(args, cwd=cwd, stdout=subprocess.PIPE, stderr=subprocess.PIPE) as process:
