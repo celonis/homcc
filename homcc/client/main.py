@@ -54,7 +54,7 @@ def main():
 
     # exit on unrecoverable errors
     except RemoteCompilationError as error:
-        logger.error("%s", error.message)
+        logger.error(error.message)
         raise SystemExit(error.return_code) from error
 
     # compile locally on recoverable errors if local compilation is not disabled

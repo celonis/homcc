@@ -311,7 +311,7 @@ def setup_client(cli_args: List[str]) -> Tuple[ClientConfig, Arguments, Host, Li
         try:
             hosts_file, hosts_str = load_hosts()
         except NoHostsFoundError as error:
-            logger.error("%s", error)
+            logger.error(error.message)
             raise SystemExit(os.EX_NOINPUT) from error
 
         has_local: bool = False
