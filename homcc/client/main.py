@@ -13,6 +13,7 @@ from homcc.client.compilation import (  # pylint: disable=wrong-import-position
     RECURSIVE_ERROR_MESSAGE,
     compile_locally,
     compile_remotely,
+    execute_linking,
 )
 from homcc.client.parsing import setup_client  # pylint: disable=wrong-import-position
 from homcc.common.errors import (  # pylint: disable=wrong-import-position
@@ -41,7 +42,10 @@ def main():
     homcc_config, compiler_arguments, localhost, remote_hosts = setup_client(sys.argv)
 
     # force local execution
-    if compiler_arguments.is_linking_only() or not compiler_arguments.is_sendable():
+    if compiler_arguments.is_linking_only():
+        sys.exit(execute_linking(compiler_arguments, localhost))
+
+    if not compiler_arguments.is_sendable():
         sys.exit(compile_locally(compiler_arguments, localhost))
 
     # try to compile remotely
