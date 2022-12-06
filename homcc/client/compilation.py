@@ -205,6 +205,21 @@ async def compile_remotely_at(
     return os.EX_OK
 
 
+def execute_linking(arguments: Arguments, localhost: Host) -> int:
+    """execute linking command, no StateFile necessary"""
+
+    with LocalHostSemaphore(localhost):
+        try:
+            # execute compile command, e.g.: "g++ main.cpp foo.cpp"
+            result: ArgumentsExecutionResult = arguments.execute(check=True, output=True)
+        except subprocess.CalledProcessError as error:
+            check_recursive_call(arguments.compiler, error)
+            logger.error(error.stderr)
+            raise SystemExit(error.returncode) from error
+
+        return result.return_code
+
+
 def compile_locally(arguments: Arguments, localhost: Host) -> int:
     """execute local compilation"""
 
@@ -212,11 +227,11 @@ def compile_locally(arguments: Arguments, localhost: Host) -> int:
         state.set_compile()
 
         try:
-            # execute compile command, e.g.: "g++ foo.cpp -o foo"
+            # execute compile command, e.g.: "g++ -c foo.cpp -o foo"
             result: ArgumentsExecutionResult = arguments.execute(check=True, output=True)
         except subprocess.CalledProcessError as error:
             check_recursive_call(arguments.compiler, error)
-            logger.error("%s", error)
+            logger.error(error.stderr)
             raise SystemExit(error.returncode) from error
 
         return result.return_code
@@ -229,7 +244,7 @@ def scan_includes(arguments: Arguments) -> List[str]:
         dependencies: Set[str] = find_dependencies(arguments)
     except subprocess.CalledProcessError as error:
         check_recursive_call(arguments.compiler, error)
-        logger.error("%s", error)
+        logger.error(error.stderr)
         raise SystemExit(error.returncode) from error
 
     return [dependency for dependency in dependencies if not Arguments.is_source_file_arg(dependency)]
