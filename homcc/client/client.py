@@ -122,20 +122,19 @@ class HostSemaphore(ABC):
         pass
 
     def __exit__(self, *exc):
-        if self._semaphore is not None:
-            try:
-                logger.debug("Exiting semaphore '%s' with value '%i'", self._semaphore.id, self._semaphore.value)
+        try:
+            logger.debug("Exiting semaphore '%s' with value '%i'", self._semaphore.id, self._semaphore.value)
 
-                self._semaphore.release()  # releases the semaphore
+            self._semaphore.release()  # releases the semaphore
 
-                if self._semaphore.value == self._host_limit:
-                    # remove the semaphore from the system if no other process currently holds it
-                    self._semaphore.remove()
-            except sysv_ipc.ExistentialError:
-                pass
+            if self._semaphore.value == self._host_limit:
+                # remove the semaphore from the system if no other process currently holds it
+                self._semaphore.remove()
+        except (AttributeError, sysv_ipc.ExistentialError):
+            pass
 
-            # prevent double release while receiving signal during normal context manager exit
-            self._semaphore = None  # type: ignore
+        # prevent double release while receiving signal during normal context manager exit
+        self._semaphore = None  # type: ignore
 
 
 class RemoteHostSemaphore(HostSemaphore):
