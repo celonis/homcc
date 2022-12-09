@@ -12,6 +12,7 @@ import socket
 import struct
 import sys
 import time
+import types
 from abc import ABC, abstractmethod
 from enum import Enum, auto
 from pathlib import Path
@@ -445,6 +446,11 @@ class TCPClient:
         content: bytearray = bytearray(Path(dependency).read_bytes())
         await self._send(DependencyReplyMessage(content, self.compression))
 
+    @types.coroutine
+    def check_timeout(self):
+        """Yield control to the event loop so that asyncio respects timeouts."""
+        yield
+
     async def receive(self) -> Message:
         """receive data from homcc server and convert it to Message"""
         #  read stream into internal buffer
@@ -454,6 +460,7 @@ class TCPClient:
         # if message is incomplete, continue reading from stream until no more bytes are missing
         while bytes_needed > 0:
             logger.debug("Message is incomplete by #%i bytes.", bytes_needed)
+            await self.check_timeout()
             self._data += await self._reader.read(bytes_needed)
             bytes_needed, parsed_message = Message.from_bytes(bytearray(self._data))
 

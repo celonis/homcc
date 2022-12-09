@@ -480,6 +480,8 @@ class TCPRequestHandler(socketserver.BaseRequestHandler):
 
         try:
             self.recv_loop()
+        except Exception as ex:  # pylint: disable=broad-except
+            logger.exception("Error when handling client: %s", ex)
         finally:
             with self.server.current_amount_connections_mutex:
                 self.server.current_amount_connections -= 1
