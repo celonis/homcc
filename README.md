@@ -214,7 +214,7 @@ Things to keep in mind when deploying `homccd`:
 - `homccd` currently does not support cache eviction. The dependency cache is therefore growing until there is no space any more. We recommend to restart the `homccd` service every 24 hours (e.g. using a cronjob) so that the cache gets cleared regularly.
 - `homccd` does not limit simultaneous connections of a single client. A malicious client could therefore block the service by always opening up connections until no server slots are available any more.
 
-The key takeaway of the previous points is to **not expose** `homccd` publicly. You should make sure only internal users (e.g. developers) have access to the service, for example through using a VPN.
+:exclamation: The key takeaway of the previous points is to **not expose** `homccd` publicly. You should make sure only internal users (e.g. developers) have access to the service, for example through using a VPN.
 
 ## Development
 
