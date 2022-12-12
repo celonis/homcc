@@ -213,6 +213,7 @@ Things to keep in mind when deploying `homccd`:
 - `homcc` currently does not support any transport encryption such as TLS, so source files would get transmitted over the internet in plain text if not using a VPN.
 - `homccd` currently does not support cache eviction. The dependency cache is therefore growing until there is no space any more. We recommend to restart the `homccd` service every 24 hours (e.g. using a cronjob) so that the cache gets cleared regularly.
 - `homccd` does not limit simultaneous connections of a single client. A malicious client could therefore block the service by always opening up connections until no server slots are available any more.
+- `homccd` does not limit access to docker containers or chroot environments. A client can choose any docker container or chroot environment available on the server to execute the compilation in. 
 
 :exclamation: The key takeaway of the previous points is to **not expose** `homccd` publicly. You should make sure only internal users (e.g. developers) have access to the service, for example through using a VPN.
 
