@@ -67,7 +67,7 @@ def main():
 
     setup_logging(logging_config)
 
-    # LIMIT
+    # JOB LIMIT
     if (limit := homccd_args_dict["jobs"]) is not None:
         homccd_config.limit = limit
 
