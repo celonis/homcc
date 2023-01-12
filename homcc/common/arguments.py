@@ -565,13 +565,51 @@ class Arguments:
         return ArgumentsExecutionResult.from_process_result(result)
 
     @staticmethod
+    def _wait_for_async_termination(
+        poller: select.poll,
+        process: subprocess.Popen[bytes],
+        process_fd: int,
+        event_socket_fd: int,
+        timeout: Optional[float],
+    ):
+        start_time = time.time()
+
+        while True:
+            now_time = time.time()
+
+            if timeout is not None and now_time - start_time >= timeout:
+                raise TimeoutError(f"Compiler timed out. (Timeout: {timeout}s).")
+
+            events = poller.poll(1)
+            for fd, event in events:
+                if fd == event_socket_fd:
+                    logger.info("Terminating compilation process as socket got closed by remote. (event: %i)", event)
+
+                    process.terminate()
+                    # we need to wait for the process to terminate, so that the handle is correctly closed
+                    process.wait()
+
+                    raise ClientDisconnectedError
+                elif fd == process_fd:
+                    logger.debug("Process has finished (process_fd has event): %i", event)
+
+                    stdout_bytes, stderr_bytes = process.communicate()
+                    stdout = stdout_bytes.decode(ENCODING)
+                    stderr = stderr_bytes.decode(ENCODING)
+
+                    return ArgumentsExecutionResult(process.returncode, stdout, stderr)
+                else:
+                    logger.warning(
+                        "Got poll() event for fd '%i', which does neither match the socket nor the process.", fd
+                    )
+
+    @staticmethod
     def _execute_async(
         args: List[str],
         event_socket_fd: int,
         cwd: Path,
         timeout: Optional[float],
     ) -> ArgumentsExecutionResult:
-        start_time = time.time()
         with subprocess.Popen(args, cwd=cwd, stdout=subprocess.PIPE, stderr=subprocess.PIPE) as process:
             poller = select.poll()
             # socket is readable when TCP FIN is sended, so also check if we can read (POLLIN).
@@ -582,36 +620,10 @@ class Arguments:
             process_fd = os.pidfd_open(process.pid)
             poller.register(process_fd, select.POLLRDHUP | select.POLLIN)
 
-            while True:
-                now_time = time.time()
-
-                if timeout is not None and now_time - start_time >= timeout:
-                    raise TimeoutError(f"Compiler timed out. (Timeout: {timeout}s).")
-
-                events = poller.poll(1)
-                for fd, event in events:
-                    if fd == event_socket_fd:
-                        logger.info(
-                            "Terminating compilation process as socket got closed by remote. (event: %i)", event
-                        )
-
-                        process.terminate()
-                        # we need to wait for the process to terminate, so that the handle is correctly closed
-                        process.wait()
-
-                        raise ClientDisconnectedError
-                    elif fd == process_fd:
-                        logger.debug("Process has finished (process_fd has event): %i", event)
-
-                        stdout_bytes, stderr_bytes = process.communicate()
-                        stdout = stdout_bytes.decode(ENCODING)
-                        stderr = stderr_bytes.decode(ENCODING)
-
-                        return ArgumentsExecutionResult(process.returncode, stdout, stderr)
-                    else:
-                        logger.warning(
-                            "Got poll() event for fd '%i', which does neither match the socket nor the process.", fd
-                        )
+            try:
+                return Arguments._wait_for_async_termination(poller, process, process_fd, event_socket_fd, timeout)
+            finally:
+                os.close(process_fd)
 
     def execute(self, **kwargs) -> ArgumentsExecutionResult:
         """
