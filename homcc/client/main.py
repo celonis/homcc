@@ -59,11 +59,18 @@ def main():
 
     # compile locally on recoverable errors if local compilation is not disabled
     except RecoverableClientError as error:
+        logger.error("Failed to compile remotely:\n%s", error)
+
         if not homcc_config.local_compilation_enabled:
-            logger.error("Failed to compile remotely:\n%s", error)
             raise SystemExit(os.EX_UNAVAILABLE) from error
-        logger.warning("Compiling locally instead:\n%s", error)
-    sys.exit(compile_locally(compiler_arguments, localhost))
+
+    # log all unexpected errors and fall back to local compilation
+    except Exception as error:  # pylint: disable=broad-except
+        logger.error("Unexpected error:\n%s", error)
+
+    finally:
+        logger.warning("Compiling locally instead!")
+        sys.exit(compile_locally(compiler_arguments, localhost))
 
 
 if __name__ == "__main__":
