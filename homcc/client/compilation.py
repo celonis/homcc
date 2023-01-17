@@ -100,6 +100,9 @@ async def compile_remotely(arguments: Arguments, hosts: List[Host], config: Clie
         except FailedHostNameResolutionError:
             logger.warning("Could not resolve host name of %s. Could be a DNS issue?", host.name)
 
+        except ConnectionRefusedError as error:
+            logger.warning("%s", error)
+
         except ConnectionError as error:
             logger.warning("Lost connection to host %s due to '%s'", host.name, error)
 
