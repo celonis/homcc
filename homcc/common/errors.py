@@ -46,6 +46,10 @@ class FailedHostNameResolutionError(Exception):
     """Error class to indicate that the host name could not be resolved"""
 
 
+class HostRefusedConnectionError(Exception):
+    """Error class to indicate that the host refused establishing the connection"""
+
+
 @dataclass
 class RemoteCompilationError(Exception):
     """
