@@ -21,6 +21,7 @@ from homcc.common.arguments import Arguments, ArgumentsExecutionResult, Compiler
 from homcc.common.constants import ENCODING
 from homcc.common.errors import (
     FailedHostNameResolutionError,
+    HostRefusedConnectionError,
     RemoteCompilationError,
     RemoteCompilationTimeoutError,
     RemoteHostsFailure,
@@ -96,9 +97,13 @@ async def compile_remotely(arguments: Arguments, hosts: List[Host], config: Clie
         except SlotsExhaustedError as error:
             logger.debug("%s", error)
 
-        # client could not connect, retry with different host
-        except (ConnectionError, FailedHostNameResolutionError) as error:
+        # client could not connect or lost connection, retry with different host
+        except FailedHostNameResolutionError:
+            logger.warning("Could not resolve host name of %s. Could be a DNS issue?", host.name)
+        except HostRefusedConnectionError as error:
             logger.warning("%s", error)
+        except ConnectionError as error:
+            logger.warning("Lost connection to host %s due to '%s'", host.name, error)
 
         # track all failing hosts
         finally:
@@ -155,7 +160,7 @@ async def compile_remotely_at(
         host_response: Message = await client.receive()
 
         if isinstance(host_response, ConnectionRefusedMessage):
-            raise ConnectionRefusedError(
+            raise HostRefusedConnectionError(
                 f"Host {client.host}:{client.port} refused the connection:\n{host_response.info}!"
             )
 

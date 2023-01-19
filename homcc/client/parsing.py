@@ -311,7 +311,10 @@ def setup_client(cli_args: List[str]) -> Tuple[ClientConfig, Arguments, Host, Li
         try:
             hosts_file, hosts_str = load_hosts()
         except NoHostsFoundError as error:
-            logger.error(error.message)
+            logger.error(
+                "No hosts were found! Please specify them via the HOMCC_HOSTS environmental variable or a dedicated "
+                "hosts file like '~/.homcc/hosts'."
+            )
             raise SystemExit(os.EX_NOINPUT) from error
 
         has_local: bool = False
@@ -426,4 +429,4 @@ def load_hosts(hosts_file_locations: Optional[List[Path]] = None) -> Tuple[str, 
                 continue
             return str(hosts_file_location), filtered_lines(hosts_file_location.read_text(encoding=ENCODING))
 
-    raise NoHostsFoundError("No hosts information were found!")
+    raise NoHostsFoundError

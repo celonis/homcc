@@ -52,17 +52,28 @@ def main():
     try:
         sys.exit(asyncio.run(compile_remotely(compiler_arguments, remote_hosts, homcc_config)))
 
-    # exit on unrecoverable errors
+    # valid sys exit calls
+    except SystemExit as sys_exit:
+        raise sys_exit
+
+    # forward remote compilations issues
     except RemoteCompilationError as error:
         logger.error(error.message)
         raise SystemExit(error.return_code) from error
 
-    # compile locally on recoverable errors if local compilation is not disabled
+    # log recoverable errors, do not compile locally if disabled
     except RecoverableClientError as error:
+        logger.error("Failed to compile remotely:\n%s", error)
+
         if not homcc_config.local_compilation_enabled:
-            logger.error("Failed to compile remotely:\n%s", error)
             raise SystemExit(os.EX_UNAVAILABLE) from error
-        logger.warning("Compiling locally instead:\n%s", error)
+
+    # log all remaining, unexpected errors
+    except Exception as error:  # pylint: disable=broad-except
+        logger.error("Unexpected error:\n%s", error)
+
+    # fall back to local compilation
+    logger.warning("Compiling locally instead!")
     sys.exit(compile_locally(compiler_arguments, localhost))
 
 
