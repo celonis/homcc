@@ -56,6 +56,8 @@ class Arguments:
 
     INCLUDE_ARGS: List[str] = ["-I", "-isysroot", "-isystem"]
 
+    FISSION_ARG: str = "-gsplit-dwarf"
+
     # languages
     ALLOWED_LANGUAGE_PREFIXES: List[str] = ["c", "c++", "objective-c", "objective-c++", "go"]
 
@@ -388,6 +390,10 @@ class Arguments:
     def is_linking(self) -> bool:
         """check whether the no-linking arg is missing"""
         return self.NO_LINKING_ARG not in self.args
+
+    def has_fission(self) -> bool:
+        """true if fission should be applied, else false"""
+        return self.FISSION_ARG in self.args
 
     def must_be_parsable(self) -> bool:
         """check whether the execution must be parsable and verbose logging should therefore be deactivated"""

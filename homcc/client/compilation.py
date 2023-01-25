@@ -35,7 +35,7 @@ from homcc.common.messages import (
     ConnectionRefusedMessage,
     DependencyRequestMessage,
     Message,
-    ObjectFile,
+    File,
 )
 
 logger = logging.getLogger(__name__)
@@ -136,7 +136,7 @@ async def compile_remotely_at(
             target = arguments.get_compiler_target_triple()
         except TargetInferationError as err:
             logger.warning(
-                "Could not get target architecture. Omiting passing explicit target to remote compilation host. "
+                "Could not get target architecture. Omitting passing explicit target to remote compilation host. "
                 "This may lead to unexpected results if the remote compilation host has a different architecture. %s",
                 err,
             )
@@ -186,24 +186,35 @@ async def compile_remotely_at(
             host_result.return_code,
         )
 
-    for object_file in host_response.get_object_files():
-        output_path: str = object_file.file_name
+    for file in host_response.get_files():
+        output_path: str = file.file_name
 
         if not arguments.is_linking() and arguments.output is not None:
-            # if we do not want to link, respect the -o flag for the object file
-            output_path = arguments.output
+            if file.is_dwarf_file():
+                if arguments.output.endswith(".o"):
+                    # e.g. g++ -Iinclude -gsplit-dwarf src/main.cpp -c -o ofile.o -> ofile.o, ofile.dwo
+                    output_path = arguments.output.replace(".o", ".dwo")
+                else:
+                    # e.g. g++ -Iinclude -gsplit-dwarf src/main.cpp -c -o ofile -> ofile.o, ofile.dwo
+                    output_path = f"{arguments.output}.dwo"
+
+                logger.warning("Wrote .dwo file: %s", output_path)  # TODO: remove
+            else:
+                # if we do not want to link, respect the -o flag for the object file
+                output_path = arguments.output
 
         logger.debug("Writing file %s", output_path)
 
-        Path(output_path).write_bytes(object_file.get_data())
+        Path(output_path).write_bytes(file.get_data())
 
+    # TODO(o.layer): check if we need some special linker handling, but I don't think so: https://www.productive-cpp.com/improving-cpp-builds-with-split-dwarf/
     # link and delete object files if required
     if arguments.is_linking():
         linker_return_code: int = link_object_files(arguments, host_response.get_object_files())
 
-        for object_file in host_response.get_object_files():
-            logger.debug("Deleting file %s", object_file.file_name)
-            Path(object_file.file_name).unlink()
+        for file in host_response.get_object_files():
+            logger.debug("Deleting file %s", file.file_name)
+            Path(file.file_name).unlink()
 
         return linker_return_code
 
@@ -291,7 +302,7 @@ def calculate_dependency_dict(dependencies: Set[str]) -> Dict[str, str]:
     return {dependency: hash_file_with_path(dependency) for dependency in dependencies}
 
 
-def link_object_files(arguments: Arguments, object_files: List[ObjectFile]) -> int:
+def link_object_files(arguments: Arguments, object_files: List[File]) -> int:
     """link all remotely compiled object files"""
     if len(arguments.source_files) != len(object_files):
         logger.error(

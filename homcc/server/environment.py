@@ -9,7 +9,7 @@ from typing import Dict, List, Optional
 
 from homcc.common.arguments import Arguments, ArgumentsExecutionResult
 from homcc.common.compression import Compression
-from homcc.common.messages import CompilationResultMessage, ObjectFile
+from homcc.common.messages import CompilationResultMessage, File
 from homcc.server.cache import Cache
 
 logger = logging.getLogger(__name__)
@@ -124,6 +124,9 @@ class Environment:
     def map_source_file_to_object_file(self, source_file: str) -> str:
         return os.path.join(self.mapped_cwd, f"{Path(source_file).stem}.o")
 
+    def map_source_file_to_dwarf_file(self, source_file: str) -> str:
+        return os.path.join(self.mapped_cwd, f"{Path(source_file).stem}.dwo")
+
     @staticmethod
     def compiler_exists(arguments: Arguments) -> bool:
         """Returns true if the compiler specified in the arguments exists on the system, else false."""
@@ -145,16 +148,26 @@ class Environment:
 
         result = self.invoke_compiler(arguments.no_linking())
 
-        object_files: List[ObjectFile] = []
+        object_files: List[File] = []
+        dwarf_files: List[File] = []
         if result.return_code == os.EX_OK:
             for source_file in arguments.source_files:
-                object_file_path: str = self.map_source_file_to_object_file(source_file)
-                object_file_content = Path.read_bytes(Path(object_file_path))
+                # TODO(o.layer): factor out
+                def read_and_create_file(path: str) -> File:
+                    file_content = Path.read_bytes(Path(path))
 
-                client_output_path = self.unmap_path(object_file_path)
+                    client_output_path = self.unmap_path(path)
 
-                object_file = ObjectFile(client_output_path, bytearray(object_file_content), self.compression)
+                    return File(client_output_path, bytearray(file_content), self.compression)
+
+                object_file = read_and_create_file(self.map_source_file_to_object_file(source_file))
                 object_files.append(object_file)
+
+                if arguments.has_fission():
+                    dwarf_file = read_and_create_file(self.map_source_file_to_dwarf_file(source_file))
+                    dwarf_files.append(dwarf_file)
+                    # TODO: add log
+
                 logger.info("Compiled '%s'.", object_file.file_name)
 
         logger.info(
@@ -164,11 +177,7 @@ class Environment:
         )
 
         return CompilationResultMessage(
-            object_files,
-            result.stdout,
-            result.stderr,
-            result.return_code,
-            self.compression,
+            object_files, result.stdout, result.stderr, result.return_code, self.compression, dwarf_files
         )
 
     def invoke_compiler(self, arguments: Arguments) -> ArgumentsExecutionResult:

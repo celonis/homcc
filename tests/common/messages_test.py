@@ -11,7 +11,7 @@ from homcc.common.messages import (
     DependencyReplyMessage,
     DependencyRequestMessage,
     Message,
-    ObjectFile,
+    File,
 )
 
 
@@ -74,13 +74,13 @@ class TestCompilationResultMessage:
     """Tests related to the CompilationResultMessage."""
 
     def test_serialization(self):
-        object_files: List[ObjectFile] = []
+        object_files: List[File] = []
         for index in range(1, 1337):
             file_name: str = f"dummy_file{index}.o"
             content: bytearray = bytearray(os.urandom(index))
-            object_files.append(ObjectFile(file_name, content, LZMA()))
+            object_files.append(File(file_name, content, LZMA()))
 
-        message = CompilationResultMessage(object_files, "some", "", 137, LZMA())
+        message = CompilationResultMessage(object_files, "some", "", 137, LZMA(), [])
         message_bytes = message.to_bytes()
 
         _, serialized_message = Message.from_bytes(message_bytes)
@@ -88,20 +88,20 @@ class TestCompilationResultMessage:
         assert message == serialized_message
 
 
-class TestObjectFile:
-    """Tests related to the ObjectFile data structure"""
+class TestFile:
+    """Tests related to the File data structure"""
 
     test_data = bytearray([0x1, 0x2, 0x3])
 
     def test_content_object_file(self):
-        object_file = ObjectFile("foo.o", self.test_data, NoCompression())
+        object_file = File("foo.o", self.test_data, NoCompression())
 
         assert object_file.get_data() == self.test_data
         assert len(object_file) == len(self.test_data)
         assert object_file.to_wire() == self.test_data
 
     def test_size_object_file(self):
-        object_file = ObjectFile("foo.o", None, NoCompression(), size=33)
+        object_file = File("foo.o", None, NoCompression(), size=33)
 
         assert len(object_file) == 33
         with pytest.raises(ValueError):
@@ -109,7 +109,7 @@ class TestObjectFile:
 
     def test_compressed_object_file(self):
         compressed_data = LZMA().compress(self.test_data)
-        object_file = ObjectFile("foo.o", self.test_data, LZMA())
+        object_file = File("foo.o", self.test_data, LZMA())
 
         assert len(object_file) == len(compressed_data)
         assert object_file.to_wire() == compressed_data
