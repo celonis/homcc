@@ -34,8 +34,8 @@ from homcc.common.messages import (
     CompilationResultMessage,
     ConnectionRefusedMessage,
     DependencyRequestMessage,
-    Message,
     File,
+    Message,
 )
 
 logger = logging.getLogger(__name__)
@@ -197,8 +197,6 @@ async def compile_remotely_at(
                 else:
                     # e.g. g++ -Iinclude -gsplit-dwarf src/main.cpp -c -o ofile -> ofile.o, ofile.dwo
                     output_path = f"{arguments.output}.dwo"
-
-                logger.warning("Wrote .dwo file: %s", output_path)  # TODO: remove
             else:
                 # if we do not want to link, respect the -o flag for the object file
                 output_path = arguments.output
@@ -207,7 +205,6 @@ async def compile_remotely_at(
 
         Path(output_path).write_bytes(file.get_data())
 
-    # TODO(o.layer): check if we need some special linker handling, but I don't think so: https://www.productive-cpp.com/improving-cpp-builds-with-split-dwarf/
     # link and delete object files if required
     if arguments.is_linking():
         linker_return_code: int = link_object_files(arguments, host_response.get_object_files())

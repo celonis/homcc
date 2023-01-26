@@ -12,8 +12,8 @@ from homcc.common.messages import (
     CompilationResultMessage,
     DependencyReplyMessage,
     DependencyRequestMessage,
-    Message,
     File,
+    Message,
 )
 from homcc.server.parsing import ServerConfig
 from homcc.server.server import TCPRequestHandler, start_server, stop_server

@@ -10,8 +10,8 @@ from homcc.common.messages import (
     CompilationResultMessage,
     DependencyReplyMessage,
     DependencyRequestMessage,
-    Message,
     File,
+    Message,
 )
 
 
