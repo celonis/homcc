@@ -172,7 +172,7 @@ class Environment:
             "Compiler returned code '%i', sending back #%i object files and #%i dwarf files.",
             result.return_code,
             len(object_files),
-            len(dwarf_files)
+            len(dwarf_files),
         )
 
         return CompilationResultMessage(
