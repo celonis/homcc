@@ -487,7 +487,6 @@ class CompilationResultMessage(Message):
         """Overwritten so that the object files content and the dwarf files content can be appended to the message."""
         further_payload = bytearray()
 
-        # Could also concatenate to one list, but mypy heavily complains.
         for file in self.get_files():
             further_payload += file.to_wire()
 
