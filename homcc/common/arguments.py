@@ -299,6 +299,10 @@ class Arguments:
                     output = next(it)  # skip output target
                 else:  # compact output argument: e.g.: -oout
                     output = arg[2:]
+
+        if output is not None:
+            output = output.strip()
+
         return output
 
     @cached_property

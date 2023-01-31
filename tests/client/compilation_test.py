@@ -6,7 +6,7 @@ from typing import List, Set
 
 import pytest
 
-from homcc.client.compilation import compile_locally, find_dependencies, scan_includes
+from homcc.client.compilation import compile_locally, find_dependencies, scan_includes, get_dwarf_file_output_path
 from homcc.client.parsing import Host
 from homcc.common.arguments import Arguments
 from homcc.common.constants import ENCODING
@@ -119,3 +119,24 @@ class TestCompilation:
             compile_locally(Arguments.from_vargs(*args, "-OError"), Host.localhost_with_limit(1))
 
         assert sys_exit != os.EX_OK
+
+    def test_dwarf_file_output_path(self):
+        linking_args: Arguments = Arguments.from_vargs("g++", "file.cpp")
+        assert "~/foo/a-file.dwo" == get_dwarf_file_output_path("~/foo/file.dwo", linking_args)
+
+        linking_with_output_args: Arguments = Arguments.from_vargs("g++", "file.cpp", "-o xyz")
+        assert "xyz-file.dwo" == get_dwarf_file_output_path("~/foo/file.dwo", linking_with_output_args)
+
+        linking_with_output_and_suffix_args: Arguments = Arguments.from_vargs("g++", "file.cpp", "-o xyz.out")
+        assert "xyz-file.dwo" == get_dwarf_file_output_path("file.dwo", linking_with_output_and_suffix_args)
+
+        no_linking_args: Arguments = Arguments.from_vargs("g++", "file.cpp", "-c")
+        assert "~/foo/file.dwo" == get_dwarf_file_output_path("~/foo/file.dwo", no_linking_args)
+
+        no_linking_with_output_args: Arguments = Arguments.from_vargs("g++", "file.cpp", "-c", "-o", "object")
+        assert "object.dwo" == get_dwarf_file_output_path("file.dwo", no_linking_with_output_args)
+
+        no_linking_with_output_and_suffix_args: Arguments = Arguments.from_vargs(
+            "g++", "file.cpp", "-c", "-o", "object.o"
+        )
+        assert "object.dwo" == get_dwarf_file_output_path("file.dwo", no_linking_with_output_and_suffix_args)

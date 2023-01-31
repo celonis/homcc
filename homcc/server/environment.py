@@ -152,12 +152,10 @@ class Environment:
         dwarf_files: List[File] = []
         if result.return_code == os.EX_OK:
             for source_file in arguments.source_files:
-                # TODO(o.layer): factor out
+
                 def read_and_create_file(path: str) -> File:
                     file_content = Path.read_bytes(Path(path))
-
                     client_output_path = self.unmap_path(path)
-
                     return File(client_output_path, bytearray(file_content), self.compression)
 
                 object_file = read_and_create_file(self.map_source_file_to_object_file(source_file))
@@ -166,7 +164,7 @@ class Environment:
                 if arguments.has_fission():
                     dwarf_file = read_and_create_file(self.map_source_file_to_dwarf_file(source_file))
                     dwarf_files.append(dwarf_file)
-                    # TODO: add log
+                    logger.debug("Found dwarf file: %s", dwarf_file)
 
                 logger.info("Compiled '%s'.", object_file.file_name)
 
