@@ -6,11 +6,7 @@ from typing import List, Set
 
 import pytest
 
-from homcc.client.compilation import (
-    compile_locally,
-    find_dependencies,
-    scan_includes,
-)
+from homcc.client.compilation import compile_locally, find_dependencies, scan_includes
 from homcc.client.parsing import Host
 from homcc.common.arguments import Arguments
 from homcc.common.constants import ENCODING
