@@ -44,10 +44,6 @@ RECURSIVE_ERROR_MESSAGE: str = "_HOMCC_CALLED_RECURSIVELY"
 
 EXCLUDED_DEPENDENCY_PREFIXES: Tuple = ("/usr/include", "/usr/lib")
 
-OUT_FILE_SUFFIX = ".o"
-OBJECT_FILE_SUFFIX = ".o"
-DWARF_FILE_SUFFIX = ".dwo"
-
 
 def check_recursive_call(compiler: Compiler, error: subprocess.CalledProcessError):
     """check if homcc was called recursively"""
@@ -191,18 +187,8 @@ async def compile_remotely_at(
         )
 
     for file in host_response.get_files():
-        output_path: str
-        if file.is_dwarf_file():
-            output_path = get_dwarf_file_output_path(file.file_name, arguments)
-        else:
-            if not arguments.is_linking() and arguments.output is not None:
-                # if we do not want to link, respect the -o flag for the object file
-                output_path = arguments.output
-            else:
-                output_path = file.file_name
-
-        logger.debug("Writing file %s", output_path)
-        Path(output_path).write_bytes(file.get_data())
+        logger.debug("Writing file %s", file.file_name)
+        Path(file.file_name).write_bytes(file.get_data())
 
     # link and delete object files if required
     if arguments.is_linking():
@@ -316,28 +302,3 @@ def link_object_files(arguments: Arguments, object_files: List[File]) -> int:
     result: ArgumentsExecutionResult = arguments.execute(check=True, output=True)
 
     return result.return_code
-
-
-def get_dwarf_file_output_path(file_name: str, arguments: Arguments) -> str:
-    """returns the correct output path on the file system for dwarf files"""
-    path = Path(file_name)
-
-    if arguments.output is None:
-        if arguments.is_linking():
-            # e.g. g++ -Iinclude -gsplit-dwarf src/* -> a.out, a-main.dwo, a-foo.dwo
-            return str(path.with_name(f"a-{path.name}"))
-    else:
-        output_path = Path(arguments.output)
-
-        if arguments.is_linking():
-            # e.g. g++ -Iinclude -gsplit-dwarf src/* -o abc -> abc.out, abc-main.dwo, abc-foo.dwo
-            # e.g. g++ -Iinclude -gsplit-dwarf src/* -o abc.out -> abc.out, abc-main.dwo, abc-foo.dwo
-            output_path_file_name = Path(output_path.name)
-            modified_file_name = f"{output_path_file_name.with_suffix('')}-{path.name}"
-            return str(output_path.with_name(modified_file_name))
-        else:
-            # e.g. g++ -Iinclude -gsplit-dwarf src/main.cpp -c -o ofile.o -> ofile.o, ofile.dwo
-            # e.g. g++ -Iinclude -gsplit-dwarf src/main.cpp -c -o ofile -> ofile.o, ofile.dwo
-            return str(output_path.with_suffix(DWARF_FILE_SUFFIX))
-
-    return str(path)

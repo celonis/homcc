@@ -57,6 +57,7 @@ class Arguments:
     INCLUDE_ARGS: List[str] = ["-I", "-isysroot", "-isystem"]
 
     FISSION_ARG: str = "-gsplit-dwarf"
+    DEBUG_SYMBOLS_ARG: str = "-g"
 
     # languages
     ALLOWED_LANGUAGE_PREFIXES: List[str] = ["c", "c++", "objective-c", "objective-c++", "go"]
@@ -399,6 +400,10 @@ class Arguments:
         """true if fission should be applied, else false"""
         return self.FISSION_ARG in self.args
 
+    def is_debug(self) -> bool:
+        """true if fission should be applied, else false"""
+        return self.DEBUG_SYMBOLS_ARG in self.args
+
     def must_be_parsable(self) -> bool:
         """check whether the execution must be parsable and verbose logging should therefore be deactivated"""
         return self.SHOW_COMPILER_COMMANDS in self.args
@@ -441,8 +446,30 @@ class Arguments:
         return self.copy().add_arg(self.Unsendable.PREPROCESSOR_DEPENDENCY_ARG), dependency_output_file
 
     def no_linking(self) -> Arguments:
-        """return a copy of arguments where all output args are removed and the no linking arg is added"""
-        return self.copy().remove_output_args().add_arg(self.NO_LINKING_ARG)
+        """return a copy of arguments where the no linking arg is added"""
+        without_linking = self.copy().add_arg(self.NO_LINKING_ARG)
+
+        if len(self.source_files) > 1:
+            # we can not use the -o flag when we have multiple source files given
+            return without_linking.remove_output_args()
+
+        return without_linking
+
+    def relativize_output(self, relative: Path) -> Arguments:
+        """if present, return a copy of Arguments where the output path is relative to the given path"""
+        output: Optional[str] = self.output
+
+        if output is None:
+            return self
+
+        output_path = Path(output)
+        relative_output_path = str(output_path.relative_to(relative))
+
+        return self.add_output(relative_output_path)
+
+    def add_output(self, output: str) -> Arguments:
+        """returns a copy of arguments where the output is added"""
+        return self.copy().add_arg(f"{self.OUTPUT_ARG}{output}")
 
     def add_target(self, target: str) -> Arguments:
         """returns a copy of arguments where the specified target is added (for cross compilation)"""

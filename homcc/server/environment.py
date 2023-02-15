@@ -9,6 +9,7 @@ from typing import Dict, List, Optional
 
 from homcc.common.arguments import Arguments, ArgumentsExecutionResult
 from homcc.common.compression import Compression
+from homcc.common.constants import DWARF_FILE_SUFFIX
 from homcc.common.messages import CompilationResultMessage, File
 from homcc.server.cache import Cache
 
@@ -121,11 +122,24 @@ class Environment:
 
         return mapped_dependencies
 
-    def map_source_file_to_object_file(self, source_file: str) -> str:
-        return os.path.join(self.mapped_cwd, f"{Path(source_file).stem}.o")
+    def map_source_file_to_object_file(self, source_file: str, arguments: Arguments) -> str:
+        if arguments.output is None:
+            # The output is directly in our working directly
+            return os.path.join(self.mapped_cwd, f"{Path(source_file).stem}.o")
+        else:
+            return arguments.output
 
-    def map_source_file_to_dwarf_file(self, source_file: str) -> str:
-        return os.path.join(self.mapped_cwd, f"{Path(source_file).stem}.dwo")
+    def map_source_file_to_dwarf_file(self, source_file: str, arguments: Arguments) -> str:
+        source_file_path = Path(source_file)
+
+        mapped_path: Path
+        if arguments.output is None:
+            mapped_path = Path(self.mapped_cwd) / Path(source_file_path.name).with_suffix(DWARF_FILE_SUFFIX)
+        else:
+            output_path = Path(arguments.output)
+            mapped_path = output_path.with_suffix(DWARF_FILE_SUFFIX)
+
+        return str(mapped_path.absolute())
 
     @staticmethod
     def compiler_exists(arguments: Arguments) -> bool:
@@ -141,12 +155,19 @@ class Environment:
         """Does the compilation and returns the filled result message."""
         logger.info("Compiling...")
 
+        mapped_cwd_path = Path(self.mapped_cwd)
+
         # create the mapped current working directory if it doesn't exist yet
-        Path(self.mapped_cwd).mkdir(parents=True, exist_ok=True)
+        mapped_cwd_path.mkdir(parents=True, exist_ok=True)
 
-        arguments = arguments.map_symbol_paths(self.instance_folder, "")
+        arguments = arguments.map_symbol_paths(self.instance_folder, "").no_linking()
 
-        result = self.invoke_compiler(arguments.no_linking())
+        if arguments.output is not None:
+            Path(arguments.output).parent.mkdir(parents=True, exist_ok=True)
+
+        # relativize the output for the compiler, so that the references to the .o files (e.g. in .dwo files)
+        # are also relative instead of absolute
+        result = self.invoke_compiler(arguments.relativize_output(mapped_cwd_path))
 
         object_files: List[File] = []
         dwarf_files: List[File] = []
@@ -158,12 +179,15 @@ class Environment:
                     client_output_path = self.unmap_path(path)
                     return File(client_output_path, bytearray(file_content), self.compression)
 
-                object_file = read_and_create_file(self.map_source_file_to_object_file(source_file))
+                object_file_path: str = self.map_source_file_to_object_file(source_file, arguments)
+                object_file = read_and_create_file(object_file_path)
                 object_files.append(object_file)
 
-                if arguments.has_fission():
-                    dwarf_file = read_and_create_file(self.map_source_file_to_dwarf_file(source_file))
+                if arguments.has_fission() and arguments.is_debug():
+                    dwarf_file_path: str = self.map_source_file_to_dwarf_file(source_file, arguments)
+                    dwarf_file = read_and_create_file(dwarf_file_path)
                     dwarf_files.append(dwarf_file)
+
                     logger.debug("Found dwarf file: %s", dwarf_file)
 
                 logger.info("Compiled '%s'.", object_file.file_name)
