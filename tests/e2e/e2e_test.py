@@ -168,13 +168,13 @@ class TestEndToEnd:
             "-Iexample/include",
             "example/src/foo.cpp",
             "example/src/main.cpp",
-            f"-o{TestEndToEnd.OUTPUT}",
         ]
 
         with self.ServerProcess(basic_arguments.tcp_port):
             result = self.run_client(list(basic_arguments) + args)
             self.check_remote_compilation_assertions(result)
-            assert os.path.exists(self.OUTPUT)
+            assert os.path.exists("main.o")
+            assert os.path.exists("foo.o")
 
     def cpp_end_to_end_preprocessor_side_effects(self, basic_arguments: BasicClientArguments):
         args: List[str] = [
@@ -294,6 +294,7 @@ class TestEndToEnd:
             "example/src/foo.cpp",
             "example/src/main.cpp",
             "-gsplit-dwarf",
+            "-g",
         ]
 
         if not with_linking:
@@ -306,13 +307,12 @@ class TestEndToEnd:
 
             if with_linking:
                 assert os.path.exists("a.out")
-                assert os.path.exists("a-foo.dwo")
-                assert os.path.exists("a-main.dwo")
             else:
-                assert os.path.exists("foo.dwo")
                 assert os.path.exists("foo.o")
-                assert os.path.exists("main.dwo")
                 assert os.path.exists("main.o")
+
+            assert os.path.exists("foo.dwo")
+            assert os.path.exists("main.dwo")
 
     @pytest.fixture(autouse=True)
     def clean_up(self):
