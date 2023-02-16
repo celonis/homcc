@@ -300,9 +300,8 @@ class TestEndToEnd:
         if not with_linking:
             additional_client_args.append("-c")
 
-        client_args = self.BasicClientArguments("g++", basic_arguments.tcp_port)
         with self.ServerProcess(basic_arguments.tcp_port):
-            result = self.run_client(list(client_args) + additional_client_args)
+            result = self.run_client(list(basic_arguments) + additional_client_args)
             self.check_remote_compilation_assertions(result)
 
             if with_linking:

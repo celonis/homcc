@@ -139,7 +139,7 @@ class Environment:
             output_path = Path(arguments.output)
             mapped_path = output_path.with_suffix(DWARF_FILE_SUFFIX)
 
-        return str(mapped_path.absolute())
+        return str(mapped_path)
 
     @staticmethod
     def compiler_exists(arguments: Arguments) -> bool:

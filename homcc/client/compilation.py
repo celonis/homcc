@@ -194,9 +194,9 @@ async def compile_remotely_at(
     if arguments.is_linking():
         linker_return_code: int = link_object_files(arguments, host_response.get_object_files())
 
-        for file in host_response.get_object_files():
-            logger.debug("Deleting file %s", file.file_name)
-            Path(file.file_name).unlink()
+        for object_file in host_response.get_object_files():
+            logger.debug("Deleting object file %s", object_file.file_name)
+            Path(object_file.file_name).unlink()
 
         return linker_return_code
 

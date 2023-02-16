@@ -202,3 +202,31 @@ class TestServerCompilation:
     def test_compiler_exists(self):
         assert Environment.compiler_exists(Arguments.from_vargs("g++", "foo"))
         assert not Environment.compiler_exists(Arguments.from_vargs("clang-HOMCC_TEST_COMPILER_EXISTS", "foo"))
+
+    def test_map_source_file_to_object_file(self):
+        instance_path: str = "/tmp/instance/"
+        mapped_cwd: str = "/tmp/instance/user/some_user/"
+        environment = create_mock_environment(instance_path, mapped_cwd)
+
+        arguments = Arguments.from_vargs("g++")
+        assert environment.map_source_file_to_object_file(f"{mapped_cwd}foo.cpp", arguments) == f"{mapped_cwd}foo.o"
+
+        arguments = Arguments.from_vargs("g++")
+        assert environment.map_source_file_to_object_file("foo.cpp", arguments) == f"{mapped_cwd}foo.o"
+
+        arguments = Arguments.from_vargs("g++", "-o", f"{mapped_cwd}some_dir/output.o")
+        assert environment.map_source_file_to_object_file("foo.cpp", arguments) == f"{mapped_cwd}some_dir/output.o"
+
+    def test_map_source_file_to_dwarf_file(self):
+        instance_path: str = "/tmp/instance/"
+        mapped_cwd: str = "/tmp/instance/user/some_user/"
+        environment = create_mock_environment(instance_path, mapped_cwd)
+
+        arguments = Arguments.from_vargs("g++")
+        assert environment.map_source_file_to_dwarf_file(f"{mapped_cwd}foo.cpp", arguments) == f"{mapped_cwd}foo.dwo"
+
+        arguments = Arguments.from_vargs("g++")
+        assert environment.map_source_file_to_dwarf_file("foo.cpp", arguments) == f"{mapped_cwd}foo.dwo"
+
+        arguments = Arguments.from_vargs("g++", "-o", f"{mapped_cwd}some_dir/output.o")
+        assert environment.map_source_file_to_dwarf_file("foo.cpp", arguments) == f"{mapped_cwd}some_dir/output.dwo"

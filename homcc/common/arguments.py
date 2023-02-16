@@ -301,9 +301,6 @@ class Arguments:
                 else:  # compact output argument: e.g.: -oout
                     output = arg[2:]
 
-        if output is not None:
-            output = output.strip()
-
         return output
 
     @cached_property
@@ -401,7 +398,7 @@ class Arguments:
         return self.FISSION_ARG in self.args
 
     def is_debug(self) -> bool:
-        """true if fission should be applied, else false"""
+        """true if debug symbols should be output, else false"""
         return self.DEBUG_SYMBOLS_ARG in self.args
 
     def must_be_parsable(self) -> bool:

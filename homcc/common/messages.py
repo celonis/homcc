@@ -9,7 +9,7 @@ from typing import Dict, List, Optional, Tuple
 
 from homcc.common.arguments import ArgumentsExecutionResult
 from homcc.common.compression import CompressedBytes, Compression, NoCompression
-from homcc.common.constants import ENCODING
+from homcc.common.constants import DWARF_FILE_SUFFIX, ENCODING
 
 
 class MessageType(Enum):
@@ -402,7 +402,7 @@ class File:
             )
 
     def is_dwarf_file(self) -> bool:
-        return self.file_name.endswith(".dwo")
+        return self.file_name.endswith(DWARF_FILE_SUFFIX)
 
     def __eq__(self, other) -> bool:
         if isinstance(other, File):
