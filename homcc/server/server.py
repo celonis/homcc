@@ -6,7 +6,7 @@ import socketserver
 import threading
 from functools import singledispatchmethod
 from pathlib import Path
-from socket import SHUT_RD
+from socket import SHUT_RDWR
 from tempfile import TemporaryDirectory
 from threading import Lock
 from typing import Dict, List, Optional, Tuple
@@ -91,7 +91,7 @@ class TCPServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
         conn_refused_message = ConnectionRefusedMessage(info)
         TCPServer.send_message(request, conn_refused_message)
 
-        request.shutdown(SHUT_RD)
+        request.shutdown(SHUT_RDWR)
         request.close()
 
     def verify_request(self, request, _) -> bool:
