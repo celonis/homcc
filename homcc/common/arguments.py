@@ -52,8 +52,6 @@ class Arguments:
     OUTPUT_ARG: str = "-o"
     SPECIFY_LANGUAGE_ARG: str = "-x"
 
-    DEPENDENCY_SIDE_EFFECT_ARG: str = "-MD"
-
     INCLUDE_ARGS: List[str] = ["-I", "-isysroot", "-isystem"]
 
     FISSION_ARG: str = "-gsplit-dwarf"
@@ -71,6 +69,8 @@ class Arguments:
         # preprocessor args
         PREPROCESSOR_ARGS: List[str] = ["-MG", "-MP"]
         PREPROCESSOR_OPTION_PREFIX_ARGS: List[str] = ["-MF", "-MT", "-MQ"]
+
+        DEPENDENCY_SIDE_EFFECT_ARG: str = "-MD"
 
         # linking args
         LINKER_OPTION_PREFIX_ARGS: List[str] = ["-L", "-l", "-Wl,"]
@@ -198,7 +198,7 @@ class Arguments:
             logger.debug("[%s] implies a preprocessor only call", arg)
             return False
 
-        if arg in Arguments.Local.PREPROCESSOR_ARGS + [Arguments.DEPENDENCY_SIDE_EFFECT_ARG]:
+        if arg in Arguments.Local.PREPROCESSOR_ARGS + [Arguments.Local.DEPENDENCY_SIDE_EFFECT_ARG]:
             return True
 
         if arg.startswith(tuple(Arguments.Local.PREPROCESSOR_OPTION_PREFIX_ARGS)):
@@ -423,7 +423,7 @@ class Arguments:
         # gcc and clang handle the combination of -MD -M differently, this function provides a uniform approach for
         # both compilers that also preserves side effects like the creation of dependency files
 
-        if self.DEPENDENCY_SIDE_EFFECT_ARG not in self.args:
+        if self.Local.DEPENDENCY_SIDE_EFFECT_ARG not in self.args:
             # TODO(s.pirsch): benchmark -M -MF- and writing stdout to specified file afterwards
             return self.copy().remove_output_args().add_arg(self.Unsendable.PREPROCESSOR_DEPENDENCY_ARG), None
 
@@ -510,6 +510,9 @@ class Arguments:
                 if arg.startswith(tuple(Arguments.Local.PREPROCESSOR_OPTION_PREFIX_ARGS)):
                     if arg in Arguments.Local.PREPROCESSOR_OPTION_PREFIX_ARGS:
                         next(it)
+                    continue
+
+                if arg in Arguments.Local.DEPENDENCY_SIDE_EFFECT_ARG:
                     continue
 
                 # skip linking related args
