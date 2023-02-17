@@ -122,24 +122,22 @@ class Environment:
 
         return mapped_dependencies
 
-    def map_source_file_to_object_file(self, source_file: str, arguments: Arguments) -> str:
-        if arguments.output is None:
-            # The output is directly in our working directly
-            return os.path.join(self.mapped_cwd, f"{Path(source_file).stem}.o")
-        else:
-            return arguments.output
-
-    def map_source_file_to_dwarf_file(self, source_file: str, arguments: Arguments) -> str:
+    def map_source_file_to_object_file(self, source_file: str, arguments: Arguments) -> Path:
         source_file_path = Path(source_file)
+        OBJECT_FILE_SUFFIX = ".o"
 
         mapped_path: Path
         if arguments.output is None:
-            mapped_path = Path(self.mapped_cwd) / Path(source_file_path.name).with_suffix(DWARF_FILE_SUFFIX)
+            # When no output is given, the compiler produces the result relative to our working directory.
+            mapped_path = Path(self.mapped_cwd) / Path(source_file_path.name).with_suffix(OBJECT_FILE_SUFFIX)
         else:
             output_path = Path(arguments.output)
-            mapped_path = output_path.with_suffix(DWARF_FILE_SUFFIX)
+            mapped_path = output_path.with_suffix(OBJECT_FILE_SUFFIX)
 
-        return str(mapped_path)
+        return mapped_path
+
+    def map_source_file_to_dwarf_file(self, source_file: str, arguments: Arguments) -> Path:
+        return self.map_source_file_to_object_file(source_file, arguments).with_suffix(DWARF_FILE_SUFFIX)
 
     @staticmethod
     def compiler_exists(arguments: Arguments) -> bool:
@@ -171,20 +169,20 @@ class Environment:
 
         object_files: List[File] = []
         dwarf_files: List[File] = []
+
+        def read_and_create_file(path: str) -> File:
+            file_content = Path.read_bytes(Path(path))
+            client_output_path = self.unmap_path(path)
+            return File(client_output_path, bytearray(file_content), self.compression)
+
         if result.return_code == os.EX_OK:
             for source_file in arguments.source_files:
-
-                def read_and_create_file(path: str) -> File:
-                    file_content = Path.read_bytes(Path(path))
-                    client_output_path = self.unmap_path(path)
-                    return File(client_output_path, bytearray(file_content), self.compression)
-
-                object_file_path: str = self.map_source_file_to_object_file(source_file, arguments)
+                object_file_path: str = str(self.map_source_file_to_object_file(source_file, arguments))
                 object_file = read_and_create_file(object_file_path)
                 object_files.append(object_file)
 
                 if arguments.has_fission() and arguments.is_debug():
-                    dwarf_file_path: str = self.map_source_file_to_dwarf_file(source_file, arguments)
+                    dwarf_file_path: str = str(self.map_source_file_to_dwarf_file(source_file, arguments))
                     dwarf_file = read_and_create_file(dwarf_file_path)
                     dwarf_files.append(dwarf_file)
 

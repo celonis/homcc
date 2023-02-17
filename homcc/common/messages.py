@@ -437,21 +437,19 @@ class CompilationResultMessage(Message):
     def _get_json_dict(self) -> Dict:
         json_dict: Dict = super()._get_json_dict()
 
-        object_files = []
-        for object_file in self.object_files:
-            object_files.append({"filename": object_file.file_name, "size": len(object_file)})
         # this may stay 'files' for compatibility reasons
-        json_dict["files"] = object_files
+        json_dict["files"] = [
+            {"filename": object_file.file_name, "size": len(object_file)} for object_file in self.object_files
+        ]
 
         json_dict["stdout"] = self.stdout
         json_dict["stderr"] = self.stderr
         json_dict["return_code"] = self.return_code
         json_dict["compression"] = str(self.compression)
 
-        dwarf_files = []
-        for dwarf_file in self.dwarf_files:
-            dwarf_files.append({"filename": dwarf_file.file_name, "size": len(dwarf_file)})
-        json_dict["dwarf_files"] = dwarf_files
+        json_dict["dwarf_files"] = [
+            {"filename": dwarf_file.file_name, "size": len(dwarf_file)} for dwarf_file in self.dwarf_files
+        ]
 
         return json_dict
 
@@ -506,11 +504,7 @@ class CompilationResultMessage(Message):
 
     def get_further_payload_size(self) -> int:
         """Overwritten so that the object files payload size and the dwarf files payload size can be retrieved."""
-        total_size: int = 0
-        for file in self.get_files():
-            total_size += len(file)
-
-        return total_size
+        return sum(len(file) for file in self.get_files())
 
     def __eq__(self, other):
         if isinstance(other, CompilationResultMessage):
@@ -534,16 +528,12 @@ class CompilationResultMessage(Message):
             if file_json_list is None:
                 return []
 
-            files: List[File] = []
-            for file in file_json_list:
-                file_size = file["size"]
-
-                # explicitly set the message size from the field in the JSON. Can not
-                # directly add the payload to the message, because the payload isn't contained in the JSON.
-                file = File(file_name=file["filename"], content=None, compression=compression, size=file_size)
-                files.append(file)
-
-            return files
+            # Explicitly set the message size from the field in the JSON.
+            # Can not directly add the payload to the message, because the payload isn't contained in the JSON.
+            return [
+                File(file_name=file["filename"], content=None, compression=compression, size=file["size"])
+                for file in file_json_list
+            ]
 
         object_files: List[File] = files_from_json_list(json_dict["files"])
 

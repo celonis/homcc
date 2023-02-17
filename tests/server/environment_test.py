@@ -209,13 +209,15 @@ class TestServerCompilation:
         environment = create_mock_environment(instance_path, mapped_cwd)
 
         arguments = Arguments.from_vargs("g++")
-        assert environment.map_source_file_to_object_file(f"{mapped_cwd}foo.cpp", arguments) == f"{mapped_cwd}foo.o"
-
-        arguments = Arguments.from_vargs("g++")
-        assert environment.map_source_file_to_object_file("foo.cpp", arguments) == f"{mapped_cwd}foo.o"
+        assert environment.map_source_file_to_object_file(f"{mapped_cwd}foo.cpp", arguments) == Path(mapped_cwd) / Path(
+            "foo.o"
+        )
+        assert environment.map_source_file_to_object_file("foo.cpp", arguments) == Path(mapped_cwd) / Path("foo.o")
 
         arguments = Arguments.from_vargs("g++", "-o", f"{mapped_cwd}some_dir/output.o")
-        assert environment.map_source_file_to_object_file("foo.cpp", arguments) == f"{mapped_cwd}some_dir/output.o"
+        assert environment.map_source_file_to_object_file("foo.cpp", arguments) == Path(mapped_cwd) / Path(
+            "some_dir/output.o"
+        )
 
     def test_map_source_file_to_dwarf_file(self):
         instance_path: str = "/tmp/instance/"
@@ -223,10 +225,12 @@ class TestServerCompilation:
         environment = create_mock_environment(instance_path, mapped_cwd)
 
         arguments = Arguments.from_vargs("g++")
-        assert environment.map_source_file_to_dwarf_file(f"{mapped_cwd}foo.cpp", arguments) == f"{mapped_cwd}foo.dwo"
-
-        arguments = Arguments.from_vargs("g++")
-        assert environment.map_source_file_to_dwarf_file("foo.cpp", arguments) == f"{mapped_cwd}foo.dwo"
+        assert environment.map_source_file_to_dwarf_file(f"{mapped_cwd}foo.cpp", arguments) == Path(mapped_cwd) / Path(
+            "foo.dwo"
+        )
+        assert environment.map_source_file_to_dwarf_file("foo.cpp", arguments) == Path(mapped_cwd) / Path("foo.dwo")
 
         arguments = Arguments.from_vargs("g++", "-o", f"{mapped_cwd}some_dir/output.o")
-        assert environment.map_source_file_to_dwarf_file("foo.cpp", arguments) == f"{mapped_cwd}some_dir/output.dwo"
+        assert environment.map_source_file_to_dwarf_file("foo.cpp", arguments) == Path(mapped_cwd) / Path(
+            "some_dir/output.dwo"
+        )

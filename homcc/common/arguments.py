@@ -512,7 +512,7 @@ class Arguments:
                         next(it)
                     continue
 
-                if arg in Arguments.Local.DEPENDENCY_SIDE_EFFECT_ARG:
+                if arg == Arguments.Local.DEPENDENCY_SIDE_EFFECT_ARG:
                     continue
 
                 # skip linking related args
