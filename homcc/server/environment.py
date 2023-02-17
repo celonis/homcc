@@ -16,6 +16,7 @@ from homcc.server.cache import Cache
 logger = logging.getLogger(__name__)
 
 COMPILATION_TIMEOUT: float = 180
+OBJECT_FILE_SUFFIX = ".o"
 
 
 class Environment:
@@ -124,7 +125,6 @@ class Environment:
 
     def map_source_file_to_object_file(self, source_file: str, arguments: Arguments) -> Path:
         source_file_path = Path(source_file)
-        OBJECT_FILE_SUFFIX = ".o"
 
         mapped_path: Path
         if arguments.output is None:
