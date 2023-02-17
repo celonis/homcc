@@ -12,8 +12,8 @@ from homcc.common.messages import (
     CompilationResultMessage,
     DependencyReplyMessage,
     DependencyRequestMessage,
+    File,
     Message,
-    ObjectFile,
 )
 from homcc.server.parsing import ServerConfig
 from homcc.server.server import TCPRequestHandler, start_server, stop_server
@@ -170,10 +170,21 @@ class TestServerReceive:
 
             self.messages.append(DependencyReplyMessage(bytearray([0x1, 0x2, 0x3, 0x4, 0x5]), NoCompression()))
 
-            result1 = ObjectFile("foo.o", bytearray([0x1, 0x3, 0x2, 0x4, 0x5, 0x6]), NoCompression())
-            result2 = ObjectFile("dir/other_foo.o", bytearray([0xA, 0xFF, 0xAA]), NoCompression())
+            object_file1 = File("foo.o", bytearray([0x1, 0x3, 0x2, 0x4, 0x5, 0x6]), NoCompression())
+            object_file2 = File("dir/other_foo.o", bytearray([0xA, 0xFF, 0xAA]), NoCompression())
+
+            dwarf_file1 = File("foo.dwo", bytearray([0x0, 0x1, 0x2, 0x5, 0x5, 0x6]), NoCompression())
+            dwarf_file2 = File("dir/other_foo.dwo", bytearray([0xB, 0xCC, 0xAA]), NoCompression())
+
             self.messages.append(
-                CompilationResultMessage([result1, result2], "stdout-foo", "stderr-foo", 0, NoCompression())
+                CompilationResultMessage(
+                    [object_file1, object_file2],
+                    "stdout-foo",
+                    "stderr-foo",
+                    0,
+                    NoCompression(),
+                    [dwarf_file1, dwarf_file2],
+                )
             )
 
             self.messages.append(DependencyReplyMessage(bytearray(13337), NoCompression()))
