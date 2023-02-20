@@ -12,6 +12,7 @@ from threading import Lock
 from typing import Dict, List, Optional, Tuple
 
 from homcc.common.arguments import Arguments
+from homcc.common.constants import TCP_BUFFER_SIZE
 from homcc.common.errors import (
     ClientDisconnectedError,
     ServerInitializationError,
@@ -92,6 +93,20 @@ class TCPServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
         TCPServer.send_message(request, conn_refused_message)
 
         request.shutdown(SHUT_RDWR)
+
+        def is_ready_to_close() -> bool:
+            try:
+                read_data = request.recv(TCP_BUFFER_SIZE)
+                return len(read_data) == 0
+            except ConnectionError as error:
+                logger.debug("Exception while waiting for zero-len TCP packet: %s", error)
+                return True
+
+        # Wait until we receive an error or zero-sized package to finally close the socket.
+        # See https://stackoverflow.com/questions/4160347/close-vs-shutdown-socket/23483487#23483487
+        while not is_ready_to_close():
+            pass
+
         request.close()
 
     def verify_request(self, request, _) -> bool:
@@ -120,8 +135,6 @@ class TCPServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
 
 class TCPRequestHandler(socketserver.BaseRequestHandler):
     """Handles all requests received from the client."""
-
-    BUFFER_SIZE = 65536
 
     mapped_dependencies: Dict[str, str]
     """All dependencies for the current compilation, mapped to server paths."""
@@ -433,7 +446,7 @@ class TCPRequestHandler(socketserver.BaseRequestHandler):
         """Function that receives from the connection and returns an empty
         bytearray when the connection has been closed."""
         try:
-            return self.request.recv(self.BUFFER_SIZE)
+            return self.request.recv(TCP_BUFFER_SIZE)
         except ConnectionError:
             return bytearray()
 
