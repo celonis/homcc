@@ -292,6 +292,7 @@ class TCPRequestHandler(socketserver.BaseRequestHandler):
                     stderr=f"Invocation of compiler failed:\n{error}",
                     return_code=os.EX_IOERR,
                     compression=self.environment.compression,
+                    dwarf_files=[],
                 )
 
             self.send_message(result_message)

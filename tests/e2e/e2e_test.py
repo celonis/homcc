@@ -168,13 +168,13 @@ class TestEndToEnd:
             "-Iexample/include",
             "example/src/foo.cpp",
             "example/src/main.cpp",
-            f"-o{TestEndToEnd.OUTPUT}",
         ]
 
         with self.ServerProcess(basic_arguments.tcp_port):
             result = self.run_client(list(basic_arguments) + args)
             self.check_remote_compilation_assertions(result)
-            assert os.path.exists(self.OUTPUT)
+            assert os.path.exists("main.o")
+            assert os.path.exists("foo.o")
 
     def cpp_end_to_end_preprocessor_side_effects(self, basic_arguments: BasicClientArguments):
         args: List[str] = [
@@ -288,6 +288,31 @@ class TestEndToEnd:
             )
             self.check_remote_compilation_assertions(result)
 
+    def cpp_end_to_end_fission(self, basic_arguments: BasicClientArguments, with_linking: bool):
+        additional_client_args: List[str] = [
+            "-Iexample/include",
+            "example/src/foo.cpp",
+            "example/src/main.cpp",
+            "-gsplit-dwarf",
+            "-g",
+        ]
+
+        if not with_linking:
+            additional_client_args.append("-c")
+
+        with self.ServerProcess(basic_arguments.tcp_port):
+            result = self.run_client(list(basic_arguments) + additional_client_args)
+            self.check_remote_compilation_assertions(result)
+
+            if with_linking:
+                assert os.path.exists("a.out")
+            else:
+                assert os.path.exists("foo.o")
+                assert os.path.exists("main.o")
+
+            assert os.path.exists("foo.dwo")
+            assert os.path.exists("main.dwo")
+
     @pytest.fixture(autouse=True)
     def clean_up(self):
         yield
@@ -299,6 +324,11 @@ class TestEndToEnd:
         Path("homcc/client/clang-homcc").unlink(missing_ok=True)  # test_end_to_end_client_recursive
         Path("homcc/client/g++").unlink(missing_ok=True)  # test_end_to_end_implicit_gplusplus
         Path("homcc/client/clang++").unlink(missing_ok=True)  # test_end_to_end_implicit_clangplusplus
+        Path("a.out").unlink(missing_ok=True)  # cpp_end_to_end_fission
+        Path("a-foo.dwo").unlink(missing_ok=True)  # cpp_end_to_end_fission
+        Path("a-main.dwo").unlink(missing_ok=True)  # cpp_end_to_end_fission
+        Path("foo.dwo").unlink(missing_ok=True)  # cpp_end_to_end_fission
+        Path("main.dwo").unlink(missing_ok=True)  # cpp_end_to_end_fission
 
     # client failures
     @pytest.mark.timeout(TIMEOUT)
@@ -442,8 +472,6 @@ class TestEndToEnd:
             self.BasicClientArguments("g++", unused_tcp_port, docker_container=docker_container)
         )
 
-    @pytest.mark.gplusplus
-    @pytest.mark.timeout(TIMEOUT)
     def test_print_compilation_stages_gplusplus(self):
         # homcc --verbose g++ -v; even with explicit verbose enabled, logging should not interfere
         homcc_result: subprocess.CompletedProcess = subprocess.run(
@@ -466,6 +494,16 @@ class TestEndToEnd:
         assert homcc_result.returncode == os.EX_OK
         assert gplusplus_result.returncode == os.EX_OK
         assert homcc_result.stdout == gplusplus_result.stdout
+
+    @pytest.mark.gplusplus
+    @pytest.mark.timeout(TIMEOUT)
+    def test_end_to_end_gplusplus_fission_no_linking(self, unused_tcp_port: int):
+        self.cpp_end_to_end_fission(self.BasicClientArguments("g++", unused_tcp_port), with_linking=False)
+
+    @pytest.mark.gplusplus
+    @pytest.mark.timeout(TIMEOUT)
+    def test_end_to_end_gplusplus_fission_with_linking(self, unused_tcp_port: int):
+        self.cpp_end_to_end_fission(self.BasicClientArguments("g++", unused_tcp_port), with_linking=True)
 
     # clang++ tests
     @pytest.mark.clangplusplus
@@ -522,3 +560,13 @@ class TestEndToEnd:
         assert homcc_result.returncode == os.EX_OK
         assert clangplusplus_result.returncode == os.EX_OK
         assert homcc_result.stdout == clangplusplus_result.stdout
+
+    @pytest.mark.clangplusplus
+    @pytest.mark.timeout(TIMEOUT)
+    def test_end_to_end_clangplusplus_fission_no_linking(self, unused_tcp_port: int):
+        self.cpp_end_to_end_fission(self.BasicClientArguments("clang++", unused_tcp_port), with_linking=False)
+
+    @pytest.mark.clangplusplus
+    @pytest.mark.timeout(TIMEOUT)
+    def test_end_to_end_clangplusplus_fission_with_linking(self, unused_tcp_port: int):
+        self.cpp_end_to_end_fission(self.BasicClientArguments("clang++", unused_tcp_port), with_linking=True)

@@ -52,9 +52,10 @@ class Arguments:
     OUTPUT_ARG: str = "-o"
     SPECIFY_LANGUAGE_ARG: str = "-x"
 
-    DEPENDENCY_SIDE_EFFECT_ARG: str = "-MD"
-
     INCLUDE_ARGS: List[str] = ["-I", "-isysroot", "-isystem"]
+
+    FISSION_ARG: str = "-gsplit-dwarf"
+    DEBUG_SYMBOLS_ARG: str = "-g"
 
     # languages
     ALLOWED_LANGUAGE_PREFIXES: List[str] = ["c", "c++", "objective-c", "objective-c++", "go"]
@@ -68,6 +69,8 @@ class Arguments:
         # preprocessor args
         PREPROCESSOR_ARGS: List[str] = ["-MG", "-MP"]
         PREPROCESSOR_OPTION_PREFIX_ARGS: List[str] = ["-MF", "-MT", "-MQ"]
+
+        DEPENDENCY_SIDE_EFFECT_ARG: str = "-MD"
 
         # linking args
         LINKER_OPTION_PREFIX_ARGS: List[str] = ["-L", "-l", "-Wl,"]
@@ -195,7 +198,7 @@ class Arguments:
             logger.debug("[%s] implies a preprocessor only call", arg)
             return False
 
-        if arg in Arguments.Local.PREPROCESSOR_ARGS + [Arguments.DEPENDENCY_SIDE_EFFECT_ARG]:
+        if arg in Arguments.Local.PREPROCESSOR_ARGS + [Arguments.Local.DEPENDENCY_SIDE_EFFECT_ARG]:
             return True
 
         if arg.startswith(tuple(Arguments.Local.PREPROCESSOR_OPTION_PREFIX_ARGS)):
@@ -297,6 +300,7 @@ class Arguments:
                     output = next(it)  # skip output target
                 else:  # compact output argument: e.g.: -oout
                     output = arg[2:]
+
         return output
 
     @cached_property
@@ -389,6 +393,14 @@ class Arguments:
         """check whether the no-linking arg is missing"""
         return self.NO_LINKING_ARG not in self.args
 
+    def has_fission(self) -> bool:
+        """true if fission should be applied, else false"""
+        return self.FISSION_ARG in self.args
+
+    def is_debug(self) -> bool:
+        """true if debug symbols should be output, else false"""
+        return self.DEBUG_SYMBOLS_ARG in self.args
+
     def must_be_parsable(self) -> bool:
         """check whether the execution must be parsable and verbose logging should therefore be deactivated"""
         return self.SHOW_COMPILER_COMMANDS in self.args
@@ -411,7 +423,7 @@ class Arguments:
         # gcc and clang handle the combination of -MD -M differently, this function provides a uniform approach for
         # both compilers that also preserves side effects like the creation of dependency files
 
-        if self.DEPENDENCY_SIDE_EFFECT_ARG not in self.args:
+        if self.Local.DEPENDENCY_SIDE_EFFECT_ARG not in self.args:
             # TODO(s.pirsch): benchmark -M -MF- and writing stdout to specified file afterwards
             return self.copy().remove_output_args().add_arg(self.Unsendable.PREPROCESSOR_DEPENDENCY_ARG), None
 
@@ -431,8 +443,30 @@ class Arguments:
         return self.copy().add_arg(self.Unsendable.PREPROCESSOR_DEPENDENCY_ARG), dependency_output_file
 
     def no_linking(self) -> Arguments:
-        """return a copy of arguments where all output args are removed and the no linking arg is added"""
-        return self.copy().remove_output_args().add_arg(self.NO_LINKING_ARG)
+        """return a copy of arguments where the no linking arg is added"""
+        without_linking = self.copy().add_arg(self.NO_LINKING_ARG)
+
+        if len(self.source_files) > 1:
+            # we can not use the -o flag when we have multiple source files given
+            return without_linking.remove_output_args()
+
+        return without_linking
+
+    def relativize_output(self, relative: Path) -> Arguments:
+        """if present, return a copy of Arguments where the output path is relative to the given path"""
+        output: Optional[str] = self.output
+
+        if output is None:
+            return self
+
+        output_path = Path(output)
+        relative_output_path = str(output_path.relative_to(relative))
+
+        return self.add_output(relative_output_path)
+
+    def add_output(self, output: str) -> Arguments:
+        """returns a copy of arguments where the output is added"""
+        return self.copy().add_arg(f"{self.OUTPUT_ARG}{output}")
 
     def add_target(self, target: str) -> Arguments:
         """returns a copy of arguments where the specified target is added (for cross compilation)"""
@@ -476,6 +510,9 @@ class Arguments:
                 if arg.startswith(tuple(Arguments.Local.PREPROCESSOR_OPTION_PREFIX_ARGS)):
                     if arg in Arguments.Local.PREPROCESSOR_OPTION_PREFIX_ARGS:
                         next(it)
+                    continue
+
+                if arg == Arguments.Local.DEPENDENCY_SIDE_EFFECT_ARG:
                     continue
 
                 # skip linking related args

@@ -1,4 +1,5 @@
 """Tests regarding the arguments module of homcc."""
+from pathlib import Path
 from typing import List, Optional
 
 import pytest
@@ -218,6 +219,24 @@ class TestArguments:
         assert Arguments.from_vargs("gcc", "foo").normalize_compiler().compiler == "gcc"
         assert Arguments.from_vargs("/usr/bin/gcc", "foo").normalize_compiler().compiler == "gcc"
         assert Arguments.from_vargs("~/bin/g++", "foo").normalize_compiler().compiler == "g++"
+
+    def test_relativize_output(self):
+        assert (
+            Arguments.from_vargs("gcc", "-o", "/home/user/abc.o").relativize_output(Path("/home/user")).output
+            == "abc.o"
+        )
+        assert (
+            Arguments.from_vargs("gcc", "-o", "/home/user/./../user/abc.o").relativize_output(Path("/home/user")).output
+            == "../user/abc.o"
+        )
+        assert (
+            Arguments.from_vargs("gcc", "-o", "/home/user/abc.o").relativize_output(Path("/home/")).output
+            == "user/abc.o"
+        )
+
+    def test_add_output(self):
+        assert Arguments.from_vargs("gcc").add_output("foo.o").output == "foo.o"
+        assert Arguments.from_vargs("gcc", "-oabc.o").add_output("foo.o").output == "foo.o"
 
 
 class TestCompiler:

@@ -9,7 +9,7 @@ from typing import Dict, List, Optional, Tuple
 
 from homcc.common.arguments import ArgumentsExecutionResult
 from homcc.common.compression import CompressedBytes, Compression, NoCompression
-from homcc.common.constants import ENCODING
+from homcc.common.constants import DWARF_FILE_SUFFIX, ENCODING
 
 
 class MessageType(Enum):
@@ -356,8 +356,8 @@ class DependencyReplyMessage(Message):
 
 
 @dataclass
-class ObjectFile:
-    """Represents an object file (-> compilation result)."""
+class File:
+    """Represents a file."""
 
     file_name: str
     size: Optional[int]
@@ -401,8 +401,11 @@ class ObjectFile:
                 f"Tried to convert {type(self).__name__} to wire format even though it has no content set."
             )
 
+    def is_dwarf_file(self) -> bool:
+        return self.file_name.endswith(DWARF_FILE_SUFFIX)
+
     def __eq__(self, other) -> bool:
-        if isinstance(other, ObjectFile):
+        if isinstance(other, File):
             return self.file_name == other.file_name and self.content == other.content
 
         return False
@@ -414,32 +417,43 @@ class CompilationResultMessage(Message):
     the file in bytes and the actual file bytes."""
 
     def __init__(
-        self, object_files: List[ObjectFile], stdout: str, stderr: str, return_code: int, compression: Compression
+        self,
+        object_files: List[File],
+        stdout: str,
+        stderr: str,
+        return_code: int,
+        compression: Compression,
+        dwarf_files: List[File],
     ):
         self.object_files = object_files
         self.stdout = stdout
         self.stderr = stderr
         self.return_code = return_code
         self.compression = compression
+        self.dwarf_files = dwarf_files
 
         super().__init__(MessageType.CompilationResultMessage)
 
     def _get_json_dict(self) -> Dict:
         json_dict: Dict = super()._get_json_dict()
 
-        files = []
-        for object_file in self.object_files:
-            files.append({"filename": object_file.file_name, "size": len(object_file)})
-        json_dict["files"] = files
+        # this may stay 'files' for compatibility reasons
+        json_dict["files"] = [
+            {"filename": object_file.file_name, "size": len(object_file)} for object_file in self.object_files
+        ]
 
         json_dict["stdout"] = self.stdout
         json_dict["stderr"] = self.stderr
         json_dict["return_code"] = self.return_code
         json_dict["compression"] = str(self.compression)
 
+        json_dict["dwarf_files"] = [
+            {"filename": dwarf_file.file_name, "size": len(dwarf_file)} for dwarf_file in self.dwarf_files
+        ]
+
         return json_dict
 
-    def get_object_files(self) -> List[ObjectFile]:
+    def get_object_files(self) -> List[File]:
         return self.object_files
 
     def get_stdout(self) -> str:
@@ -454,22 +468,33 @@ class CompilationResultMessage(Message):
     def get_compression(self) -> Compression:
         return self.compression
 
+    def get_dwarf_files(self) -> List[File]:
+        return self.dwarf_files
+
+    def get_files(self) -> List[File]:
+        files: List[File] = []
+
+        files.extend(self.object_files)  # ordering is important for serialization here, i.e. add object files first
+        files.extend(self.dwarf_files)
+        return files
+
     def get_compilation_result(self) -> ArgumentsExecutionResult:
         return ArgumentsExecutionResult(self.return_code, self.stdout, self.stderr)
 
     def get_further_payload(self) -> bytearray:
-        """Overwritten so that the dependencies' content can be appended to the message."""
+        """Overwritten so that the object files content and the dwarf files content can be appended to the message."""
         further_payload = bytearray()
 
-        for file in self.object_files:
+        for file in self.get_files():
             further_payload += file.to_wire()
 
         return further_payload
 
     def set_further_payload(self, further_payload: bytearray):
-        """Overwritten so that the dependencies' content can be set."""
+        """Overwritten so that the object files content and the dwarf files content can be set."""
+
         current_payload_offset: int = 0
-        for file in self.object_files:
+        for file in self.get_files():
             file_len = len(file)
 
             file.content = CompressedBytes.from_wire(
@@ -478,12 +503,8 @@ class CompilationResultMessage(Message):
             current_payload_offset += file_len
 
     def get_further_payload_size(self) -> int:
-        """Overwritten so that the dependencies' payload size can be retrieved."""
-        total_size: int = 0
-        for object_file in self.object_files:
-            total_size += len(object_file)
-
-        return total_size
+        """Overwritten so that the object files payload size and the dwarf files payload size can be retrieved."""
+        return sum(len(file) for file in self.get_files())
 
     def __eq__(self, other):
         if isinstance(other, CompilationResultMessage):
@@ -493,6 +514,7 @@ class CompilationResultMessage(Message):
                 and self.get_stderr() == other.get_stderr()
                 and self.get_return_code() == other.get_return_code()
                 and self.get_compression() == other.get_compression()
+                and self.get_dwarf_files() == other.get_dwarf_files()
             )
 
         return False
@@ -502,22 +524,26 @@ class CompilationResultMessage(Message):
         compression_name = json_dict.get("compression", str(NoCompression))
         compression = Compression.from_name(compression_name)
 
-        object_files: List[ObjectFile] = []
-        for file in json_dict["files"]:
-            object_file_size = file["size"]
+        def files_from_json_list(file_json_list: Optional[List]) -> List[File]:
+            if file_json_list is None:
+                return []
 
-            # explicitly set the message size from the field in the JSON. Can not
-            # directly add the payload to the message, because the payload isn't contained in the JSON.
-            object_file = ObjectFile(
-                file_name=file["filename"], content=None, compression=compression, size=object_file_size
-            )
-            object_files.append(object_file)
+            # Explicitly set the message size from the field in the JSON.
+            # Can not directly add the payload to the message, because the payload isn't contained in the JSON.
+            return [
+                File(file_name=file["filename"], content=None, compression=compression, size=file["size"])
+                for file in file_json_list
+            ]
+
+        object_files: List[File] = files_from_json_list(json_dict["files"])
 
         stdout = json_dict["stdout"]
         stderr = json_dict["stderr"]
         return_code = json_dict["return_code"]
 
-        return CompilationResultMessage(object_files, stdout, stderr, return_code, compression)
+        dwarf_files: List[File] = files_from_json_list(json_dict.get("dwarf_files"))
+
+        return CompilationResultMessage(object_files, stdout, stderr, return_code, compression, dwarf_files)
 
 
 class ConnectionRefusedMessage(Message):
