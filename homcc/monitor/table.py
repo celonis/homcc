@@ -20,7 +20,6 @@ class Table:
     """Relevant compilation attributes."""
 
     def __init__(self, data: List[RowData]):
-
         self.data = data
         self.table = QTableWidget()
         self.table.setRowCount(len(data))
