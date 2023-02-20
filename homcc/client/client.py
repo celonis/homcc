@@ -22,6 +22,7 @@ import sysv_ipc
 
 from homcc.client.host import ConnectionType, Host
 from homcc.common.arguments import Arguments
+from homcc.common.constants import TCP_BUFFER_SIZE
 from homcc.common.errors import (
     ClientParsingError,
     FailedHostNameResolutionError,
@@ -372,8 +373,6 @@ class StateFile:
 class TCPClient:
     """Wrapper class to exchange homcc protocol messages via TCP"""
 
-    DEFAULT_BUFFER_SIZE_LIMIT: int = 65_536  # default buffer size limit of StreamReader is 64 KiB
-
     def __init__(self, host: Host, timeout: float, state: StateFile):
         connection_type: ConnectionType = host.type
 
@@ -397,7 +396,7 @@ class TCPClient:
         logger.debug("Connecting to '%s:%i'.", self.host, self.port)
         try:
             self._reader, self._writer = await asyncio.wait_for(
-                asyncio.open_connection(host=self.host, port=self.port, limit=self.DEFAULT_BUFFER_SIZE_LIMIT),
+                asyncio.open_connection(host=self.host, port=self.port, limit=TCP_BUFFER_SIZE),
                 timeout=self.timeout,
             )
         except asyncio.TimeoutError as error:
@@ -454,7 +453,7 @@ class TCPClient:
     async def receive(self) -> Message:
         """receive data from homcc server and convert it to Message"""
         #  read stream into internal buffer
-        self._data += await self._reader.read(self.DEFAULT_BUFFER_SIZE_LIMIT)
+        self._data += await self._reader.read(TCP_BUFFER_SIZE)
         bytes_needed, parsed_message = Message.from_bytes(bytearray(self._data))
 
         # if message is incomplete, continue reading from stream until no more bytes are missing
