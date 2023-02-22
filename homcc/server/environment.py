@@ -153,6 +153,12 @@ class Environment:
         """Does the compilation and returns the filled result message."""
         logger.info("Compiling...")
 
+        # TODO(o.layer): The next code line exists due to compatibility issues between 0.0.3 and 0.0.4,
+        # where the old client does not filter the -MD flag, but the newer server version
+        # expects the absence of the -MD flag. To fix this, the server temporarily removes local arguments.
+        # We can remove this after 0.0.4 is completely rolled out.
+        arguments = arguments.remove_local_args()
+
         mapped_cwd_path = Path(self.mapped_cwd)
 
         # create the mapped current working directory if it doesn't exist yet
