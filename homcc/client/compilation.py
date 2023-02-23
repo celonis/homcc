@@ -145,6 +145,7 @@ async def compile_remotely_at(
         remote_arguments.normalize_compiler()
 
         state.set_compile()
+
         await client.send_argument_message(
             arguments=remote_arguments,
             cwd=os.getcwd(),
@@ -153,16 +154,14 @@ async def compile_remotely_at(
             schroot_profile=schroot_profile,
             docker_container=docker_container,
         )
-
-        # invert dependency dictionary to access dependencies via hash
-        dependency_dict = {file_hash: dependency for dependency, file_hash in dependency_dict.items()}
-
         host_response: Message = await client.receive()
-
         if isinstance(host_response, ConnectionRefusedMessage):
             raise HostRefusedConnectionError(
                 f"Host {client.host}:{client.port} refused the connection:\n{host_response.info}!"
             )
+
+        # invert dependency dictionary to access dependencies via hash
+        dependency_dict = {file_hash: dependency for dependency, file_hash in dependency_dict.items()}
 
         # provide requested dependencies
         while isinstance(host_response, DependencyRequestMessage):

@@ -26,6 +26,7 @@ from homcc.common.constants import TCP_BUFFER_SIZE
 from homcc.common.errors import (
     ClientParsingError,
     FailedHostNameResolutionError,
+    HostRefusedConnectionError,
     RemoteHostsFailure,
     SlotsExhaustedError,
 )
@@ -410,7 +411,12 @@ class TCPClient:
         """disconnect from server and close client socket"""
         logger.debug("Disconnecting from '%s:%i'.", self.host, self.port)
         self._writer.close()
-        await self._writer.wait_closed()
+
+        try:
+            await self._writer.wait_closed()
+        except ConnectionError:
+            # If an error occurs during closing the connection, we can safely ignore it.
+            pass
 
     async def _send(self, message: Message):
         """send a message to homcc server"""
@@ -428,17 +434,32 @@ class TCPClient:
         docker_container: Optional[str],
     ):
         """send an argument message to homcc server"""
-        await self._send(
-            ArgumentMessage(
-                args=list(arguments),
-                cwd=cwd,
-                dependencies=dependency_dict,
-                target=target,
-                schroot_profile=schroot_profile,
-                docker_container=docker_container,
-                compression=self.compression,
+        try:
+            await self._send(
+                ArgumentMessage(
+                    args=list(arguments),
+                    cwd=cwd,
+                    dependencies=dependency_dict,
+                    target=target,
+                    schroot_profile=schroot_profile,
+                    docker_container=docker_container,
+                    compression=self.compression,
+                )
             )
-        )
+        except ConnectionError as error:
+            # TODO(o.layer): we have to handle this edge case here, because the server may close the
+            # connection before the client sends the ArgumentMessage. (and therefore sending will fail)
+            # In the future, we should make the contract between the server and the client clearer, e.g.
+            # by defining the time in point / ordering of when to expect ConnectionRefusedMessages.
+            logger.debug(
+                "Error occurred when sending ArgumentMessage. The server has probably closed the "
+                "connection before we could send the ArgumentMessage: %s",
+                error,
+            )
+            raise HostRefusedConnectionError(
+                f"Host {self.host}:{self.port} closed the connection, probably due to "
+                "reaching the compilation limit."
+            ) from error
 
     async def send_dependency_reply_message(self, dependency: str):
         """send dependency reply message to homcc server"""
@@ -452,7 +473,6 @@ class TCPClient:
 
     async def receive(self) -> Message:
         """receive data from homcc server and convert it to Message"""
-        #  read stream into internal buffer
         self._data += await self._reader.read(TCP_BUFFER_SIZE)
         bytes_needed, parsed_message = Message.from_bytes(bytearray(self._data))
 
