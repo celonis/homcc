@@ -146,28 +146,19 @@ async def compile_remotely_at(
 
         state.set_compile()
 
-        send_error: Optional[ConnectionError] = None
-        try:
-            await client.send_argument_message(
-                arguments=remote_arguments,
-                cwd=os.getcwd(),
-                dependency_dict=dependency_dict,
-                target=target,
-                schroot_profile=schroot_profile,
-                docker_container=docker_container,
-            )
-        except ConnectionError as error:
-            send_error = error
-
+        await client.send_argument_message(
+            arguments=remote_arguments,
+            cwd=os.getcwd(),
+            dependency_dict=dependency_dict,
+            target=target,
+            schroot_profile=schroot_profile,
+            docker_container=docker_container,
+        )
         host_response: Message = await client.receive()
         if isinstance(host_response, ConnectionRefusedMessage):
             raise HostRefusedConnectionError(
                 f"Host {client.host}:{client.port} refused the connection:\n{host_response.info}!"
             )
-
-        if send_error is not None:
-            # rethrow the ConnectionError, since at this point it can not be related to the server limit
-            raise send_error
 
         # invert dependency dictionary to access dependencies via hash
         dependency_dict = {file_hash: dependency for dependency, file_hash in dependency_dict.items()}
