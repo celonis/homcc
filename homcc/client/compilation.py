@@ -12,9 +12,9 @@ from homcc.client.client import (
     LocalHostSemaphore,
     RemoteHostSelector,
     RemoteHostSemaphore,
-    StateFile,
     TCPClient,
 )
+from homcc.common.statefile import StateFile
 from homcc.client.config import ClientConfig
 from homcc.client.host import Host
 from homcc.common.arguments import Arguments, ArgumentsExecutionResult, Compiler
