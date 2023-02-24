@@ -31,6 +31,7 @@ def on_created(event):  # tracks the creation of a state file and reads its data
 
     state: StateFile = StateFile.from_bytes(file_bytes)
 
+    data_list.append(event.src_path)
     data_list.append(state.hostname.decode("utf-8"))
     data_list.append(StateFile.ClientPhase(state.phase).name)
     data_list.append(state.source_base_filename)
@@ -49,6 +50,11 @@ def on_created(event):  # tracks the creation of a state file and reads its data
 
 
 def on_deleted(event):  # tracks deletion of a state file - not actively used
+
+    for e in table_info:
+        if e[0] == event.src_path:
+            table_info.remove(e)
+
     print(f"{datetime.now().strftime('%d/%m/%Y %H:%M:%S')} - {event.src_path} has been deleted!")
 
 
@@ -70,7 +76,7 @@ class WorkerThread(QtCore.QThread):
             time.sleep(1)
             if len(table_info) != 0:
                 for data in table_info:
-                    row = [data[0], data[1], data[2], "0"]
+                    row = [data[1], data[2], data[3], "0"]
                     self.row_ready.emit(row)
                 table_info.clear()
 
