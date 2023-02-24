@@ -13,10 +13,10 @@ from homcc.client.client import (
     LocalHostSemaphore,
     RemoteHostSelector,
     RemoteHostSemaphore,
-    StateFile,
 )
 from homcc.client.host import ConnectionType, Host
 from homcc.common.errors import RemoteHostsFailure, SlotsExhaustedError
+from homcc.common.statefile import StateFile
 
 
 class TestRemoteHostSelector:

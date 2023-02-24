@@ -117,7 +117,6 @@ class StateFile:
         # enum dcc_phase curr_phase: unassigned
         # struct dcc_task_state *next: DISTCC_NEXT_TASK_STATE
 
-
     def __bytes__(self) -> bytes:
         # fmt: off
         return struct.pack(
@@ -137,7 +136,6 @@ class StateFile:
 
     @classmethod
     def from_bytes(cls, buffer: bytes) -> StateFile:
-
         (  # ignore constants: DISTCC_TASK_STATE_STRUCT_SIZE, DISTCC_STATE_MAGIC, 0 (void*)
             _,
             _,
@@ -164,11 +162,11 @@ class StateFile:
     def __eq__(self, other):
         if isinstance(other, StateFile):
             return (  # ignore constants: DISTCC_TASK_STATE_STRUCT_SIZE, DISTCC_STATE_MAGIC, 0 (void*)
-                    self.pid == other.pid
-                    and self.source_base_filename.decode(encoding='utf-8') == other.source_base_filename
-                    and self.hostname == other.hostname
-                    and self.slot == other.slot
-                    and self.phase.value == other.phase
+                self.pid == other.pid
+                and self.source_base_filename.decode(encoding='utf-8') == other.source_base_filename
+                and self.hostname == other.hostname
+                and self.slot == other.slot
+                and self.phase.value == other.phase
             )
         return False
 
@@ -203,4 +201,3 @@ class StateFile:
 
     def set_compile(self):
         self._set_phase(self.ClientPhase.COMPILE)
-

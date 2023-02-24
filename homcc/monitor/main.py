@@ -50,7 +50,6 @@ def on_created(event):  # tracks the creation of a state file and reads its data
 
 
 def on_deleted(event):  # tracks deletion of a state file - not actively used
-
     for e in table_info:
         if e[0] == event.src_path:
             table_info.remove(e)
@@ -85,7 +84,6 @@ class WorkerThread(QtCore.QThread):
 
 # MainWindow class where table activities are carried out
 class MainWindow(QMainWindow):
-
     def __init__(self, *args, **kwargs):
         super(MainWindow, self).__init__(*args, **kwargs)
 
@@ -151,4 +149,3 @@ if __name__ == "__main__":
     window = MainWindow()
     window.show()
     app.exec_()
-
