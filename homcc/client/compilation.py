@@ -1,13 +1,11 @@
 """fundamental compilation functions and classes for the homcc client"""
 from __future__ import annotations
-
 import asyncio
 import logging
 import os
 import subprocess
 from pathlib import Path
 from typing import Dict, List, Optional, Set, Tuple
-
 from homcc.client.client import (
     LocalHostSemaphore,
     RemoteHostSelector,

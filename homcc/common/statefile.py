@@ -2,14 +2,11 @@
 TCPClient class and related Exception classes for the homcc client
 """
 from __future__ import annotations
-
 import logging
 import os
 import struct
-
 from enum import Enum, auto
 from pathlib import Path
-
 from homcc.client.host import ConnectionType, Host
 from homcc.common.arguments import Arguments
 
@@ -96,7 +93,7 @@ class StateFile:
         elif output := arguments.output:
             self.source_base_filename = output.encode()  # take output target for linking instead
         else:
-            logger.debug("No monitoring string deducible for %s.", arguments)
+            logger.debug("No monitoring string deducible for '%s'.", arguments)
             self.source_base_filename = "".encode()
 
         if len(self.source_base_filename) > 127:

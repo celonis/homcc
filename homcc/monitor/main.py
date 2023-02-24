@@ -3,10 +3,9 @@
 homcc monitor
 """
 import sys
-from datetime import datetime
 import time
 from pathlib import Path
-
+from datetime import datetime
 from PySide2 import QtCore, QtWidgets
 from PySide2.QtWidgets import QApplication, QMainWindow
 from watchdog.events import PatternMatchingEventHandler
