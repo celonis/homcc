@@ -17,7 +17,7 @@ from typing import Dict, Iterator, List, Optional
 
 import sysv_ipc
 
-from homcc.client.host import ConnectionType, Host
+from homcc.common.host import ConnectionType, Host
 from homcc.common.arguments import Arguments
 from homcc.common.constants import TCP_BUFFER_SIZE
 from homcc.common.errors import (
@@ -28,6 +28,7 @@ from homcc.common.errors import (
     SlotsExhaustedError,
 )
 from homcc.common.messages import ArgumentMessage, DependencyReplyMessage, Message
+from homcc.common.statefile import StateFile
 
 logger = logging.getLogger(__name__)
 
@@ -220,7 +221,7 @@ class LocalHostSemaphore(HostSemaphore):
 class TCPClient:
     """Wrapper class to exchange homcc protocol messages via TCP"""
 
-    def __init__(self, host: Host, timeout: float, state):
+    def __init__(self, host: Host, timeout: float, state: StateFile):
         connection_type: ConnectionType = host.type
 
         if connection_type != ConnectionType.TCP:

@@ -7,7 +7,7 @@ import os
 import struct
 from enum import Enum, auto
 from pathlib import Path
-from homcc.client.host import ConnectionType, Host
+from homcc.common.host import ConnectionType, Host
 from homcc.common.arguments import Arguments
 
 logger = logging.getLogger(__name__)
