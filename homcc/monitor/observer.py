@@ -39,7 +39,7 @@ class StateFileObserver(PatternMatchingEventHandler):
         data_list.event_src_path = event.src_path
         data_list.state_hostname = state.hostname.decode("utf-8")
         data_list.phase_name = StateFile.ClientPhase(state.phase).name
-        data_list.source_base_filename = state.source_base_filename
+        data_list.source_base_filename = state.source_base_filename.decode("utf-8")
 
         self.table_info.append(data_list)
 
