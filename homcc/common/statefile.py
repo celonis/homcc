@@ -162,7 +162,7 @@ class StateFile:
         if isinstance(other, StateFile):
             return (  # ignore constants: DISTCC_TASK_STATE_STRUCT_SIZE, DISTCC_STATE_MAGIC, 0 (void*)
                 self.pid == other.pid
-                and self.source_base_filename.decode(encoding='utf-8') == other.source_base_filename
+                and self.source_base_filename.decode(encoding="utf-8") == other.source_base_filename
                 and self.hostname == other.hostname
                 and self.slot == other.slot
                 and self.phase.value == other.phase
