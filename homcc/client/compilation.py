@@ -15,7 +15,7 @@ from homcc.client.client import (
     TCPClient,
 )
 from homcc.client.config import ClientConfig
-from homcc.client.host import Host
+from homcc.common.host import Host
 from homcc.common.arguments import Arguments, ArgumentsExecutionResult, Compiler
 from homcc.common.constants import ENCODING
 from homcc.common.errors import (

@@ -10,7 +10,7 @@ from pytest_mock.plugin import MockerFixture
 
 from homcc import client
 from homcc.client.config import parse_config
-from homcc.client.host import ConnectionType
+from homcc.common.host import ConnectionType
 from homcc.client.parsing import (
     HOMCC_HOSTS_ENV_VAR,
     HOMCC_HOSTS_FILENAME,

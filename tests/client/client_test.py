@@ -14,7 +14,7 @@ from homcc.client.client import (
     RemoteHostSelector,
     RemoteHostSemaphore,
 )
-from homcc.client.host import ConnectionType, Host
+from homcc.common.host import ConnectionType, Host
 from homcc.common.errors import RemoteHostsFailure, SlotsExhaustedError
 from homcc.common.statefile import StateFile
 
