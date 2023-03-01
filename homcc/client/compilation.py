@@ -15,7 +15,6 @@ from homcc.client.client import (
     TCPClient,
 )
 from homcc.client.config import ClientConfig
-from homcc.common.host import Host
 from homcc.common.arguments import Arguments, ArgumentsExecutionResult, Compiler
 from homcc.common.constants import ENCODING
 from homcc.common.errors import (
@@ -29,6 +28,7 @@ from homcc.common.errors import (
     UnexpectedMessageTypeError,
 )
 from homcc.common.hashing import hash_file_with_path
+from homcc.common.host import Host
 from homcc.common.messages import (
     CompilationResultMessage,
     ConnectionRefusedMessage,

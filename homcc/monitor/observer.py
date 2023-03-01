@@ -1,11 +1,11 @@
+import logging
 from datetime import datetime
 from pathlib import Path
 from typing import List
+
 from watchdog.events import FileSystemEvent, PatternMatchingEventHandler
+
 from homcc.common.statefile import StateFile
-
-import logging
-
 
 logger = logging.getLogger(__name__)
 

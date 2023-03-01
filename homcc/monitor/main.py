@@ -5,9 +5,9 @@ homcc monitor
 import sys
 import time
 from datetime import datetime
-
 from pathlib import Path
 
+from observer import StateFileObserver
 from PySide2 import QtCore, QtWidgets
 from PySide2.QtCore import Qt
 from PySide2.QtWidgets import (
@@ -20,7 +20,6 @@ from PySide2.QtWidgets import (
 )
 from watchdog.events import PatternMatchingEventHandler
 from watchdog.observers import Observer
-from observer import StateFileObserver
 
 """HOMCC monitor: homccm"""
 
