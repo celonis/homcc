@@ -6,7 +6,7 @@ import sys
 import time
 from pathlib import Path
 
-from observer import StateFileObserver
+from homcc.monitor.observer import StateFileObserver
 from PySide2 import QtCore, QtWidgets
 from PySide2.QtCore import Qt
 from PySide2.QtWidgets import (
