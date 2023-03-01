@@ -4,7 +4,6 @@ homcc monitor
 """
 import sys
 import time
-from datetime import datetime
 from pathlib import Path
 
 from observer import StateFileObserver
@@ -50,8 +49,9 @@ class MainWindow(QMainWindow):
     def __init__(self, *args, **kwargs):
         super(MainWindow, self).__init__(*args, **kwargs)
 
-        file_event_handler = PatternMatchingEventHandler(patterns=["*"], ignore_patterns=None, ignore_directories=False,
-                                                         case_sensitive=True)
+        file_event_handler = PatternMatchingEventHandler(
+            patterns=["*"], ignore_patterns=None, ignore_directories=False, case_sensitive=True
+        )
 
         state_file_observer = StateFileObserver(file_event_handler)
         file_event_handler.on_created = state_file_observer.on_created
