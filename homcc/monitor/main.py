@@ -106,7 +106,7 @@ class MainWindow(QMainWindow):
 
         self.my_observer.start()
 
-        self.setWindowTitle("HOMCC")
+        self.setWindowTitle('HOMCC')
 
         self.data = []
 
@@ -126,7 +126,7 @@ class MainWindow(QMainWindow):
         font = text_widget.font()
         font.setPointSize(font_size)
         text_widget.setFont(font)
-        text_widget.setAlignment(Qt.AlignLeft|Qt.AlignTop)
+        text_widget.setAlignment(Qt.AlignLeft | Qt.AlignTop)
         return text_widget
 
     def __create_table_widget(self, col_header):
@@ -135,7 +135,7 @@ class MainWindow(QMainWindow):
         table.setHorizontalHeaderLabels(col_header)
         table.setMinimumSize(438, 200)
         table_files_header = table.horizontalHeader()
-        table_files_header.setMinimumSectionSize(436/len(col_header))
+        table_files_header.setMinimumSectionSize(436 / len(col_header))
         return table
 
     def __create_layout(self):
