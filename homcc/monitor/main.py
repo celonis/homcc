@@ -7,7 +7,9 @@ import time
 from pathlib import Path
 from datetime import datetime
 from PySide2 import QtCore, QtWidgets
-from PySide2.QtWidgets import QApplication, QMainWindow
+from PySide2.QtCore import Qt
+from PySide2.QtWidgets import QApplication, QMainWindow, QLabel
+from PySide2.QtWidgets import QHBoxLayout, QPushButton, QVBoxLayout
 from watchdog.events import PatternMatchingEventHandler
 from watchdog.observers import Observer
 from homcc.common.statefile import StateFile
@@ -104,16 +106,86 @@ class MainWindow(QMainWindow):
 
         self.my_observer.start()
 
+        self.setWindowTitle("HOMCC")
+
         self.data = []
+        layout = QHBoxLayout()
+        right_layout_1 = QVBoxLayout()
+        right_layout_2 = QHBoxLayout()
+        left_layout_1 = QVBoxLayout()
+        left_layout_2 = QHBoxLayout()
 
-        column_headers = ["Host", "State", "Source File", "Time Elapsed"]
+        self.table_curr_jobs = QtWidgets.QTableWidget()
+        self.table_curr_jobs.setColumnCount(4)
+        self.table_curr_jobs.setHorizontalHeaderLabels(["Host", "State", "Source File", "Time Elapsed"])
+        self.table_curr_jobs.setMinimumSize(438, 200)
 
-        self.table_widget = QtWidgets.QTableWidget()
-        self.table_widget.setColumnCount(4)
-        self.setCentralWidget(self.table_widget)
-        self.table_widget.setHorizontalHeaderLabels(column_headers)
-        self.table_widget.setMinimumSize(438, 200)
-        # self.table_widget.verticalHeader().setVisible(False)
+        summary = QLabel("Summary")
+        font = summary.font()
+        font.setPointSize(18)
+        summary.setFont(font)
+        summary.setAlignment(Qt.AlignLeft|Qt.AlignTop)
+
+        files = QLabel("    Files")
+        font = files.font()
+        font.setPointSize(12)
+        files.setFont(font)
+        files.setAlignment(Qt.AlignLeft|Qt.AlignTop)
+
+        self.reset = QPushButton("RESET")
+
+        hosts = QLabel("    Hosts")
+        font = hosts.font()
+        font.setPointSize(12)
+        hosts.setFont(font)
+        hosts.setAlignment(Qt.AlignLeft|Qt.AlignTop)
+
+        curr_jobs = QLabel("Current Jobs")
+        font = curr_jobs.font()
+        font.setPointSize(18)
+        curr_jobs.setFont(font)
+
+        self.table_hosts = QtWidgets.QTableWidget()
+        self.table_hosts.setColumnCount(4)
+        self.table_hosts.setHorizontalHeaderLabels(["name", "total", "current", "failed"])
+        self.table_hosts.setMinimumSize(438, 200)
+
+        self.table_files = QtWidgets.QTableWidget()
+        self.table_files.setColumnCount(2)
+        self.table_files.setHorizontalHeaderLabels(["Compilation (top 5 max)", "Preprocessing (top 5 max)"])
+        self.table_files.setMinimumSize(438, 200)
+        table_files_header = self.table_files.horizontalHeader()
+        table_files_header.setMinimumSectionSize(218)
+
+        right_layout_2.addWidget(summary)
+        right_layout_2.addWidget(self.reset)
+        top_right_line = QtWidgets.QWidget()
+        top_right_line.setLayout(right_layout_2)
+
+        right_layout_1.addWidget(top_right_line)
+        right_layout_1.addWidget(files)
+        right_layout_1.addWidget(self.table_files)
+        right_layout_1.addWidget(hosts)
+        right_layout_1.addWidget(self.table_hosts)
+
+        right_side = QtWidgets.QWidget()
+        right_side.setLayout(right_layout_1)
+
+        left_layout_2.addWidget(curr_jobs)
+        left_top_line = QtWidgets.QWidget()
+        left_top_line.setLayout(left_layout_2)
+
+        left_layout_1.addWidget(left_top_line)
+        left_layout_1.addWidget(self.table_curr_jobs)
+
+        left_side = QtWidgets.QWidget()
+        left_side.setLayout(left_layout_1)
+
+        layout.addWidget(left_side)
+        layout.addWidget(right_side)
+        widget = QtWidgets.QWidget()
+        widget.setLayout(layout)
+        self.setCentralWidget(widget)
 
         self.row_counters = {}  # to store time data
         self.timer = QtCore.QTimer(self)
@@ -125,18 +197,18 @@ class MainWindow(QMainWindow):
         self.worker_thread.start()
 
     def add_row_to_table(self, row):  # sets the table widget rows to row data
-        row_index = self.table_widget.rowCount()
-        self.table_widget.insertRow(row_index)
+        row_index = self.table_curr_jobs.rowCount()
+        self.table_curr_jobs.insertRow(row_index)
         for i, item in enumerate(row):
-            self.table_widget.setItem(row_index, i, QtWidgets.QTableWidgetItem(item))
+            self.table_curr_jobs.setItem(row_index, i, QtWidgets.QTableWidgetItem(item))
         self.row_counters[row_index] = 0
-        self.table_widget.verticalScrollBar().setValue(self.table_widget.verticalScrollBar().maximum())
+        self.table_curr_jobs.verticalScrollBar().setValue(self.table_curr_jobs.verticalScrollBar().maximum())
 
     def update_time(self):  # increments time column by 1 everytime it is called and sets time elapsed column
-        for row_index in range(self.table_widget.rowCount()):
+        for row_index in range(self.table_curr_jobs.rowCount()):
             self.row_counters[row_index] += 1
             count_item = QtWidgets.QTableWidgetItem(str(self.row_counters[row_index]) + 's')
-            self.table_widget.setItem(row_index, 3, count_item)
+            self.table_curr_jobs.setItem(row_index, 3, count_item)
 
     def __del__(self):  # destructor
         self.my_observer.stop()
