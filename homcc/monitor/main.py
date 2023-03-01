@@ -4,16 +4,23 @@ homcc monitor
 """
 import sys
 import time
-from pathlib import Path
 from datetime import datetime
+from pathlib import Path
+
 from PySide2 import QtCore, QtWidgets
 from PySide2.QtCore import Qt
-from PySide2.QtWidgets import QApplication, QMainWindow, QLabel
-from PySide2.QtWidgets import QHBoxLayout, QPushButton, QVBoxLayout
+from PySide2.QtWidgets import (
+    QApplication,
+    QHBoxLayout,
+    QLabel,
+    QMainWindow,
+    QPushButton,
+    QVBoxLayout,
+)
 from watchdog.events import PatternMatchingEventHandler
 from watchdog.observers import Observer
-from homcc.common.statefile import StateFile
 
+from homcc.common.statefile import StateFile
 
 table_info = []
 

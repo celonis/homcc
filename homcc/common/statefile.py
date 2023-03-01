@@ -2,11 +2,13 @@
 TCPClient class and related Exception classes for the homcc client
 """
 from __future__ import annotations
+
 import logging
 import os
 import struct
 from enum import Enum, auto
 from pathlib import Path
+
 from homcc.client.host import ConnectionType, Host
 from homcc.common.arguments import Arguments
 
