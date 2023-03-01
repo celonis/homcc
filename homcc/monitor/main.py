@@ -21,13 +21,13 @@ from PySide2.QtWidgets import (
 from watchdog.events import PatternMatchingEventHandler
 from watchdog.observers import Observer
 
-"""HOMCC monitor: homccm"""
+""" HOMCC monitor: homccm"""
 
 __version__: str = "0.0.1"
 
 
 class WorkerThread(QtCore.QThread):
-    """ thread that sleeps for one second and emits row_ready signal to alert QMainWindow when new data arrives """
+    """thread that sleeps for one second and emits row_ready signal to alert QMainWindow when new data arrives"""
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -45,7 +45,7 @@ class WorkerThread(QtCore.QThread):
 
 
 class MainWindow(QMainWindow):
-    """ MainWindow class where table activities are carried out """
+    """MainWindow class where table activities are carried out"""
 
     def __init__(self, *args, **kwargs):
         super(MainWindow, self).__init__(*args, **kwargs)
