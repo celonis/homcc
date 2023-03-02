@@ -72,7 +72,6 @@ class MainWindow(QMainWindow):
         self.my_observer.start()
 
         self.setWindowTitle('HOMCC Monitor')
-        self.data = []
 
         self._create_layout()
 
