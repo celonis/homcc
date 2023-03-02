@@ -93,13 +93,15 @@ class MainWindow(QMainWindow):
         text_widget.setAlignment(Qt.AlignLeft | Qt.AlignTop)
         return text_widget
 
-    def _create_table_widget(self, col_header: list[str]) -> QtWidgets.QTableWidget:
+    def _create_table_widget(
+        self, col_header: list[str], width: int = MIN_TABLE_WIDTH, height: int = MIN_TABLE_HEIGHT
+    ) -> QtWidgets.QTableWidget:
         table = QtWidgets.QTableWidget()
         table.setColumnCount(len(col_header))
         table.setHorizontalHeaderLabels(col_header)
-        table.setMinimumSize(self.MIN_TABLE_WIDTH, self.MIN_TABLE_HEIGHT)
+        table.setMinimumSize(width, height)
         table_files_header = table.horizontalHeader()
-        table_files_header.setMinimumSectionSize(int((self.MIN_TABLE_WIDTH - 2) / len(col_header)))
+        table_files_header.setMinimumSectionSize(int((width - 2) / len(col_header)))
         return table
 
     def _create_layout(self):
@@ -135,7 +137,17 @@ class MainWindow(QMainWindow):
 
         self.reset = QPushButton('RESET')
         self.table_hosts = self._create_table_widget(['name', 'total', 'current', 'failed'])
-        self.table_files = self._create_table_widget(['Compilation (top 5 max)', 'Preprocessing (top 5 max)'])
+        table_files = self._create_table_widget(['Compilation (top 5 max)', 'Preprocessing (top 5 max)'])
+        self.table_compiled_files = self._create_table_widget(['sec', 'file-name'], int((self.MIN_TABLE_WIDTH - 2) / 2))
+        self.table_preprocessed_files = self._create_table_widget(
+            ['sec', 'file-name'], int((self.MIN_TABLE_WIDTH - 2) / 2)
+        )
+        self.table_compiled_files.setSortingEnabled(True)
+        self.table_preprocessed_files.setSortingEnabled(True)
+        table_files.insertRow(0)
+        table_files.setCellWidget(0, 0, self.table_compiled_files)
+        table_files.setCellWidget(0, 1, self.table_preprocessed_files)
+        table_files.verticalHeader().setVisible(False)
 
         right_layout_1 = QVBoxLayout()
         right_layout_2 = QHBoxLayout()
@@ -146,7 +158,7 @@ class MainWindow(QMainWindow):
 
         right_layout_1.addWidget(top_right_line)
         right_layout_1.addWidget(files)
-        right_layout_1.addWidget(self.table_files)
+        right_layout_1.addWidget(table_files)
         right_layout_1.addWidget(hosts)
         right_layout_1.addWidget(self.table_hosts)
 
