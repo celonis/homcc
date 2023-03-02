@@ -46,7 +46,7 @@ class WorkerThread(QtCore.QThread):
 
 class MainWindow(QMainWindow):
     """MainWindow class where table activities are carried out"""
-    
+
     MIN_TABLE_WIDTH: int = 438
     MIN_TABLE_HEIGHT: int = 200
     HEADER_SIZE: int = 18
