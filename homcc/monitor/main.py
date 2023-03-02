@@ -46,6 +46,10 @@ class WorkerThread(QtCore.QThread):
 
 class MainWindow(QMainWindow):
     """MainWindow class where table activities are carried out"""
+    MIN_TABLE_WIDTH: int = 438
+    MIN_TABLE_HEIGHT: int = 200
+    HEADER_SIZE: int = 18
+    SUB_HEADER_SIZE: int = 12
 
     def __init__(self, *args, **kwargs):
         super(MainWindow, self).__init__(*args, **kwargs)
@@ -61,15 +65,15 @@ class MainWindow(QMainWindow):
         file_event_handler.on_moved = state_file_observer.on_moved
 
         path = Path.home() / ".distcc" / "state"
-        file_observer = Observer()
-        file_observer.schedule(file_event_handler, str(path), recursive=True)
+        self.my_observer = Observer()
+        self.my_observer.schedule(file_event_handler, str(path), recursive=True)
 
-        file_observer.start()
+        self.my_observer.start()
 
-        self.setWindowTitle('HOMCC')
+        self.setWindowTitle('HOMCC Monitor')
         self.data = []
 
-        self.__create_layout()
+        self._create_layout()
 
         self.row_counters = {}  # to store time data
         self.timer = QtCore.QTimer(self)
@@ -80,7 +84,8 @@ class MainWindow(QMainWindow):
         self.worker_thread.row_ready.connect(self.add_row_to_table)  # connects to add_row_to_table when signal is ready
         self.worker_thread.start()
 
-    def __create_text_widget(self, text, font_size):
+    @staticmethod
+    def _create_text_widget(text: str, font_size: int) -> QtWidgets.QWidget:
         text_widget = QLabel(text)
         font = text_widget.font()
         font.setPointSize(font_size)
@@ -88,26 +93,26 @@ class MainWindow(QMainWindow):
         text_widget.setAlignment(Qt.AlignLeft | Qt.AlignTop)
         return text_widget
 
-    def __create_table_widget(self, col_header):
+    def _create_table_widget(self, col_header: list[str]) -> QtWidgets.QTableWidget:
         table = QtWidgets.QTableWidget()
         table.setColumnCount(len(col_header))
         table.setHorizontalHeaderLabels(col_header)
-        table.setMinimumSize(438, 200)
+        table.setMinimumSize(self.MIN_TABLE_WIDTH, self.MIN_TABLE_HEIGHT)
         table_files_header = table.horizontalHeader()
-        table_files_header.setMinimumSectionSize(436 / len(col_header))
+        table_files_header.setMinimumSectionSize(int((self.MIN_TABLE_WIDTH-2) / len(col_header)))
         return table
 
-    def __create_layout(self):
+    def _create_layout(self):
         layout = QHBoxLayout()
-        layout.addWidget(self.__create_left_layout())
-        layout.addWidget(self.__create_right_layout())
+        layout.addWidget(self._create_left_layout())
+        layout.addWidget(self._create_right_layout())
         widget = QtWidgets.QWidget()
         widget.setLayout(layout)
         self.setCentralWidget(widget)
 
-    def __create_left_layout(self):
-        self.table_curr_jobs = self.__create_table_widget(['Host', 'State', 'Source File', 'Time Elapsed'])
-        curr_jobs = self.__create_text_widget('Current Jobs', 18)
+    def _create_left_layout(self) -> QtWidgets.QWidget:
+        self.table_curr_jobs = self._create_table_widget(['Host', 'State', 'Source File', 'Time Elapsed'])
+        curr_jobs = self._create_text_widget('Current Jobs', self.HEADER_SIZE)
 
         left_layout_1 = QVBoxLayout()
         left_layout_2 = QHBoxLayout()
@@ -123,14 +128,14 @@ class MainWindow(QMainWindow):
         left_side.setLayout(left_layout_1)
         return left_side
 
-    def __create_right_layout(self):
-        summary = self.__create_text_widget('Summary', 18)
-        files = self.__create_text_widget('    Files', 12)
-        hosts = self.__create_text_widget('    Hosts', 12)
+    def _create_right_layout(self) -> QtWidgets.QWidget:
+        summary = self._create_text_widget('Summary', self.HEADER_SIZE)
+        files = self._create_text_widget('    Files', self.SUB_HEADER_SIZE)
+        hosts = self._create_text_widget('    Hosts', self.SUB_HEADER_SIZE)
 
         self.reset = QPushButton('RESET')
-        self.table_hosts = self.__create_table_widget(['name', 'total', 'current', 'failed'])
-        self.table_files = self.__create_table_widget(['Compilation (top 5 max)', 'Preprocessing (top 5 max)'])
+        self.table_hosts = self._create_table_widget(['name', 'total', 'current', 'failed'])
+        self.table_files = self._create_table_widget(['Compilation (top 5 max)', 'Preprocessing (top 5 max)'])
 
         right_layout_1 = QVBoxLayout()
         right_layout_2 = QHBoxLayout()
