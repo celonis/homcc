@@ -99,7 +99,7 @@ class MainWindow(QMainWindow):
         table.setHorizontalHeaderLabels(col_header)
         table.setMinimumSize(self.MIN_TABLE_WIDTH, self.MIN_TABLE_HEIGHT)
         table_files_header = table.horizontalHeader()
-        table_files_header.setMinimumSectionSize(int((self.MIN_TABLE_WIDTH-2) / len(col_header)))
+        table_files_header.setMinimumSectionSize(int((self.MIN_TABLE_WIDTH - 2) / len(col_header)))
         return table
 
     def _create_layout(self):
