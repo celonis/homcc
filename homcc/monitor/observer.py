@@ -47,7 +47,7 @@ class StateFileObserver(PatternMatchingEventHandler):
             "Created entry for hostname '%s' in Phase '%s' with source base filename '%s' ",
             state.hostname.decode("utf-8"),
             StateFile.ClientPhase(state.phase).name,
-            state.source_base_filename,
+            state.source_base_filename.decode("utf-8"),
         )
 
         logger.debug("'%s' - '%s' has been created!", datetime.now().strftime('%d/%m/%Y %H:%M:%S'), event.src_path)
