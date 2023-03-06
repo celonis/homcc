@@ -16,7 +16,7 @@ class MainWindow(QMainWindow):
     """MainWindow class where table activities are carried out"""
 
     def __init__(self, *args, **kwargs):
-        super(MainWindow, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
 
         state_file_event_handler = StateFileObserver(
             patterns=["*"], ignore_patterns=None, ignore_directories=False, case_sensitive=True
@@ -68,7 +68,7 @@ class MainWindow(QMainWindow):
 
         for row_index in range(self.table_widget.rowCount()):
             self.row_counters[row_index] += 1
-            count_item = QtWidgets.QTableWidgetItem(str(self.row_counters[row_index]) + 's')
+            count_item = QtWidgets.QTableWidgetItem(str(self.row_counters[row_index]) + "s")
             self.table_widget.setItem(row_index, 3, count_item)
 
     def __del__(self):
