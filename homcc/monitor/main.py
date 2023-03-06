@@ -17,24 +17,6 @@ from observer import StateFileObserver
 __version__: str = "0.0.1"
 
 
-class WorkerThread(QtCore.QThread):
-    """thread that sleeps for one second and emits row_ready signal to alert QMainWindow when new data arrives"""
-
-    def __init__(self, parent=None):
-        super().__init__(parent)
-
-    def run(self):
-        while True:
-            time.sleep(1)
-            if len(StateFileObserver.table_info) != 0:
-                for data in StateFileObserver.table_info:
-                    row = [data.state_hostname, data.phase_name, data.source_base_filename, "0"]
-                    self.row_ready.emit(row)
-                StateFileObserver.table_info.clear()
-
-    row_ready = QtCore.Signal(list)
-
-
 class MainWindow(QMainWindow):
     """MainWindow class where table activities are carried out"""
 
@@ -66,13 +48,21 @@ class MainWindow(QMainWindow):
         self.table_widget.setMinimumSize(438, 200)
 
         self.row_counters = {}  # to store time data
-        self.timer = QtCore.QTimer(self)
-        self.timer.timeout.connect(self.update_time)
-        self.timer.start(1000)  # updates every second
+        self.elapsed_time_timer = QtCore.QTimer(self)
+        self.elapsed_time_timer.timeout.connect(self.update_time)
+        self.elapsed_time_timer.start(1000)  # updates every second
 
-        self.worker_thread = WorkerThread(self)
-        self.worker_thread.row_ready.connect(self.add_row_to_table)  # connects to add_row_to_table when signal is ready
-        self.worker_thread.start()
+        self.add_row_timer = QtCore.QTimer(self)
+        self.add_row_timer.timeout.connect(self.run)
+        self.add_row_timer.start(1000)  # updates every second
+
+    def run(self):
+        """updates row data on table every second"""
+        if len(StateFileObserver.table_info) != 0:
+            for data in StateFileObserver.table_info:
+                row = [data.state_hostname, data.phase_name, data.source_base_filename, "0"]
+                self.add_row_to_table(row)
+            StateFileObserver.table_info.clear()
 
     def add_row_to_table(self, row):
         """sets the table widget rows to row data"""
