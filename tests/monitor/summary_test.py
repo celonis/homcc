@@ -1,10 +1,9 @@
 """Tests regarding the summary stats module of homcc."""
-import time
+from datetime import datetime
 
 import pytest
 
 from homcc.monitor.summary import SummaryStats
-from datetime import datetime
 
 
 class TestSummaryStats:

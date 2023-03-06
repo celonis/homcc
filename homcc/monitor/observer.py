@@ -6,7 +6,6 @@ from typing import List
 from watchdog.events import FileSystemEvent, PatternMatchingEventHandler
 
 from homcc.common.statefile import StateFile
-
 from homcc.monitor.summary import SummaryStats
 
 logger = logging.getLogger(__name__)
