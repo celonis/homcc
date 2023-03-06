@@ -17,12 +17,12 @@ logger = logging.getLogger(__name__)
 @dataclass
 class CompilationInfo:
     event_src_path: Path
-    state_hostname: str
-    phase_name: str
-    source_base_filename: str
+    hostname: str
+    phase: str
+    file_path: str
 
 
-class StateFileObserver(PatternMatchingEventHandler):
+class StateFileEventHandler(PatternMatchingEventHandler):
     """tracks state files and adds or removes state files into a list based on their creation or deletion"""
 
     def __init__(self, *args, **kwargs):
@@ -44,9 +44,9 @@ class StateFileObserver(PatternMatchingEventHandler):
 
         compilation_info = CompilationInfo(
             event_src_path=event.src_path,
-            state_hostname=state.hostname.decode(ENCODING),
-            phase_name=StateFile.ClientPhase(state.phase).name,
-            source_base_filename=state.source_base_filename.decode(ENCODING),
+            hostname=state.hostname.decode(ENCODING),
+            phase=StateFile.ClientPhase(state.phase).name,
+            file_path=state.source_base_filename.decode(ENCODING),
         )
         self.table_info.append(compilation_info)
 
@@ -62,7 +62,7 @@ class StateFileObserver(PatternMatchingEventHandler):
     def on_deleted(self, event: FileSystemEvent):
         """tracks deletion of a state file - not actively used"""
 
-        # self.table_info = [e for e in self.table_info if e.event_src_path != event.src_path]
+        self.table_info = [e for e in self.table_info if e.event_src_path != event.src_path]
 
         logger.debug("'%s' - '%s' has been deleted!", datetime.now().strftime('%d/%m/%Y %H:%M:%S'), event.src_path)
 

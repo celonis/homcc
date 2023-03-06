@@ -1,5 +1,5 @@
 """
-TCPClient class and related Exception classes for the homcc client
+StateFile class
 """
 from __future__ import annotations
 

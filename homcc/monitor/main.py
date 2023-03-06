@@ -6,11 +6,11 @@ import sys
 from typing import List
 
 from PySide2 import QtCore, QtWidgets
-from PySide2.QtWidgets import QApplication, QMainWindow
+from PySide2.QtWidgets import QApplication, QMainWindow, QPushButton
 from watchdog.observers import Observer
 
 from homcc.common.statefile import StateFile
-from homcc.monitor.observer import StateFileObserver
+from homcc.monitor.event_handler import StateFileEventHandler
 
 
 class MainWindow(QMainWindow):
@@ -19,7 +19,7 @@ class MainWindow(QMainWindow):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-        self.state_file_event_handler = StateFileObserver(
+        self.state_file_event_handler = StateFileEventHandler(
             patterns=["*"], ignore_patterns=None, ignore_directories=False, case_sensitive=True
         )
         file_observer = Observer()
@@ -33,7 +33,7 @@ class MainWindow(QMainWindow):
         self.table_widget.setColumnCount(4)
         self.setCentralWidget(self.table_widget)
         self.table_widget.setHorizontalHeaderLabels(column_headers)
-        self.table_widget.setMinimumSize(438, 200)
+        self.table_widget.setMinimumSize(520, 200)
 
         self.row_counters = {}  # to store time data
         self.elapsed_time_timer = QtCore.QTimer(self)
@@ -41,16 +41,31 @@ class MainWindow(QMainWindow):
         self.elapsed_time_timer.start(1000)  # updates every second
 
         self.add_row_timer = QtCore.QTimer(self)
-        self.add_row_timer.timeout.connect(self.ready_row_data)
+        self.add_row_timer.timeout.connect(self.update_compilation_table_data)
         self.add_row_timer.start(1000)  # updates every second
+
+        self.button = QPushButton("Toggle Mode", self)
+        self.button.clicked.connect(self.toggle_mode)
+        self.button.setGeometry(405, 0, 100, 22)
+
+        self.table_widget.setStyleSheet("QTableWidget { background-color: white; color: black; }")
 
         self.show()
 
-    def ready_row_data(self):
+    def toggle_mode(self):
+        if self.table_widget.styleSheet() == "QTableWidget { background-color: white; color: black; }":
+            self.table_widget.setStyleSheet("QTableWidget { background-color: black; color: white; }")
+            self.table_widget.update()
+
+        else:
+            self.table_widget.setStyleSheet("QTableWidget { background-color: white; color: black; }")
+            self.table_widget.update()
+
+    def update_compilation_table_data(self):
         """updates row data on table every second"""
         if self.state_file_event_handler.table_info:
             for data in self.state_file_event_handler.table_info:
-                row = [data.state_hostname, data.phase_name, data.source_base_filename, "0"]
+                row = [data.hostname, data.phase, data.file_path, "0"]
                 self.add_row_to_table(row)
             self.state_file_event_handler.table_info.clear()
 
@@ -62,7 +77,6 @@ class MainWindow(QMainWindow):
         for i, item in enumerate(row):
             self.table_widget.setItem(row_index, i, QtWidgets.QTableWidgetItem(item))
         self.row_counters[row_index] = 0
-        self.table_widget.verticalScrollBar().setValue(self.table_widget.verticalScrollBar().maximum())
 
     def update_time(self):
         """increments time column by 1 everytime it is called and sets time elapsed column"""
