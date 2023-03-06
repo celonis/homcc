@@ -10,8 +10,8 @@ from enum import Enum, auto
 from pathlib import Path
 
 from homcc.common.arguments import Arguments
-from homcc.common.host import ConnectionType, Host
 from homcc.common.constants import ENCODING
+from homcc.common.host import ConnectionType, Host
 
 logger = logging.getLogger(__name__)
 

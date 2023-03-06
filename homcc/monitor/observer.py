@@ -1,13 +1,13 @@
 """observer class to track state files"""
 
 import logging
-from homcc.common.constants import ENCODING
 from datetime import datetime
 from pathlib import Path
 from typing import List
 
 from watchdog.events import FileSystemEvent, PatternMatchingEventHandler
 
+from homcc.common.constants import ENCODING
 from homcc.common.statefile import StateFile
 
 logger = logging.getLogger(__name__)
@@ -23,6 +23,7 @@ class CompilationInfo:
 
 class StateFileObserver(PatternMatchingEventHandler):
     """tracks state files and adds or removes state files into a list based on their creation or deletion"""
+
     table_info: List[CompilationInfo] = []
 
     def on_created(self, event: FileSystemEvent):
