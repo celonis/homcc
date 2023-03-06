@@ -188,7 +188,7 @@ class MainWindow(QMainWindow):
 
         row_index = table.rowCount()
         for i, item in enumerate(row):
-           table.setItem(row_index, i, QtWidgets.QTableWidgetItem(item))
+            table.setItem(row_index, i, QtWidgets.QTableWidgetItem(item))
 
     def add_row_to_compiled_file_table(self, row):
         """sets the table widget rows to row data"""

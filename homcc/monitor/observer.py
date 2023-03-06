@@ -54,7 +54,7 @@ class StateFileObserver(PatternMatchingEventHandler):
         )
 
         time_stamp = datetime.now()
-        logger.debug("'%s' - '%s' has been created!",time_stamp.strftime('%d/%m/%Y %H:%M:%S'), event.src_path)
+        logger.debug("'%s' - '%s' has been created!", time_stamp.strftime('%d/%m/%Y %H:%M:%S'), event.src_path)
 
         self.summary.register_compilation(time_stamp, data_list.state_hostname, data_list.source_base_filename)
 

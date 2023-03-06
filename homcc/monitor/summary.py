@@ -1,10 +1,7 @@
-
-from pathlib import Path
 from typing import Optional
 
 
 class HostStats:
-
     name: str
     current_compilations: int
     total_compilations: int
@@ -24,7 +21,6 @@ class HostStats:
 
 
 class FileStats:
-
     filepath: str
     creation_time: int
     # phase: CompilationPhase  # might be unnecessary
