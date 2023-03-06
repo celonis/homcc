@@ -3,14 +3,14 @@
 homcc monitor
 """
 import sys
-import time
 from pathlib import Path
 
 from PySide2 import QtCore, QtWidgets
 from PySide2.QtWidgets import QApplication, QMainWindow
 from watchdog.events import PatternMatchingEventHandler
 from watchdog.observers import Observer
-from observer import StateFileObserver
+
+from homcc.monitor.observer import StateFileObserver
 
 """HOMCC monitor: homccm"""
 
@@ -23,19 +23,13 @@ class MainWindow(QMainWindow):
     def __init__(self, *args, **kwargs):
         super(MainWindow, self).__init__(*args, **kwargs)
 
-        file_event_handler = PatternMatchingEventHandler(
+        state_file_event_handler = StateFileObserver(
             patterns=["*"], ignore_patterns=None, ignore_directories=False, case_sensitive=True
         )
 
-        state_file_observer = StateFileObserver(file_event_handler)
-        file_event_handler.on_created = state_file_observer.on_created
-        file_event_handler.on_deleted = state_file_observer.on_deleted
-        file_event_handler.on_modified = state_file_observer.on_modified
-        file_event_handler.on_moved = state_file_observer.on_moved
-
         path = Path.home() / ".distcc" / "state"
         file_observer = Observer()
-        file_observer.schedule(file_event_handler, str(path), recursive=True)
+        file_observer.schedule(state_file_event_handler, str(path), recursive=True)
 
         file_observer.start()
 
@@ -53,10 +47,10 @@ class MainWindow(QMainWindow):
         self.elapsed_time_timer.start(1000)  # updates every second
 
         self.add_row_timer = QtCore.QTimer(self)
-        self.add_row_timer.timeout.connect(self.run)
+        self.add_row_timer.timeout.connect(self.ready_row_data)
         self.add_row_timer.start(1000)  # updates every second
 
-    def run(self):
+    def ready_row_data(self):
         """updates row data on table every second"""
         if len(StateFileObserver.table_info) != 0:
             for data in StateFileObserver.table_info:

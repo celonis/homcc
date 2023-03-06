@@ -2,13 +2,15 @@
 TCPClient class and related Exception classes for the homcc client
 """
 from __future__ import annotations
+
 import logging
 import os
 import struct
 from enum import Enum, auto
 from pathlib import Path
-from homcc.common.host import ConnectionType, Host
+
 from homcc.common.arguments import Arguments
+from homcc.common.host import ConnectionType, Host
 
 logger = logging.getLogger(__name__)
 
@@ -150,7 +152,7 @@ class StateFile:
         state = cls(Arguments.from_vargs("gcc", source_base_filename), Host(type=ConnectionType.LOCAL, name=hostname))
 
         state.pid = pid
-        state.source_base_filename = source_base_filename
+        state.source_base_filename = source_base_filename.encode()
         state.slot = slot
         state.phase = phase
 

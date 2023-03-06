@@ -1,20 +1,20 @@
 """fundamental compilation functions and classes for the homcc client"""
 from __future__ import annotations
+
 import asyncio
 import logging
 import os
 import subprocess
 from pathlib import Path
 from typing import Dict, List, Optional, Set, Tuple
+
 from homcc.client.client import (
     LocalHostSemaphore,
     RemoteHostSelector,
     RemoteHostSemaphore,
     TCPClient,
 )
-from homcc.common.statefile import StateFile
 from homcc.client.config import ClientConfig
-from homcc.common.host import Host
 from homcc.common.arguments import Arguments, ArgumentsExecutionResult, Compiler
 from homcc.common.constants import ENCODING
 from homcc.common.errors import (
@@ -28,6 +28,7 @@ from homcc.common.errors import (
     UnexpectedMessageTypeError,
 )
 from homcc.common.hashing import hash_file_with_path
+from homcc.common.host import Host
 from homcc.common.messages import (
     CompilationResultMessage,
     ConnectionRefusedMessage,
@@ -35,6 +36,7 @@ from homcc.common.messages import (
     File,
     Message,
 )
+from homcc.common.statefile import StateFile
 
 logger = logging.getLogger(__name__)
 

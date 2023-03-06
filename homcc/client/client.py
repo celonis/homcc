@@ -17,7 +17,6 @@ from typing import Dict, Iterator, List, Optional
 
 import sysv_ipc
 
-from homcc.common.host import ConnectionType, Host
 from homcc.common.arguments import Arguments
 from homcc.common.constants import TCP_BUFFER_SIZE
 from homcc.common.errors import (
@@ -27,6 +26,7 @@ from homcc.common.errors import (
     RemoteHostsFailure,
     SlotsExhaustedError,
 )
+from homcc.common.host import ConnectionType, Host
 from homcc.common.messages import ArgumentMessage, DependencyReplyMessage, Message
 from homcc.common.statefile import StateFile
 

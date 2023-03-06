@@ -1,11 +1,11 @@
+import logging
 from datetime import datetime
 from pathlib import Path
 from typing import List
+
 from watchdog.events import FileSystemEvent, PatternMatchingEventHandler
+
 from homcc.common.statefile import StateFile
-
-import logging
-
 
 logger = logging.getLogger(__name__)
 
@@ -39,7 +39,7 @@ class StateFileObserver(PatternMatchingEventHandler):
         data_list.event_src_path = event.src_path
         data_list.state_hostname = state.hostname.decode("utf-8")
         data_list.phase_name = StateFile.ClientPhase(state.phase).name
-        data_list.source_base_filename = state.source_base_filename
+        data_list.source_base_filename = state.source_base_filename.decode("utf-8")
 
         self.table_info.append(data_list)
 
@@ -55,7 +55,7 @@ class StateFileObserver(PatternMatchingEventHandler):
     def on_deleted(self, event: FileSystemEvent):
         """tracks deletion of a state file - not actively used"""
 
-        # self.table_info = [e for e in self.table_info if e.event_src_path != event.src_path]
+        self.table_info = [e for e in self.table_info if e.event_src_path != event.src_path]
 
         logger.debug("'%s' - '%s' has been deleted!", datetime.now().strftime('%d/%m/%Y %H:%M:%S'), event.src_path)
 
