@@ -22,7 +22,7 @@ class StateFileObserver(PatternMatchingEventHandler):
     table_info: List[CompilationInfo] = []
 
     def on_created(self, event: FileSystemEvent):
-        """ tracks the creation of a state file and reads its data into table_info """
+        """tracks the creation of a state file and reads its data into table_info"""
 
         data_list = CompilationInfo()
 
@@ -43,29 +43,30 @@ class StateFileObserver(PatternMatchingEventHandler):
 
         self.table_info.append(data_list)
 
-        logger.debug("Created entry for hostname '%s' in Phase '%s' with source base filename '%s' ",
-                     state.hostname.decode("utf-8"),
-                     StateFile.ClientPhase(state.phase).name,
-                     state.source_base_filename)
+        logger.debug(
+            "Created entry for hostname '%s' in Phase '%s' with source base filename '%s' ",
+            state.hostname.decode("utf-8"),
+            StateFile.ClientPhase(state.phase).name,
+            state.source_base_filename,
+        )
 
         logger.debug("'%s' - '%s' has been created!", datetime.now().strftime('%d/%m/%Y %H:%M:%S'), event.src_path)
 
     def on_deleted(self, event: FileSystemEvent):
-        """ tracks deletion of a state file - not actively used """
+        """tracks deletion of a state file - not actively used"""
 
-        for e in self.table_info:
-            if e.event_src_path == event.src_path:
-                self.table_info.remove(e)
+        # self.table_info = [e for e in self.table_info if e.event_src_path != event.src_path]
+
         logger.debug("'%s' - '%s' has been deleted!", datetime.now().strftime('%d/%m/%Y %H:%M:%S'), event.src_path)
 
     @staticmethod
     def on_modified(event: FileSystemEvent):
-        """ tracks modification of a state file - not actively used """
+        """tracks modification of a state file - not actively used"""
 
         logger.debug("'%s' - '%s' has been modified!", datetime.now().strftime('%d/%m/%Y %H:%M:%S'), event.src_path)
 
     @staticmethod
     def on_moved(event: FileSystemEvent):
-        """ tracks path movement of a state file - not actively used """
+        """tracks path movement of a state file - not actively used"""
 
         logger.debug("'%s' - '%s' has been moved!", datetime.now().strftime('%d/%m/%Y %H:%M:%S'), event.src_path)
