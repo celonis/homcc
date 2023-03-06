@@ -5,6 +5,7 @@ homcc monitor
 import sys
 import time
 from pathlib import Path
+from typing import ClassVar
 
 from PySide2 import QtCore, QtWidgets
 from PySide2.QtCore import Qt
@@ -38,19 +39,30 @@ class WorkerThread(QtCore.QThread):
             if len(StateFileObserver.table_info) != 0:
                 for data in StateFileObserver.table_info:
                     row = [data.state_hostname, data.phase_name, data.source_base_filename, "0"]
-                    self.row_ready.emit(row)
+                    self.job_ready.emit(row)
                 StateFileObserver.table_info.clear()
+                for file in StateFileObserver.summary.file_stats:
+                    row = [len(StateFileObserver.summary.file_stats), file.filepath]
+                    self.compiled_files_ready.emit(row)
+                    self.preprocessed_files_ready.emit(row)
+                for host in StateFileObserver.summary.host_stats:
+                    host_stat = StateFileObserver.summary.host_stats[host]
+                    row = [host, str(host_stat.total_compilations), str(host_stat.current_compilations), "0"]
+                    self.host_ready.emit(row)
 
-    row_ready = QtCore.Signal(list)
+    job_ready = QtCore.Signal(list)
+    host_ready = QtCore.Signal(list)
+    compiled_files_ready = QtCore.Signal(list)
+    preprocessed_files_ready = QtCore.Signal(list)
 
 
 class MainWindow(QMainWindow):
     """MainWindow class where table activities are carried out"""
 
-    MIN_TABLE_WIDTH: int = 438
-    MIN_TABLE_HEIGHT: int = 200
-    HEADER_SIZE: int = 18
-    SUB_HEADER_SIZE: int = 12
+    MIN_TABLE_WIDTH: ClassVar[int] = 500
+    MIN_TABLE_HEIGHT: ClassVar[int] = 200
+    HEADER_SIZE: ClassVar[int] = 18
+    SUB_HEADER_SIZE: ClassVar[int] = 12
 
     def __init__(self, *args, **kwargs):
         super(MainWindow, self).__init__(*args, **kwargs)
@@ -81,7 +93,10 @@ class MainWindow(QMainWindow):
         self.timer.start(1000)  # updates every second
 
         self.worker_thread = WorkerThread(self)
-        self.worker_thread.row_ready.connect(self.add_row_to_table)  # connects to add_row_to_table when signal is ready
+        self.worker_thread.job_ready.connect(self.add_row_to_table)  # connects to add_row_to_table when signal is ready
+        self.worker_thread.compiled_files_ready.connect(self.add_row_to_compiled_file_table)
+        self.worker_thread.preprocessed_files_ready.connect(self.add_row_to_preprocessed_file_table)
+        self.worker_thread.host_ready.connect(self.add_row_to_host_table)
         self.worker_thread.start()
 
     @staticmethod
@@ -166,6 +181,42 @@ class MainWindow(QMainWindow):
         right_side = QtWidgets.QWidget()
         right_side.setLayout(right_layout_1)
         return right_side
+
+    @staticmethod
+    def add_row(table: QtWidgets.QTableWidget, row: list[str]):
+        """sets the table widget rows to row data"""
+
+        row_index = table.rowCount()
+        for i, item in enumerate(row):
+           table.setItem(row_index, i, QtWidgets.QTableWidgetItem(item))
+
+    def add_row_to_compiled_file_table(self, row):
+        """sets the table widget rows to row data"""
+
+        row_index = self.table_compiled_files.rowCount()
+        self.table_compiled_files.insertRow(row_index)
+        item = QtWidgets.QTableWidgetItem()
+        item.setData(0, row[0])
+        self.table_compiled_files.setItem(row_index, 0, item)
+        self.table_compiled_files.setItem(row_index, 1, QtWidgets.QTableWidgetItem(row[1]))
+
+    def add_row_to_preprocessed_file_table(self, row):
+        """sets the table widget rows to row data"""
+
+        row_index = self.table_preprocessed_files.rowCount()
+        self.table_preprocessed_files.insertRow(row_index)
+        item = QtWidgets.QTableWidgetItem()
+        item.setData(0, row[0])
+        self.table_preprocessed_files.setItem(row_index, 0, item)
+        self.table_preprocessed_files.setItem(row_index, 1, QtWidgets.QTableWidgetItem(row[1]))
+
+    def add_row_to_host_table(self, row):
+        """sets the table widget rows to row data"""
+
+        row_index = self.table_hosts.rowCount()
+        self.table_hosts.insertRow(row_index)
+        for i, item in enumerate(row):
+            self.table_hosts.setItem(row_index, i, QtWidgets.QTableWidgetItem(item))
 
     def add_row_to_table(self, row):
         """sets the table widget rows to row data"""

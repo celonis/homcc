@@ -7,6 +7,8 @@ from watchdog.events import FileSystemEvent, PatternMatchingEventHandler
 
 from homcc.common.statefile import StateFile
 
+from homcc.monitor.summary import SummaryStats
+
 logger = logging.getLogger(__name__)
 
 
@@ -20,6 +22,7 @@ class CompilationInfo:
 
 class StateFileObserver(PatternMatchingEventHandler):
     table_info: List[CompilationInfo] = []
+    summary: SummaryStats = SummaryStats()
 
     def on_created(self, event: FileSystemEvent):
         """tracks the creation of a state file and reads its data into table_info"""
@@ -39,7 +42,7 @@ class StateFileObserver(PatternMatchingEventHandler):
         data_list.event_src_path = event.src_path
         data_list.state_hostname = state.hostname.decode("utf-8")
         data_list.phase_name = StateFile.ClientPhase(state.phase).name
-        data_list.source_base_filename = state.source_base_filename.decode("utf-8")
+        data_list.source_base_filename = state.source_base_filename  # type: ignore
 
         self.table_info.append(data_list)
 
@@ -47,10 +50,13 @@ class StateFileObserver(PatternMatchingEventHandler):
             "Created entry for hostname '%s' in Phase '%s' with source base filename '%s' ",
             state.hostname.decode("utf-8"),
             StateFile.ClientPhase(state.phase).name,
-            state.source_base_filename.decode("utf-8"),
+            state.source_base_filename,
         )
 
-        logger.debug("'%s' - '%s' has been created!", datetime.now().strftime('%d/%m/%Y %H:%M:%S'), event.src_path)
+        time_stamp = datetime.now()
+        logger.debug("'%s' - '%s' has been created!",time_stamp.strftime('%d/%m/%Y %H:%M:%S'), event.src_path)
+
+        self.summary.register_compilation(time_stamp, data_list.state_hostname, data_list.source_base_filename)
 
     def on_deleted(self, event: FileSystemEvent):
         """tracks deletion of a state file - not actively used"""
@@ -58,7 +64,9 @@ class StateFileObserver(PatternMatchingEventHandler):
         for e in self.table_info:
             if e.event_src_path == event.src_path:
                 self.table_info.remove(e)
-        logger.debug("'%s' - '%s' has been deleted!", datetime.now().strftime('%d/%m/%Y %H:%M:%S'), event.src_path)
+
+        time_stamp = datetime.now()
+        logger.debug("'%s' - '%s' has been deleted!", time_stamp.strftime('%d/%m/%Y %H:%M:%S'), event.src_path)
 
     @staticmethod
     def on_modified(event: FileSystemEvent):
