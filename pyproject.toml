@@ -14,5 +14,5 @@ log_cli = true
 log_cli_level = "DEBUG"
 
 [[tool.mypy.overrides]]
-module = ["lzo", "sysv_ipc", "setuptools"]
+module = ["lzo", "sysv_ipc", "setuptools", "PySide2", "watchdog"]
 ignore_missing_imports = true

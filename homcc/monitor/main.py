@@ -6,7 +6,7 @@ import sys
 from typing import List
 
 from PySide2 import QtCore, QtWidgets
-from PySide2.QtWidgets import QApplication, QMainWindow, QPushButton
+from PySide2.QtWidgets import QApplication, QMainWindow
 from watchdog.observers import Observer
 
 from homcc.common.statefile import StateFile
@@ -44,22 +44,7 @@ class MainWindow(QMainWindow):
         self.add_row_timer.timeout.connect(self.update_compilation_table_data)
         self.add_row_timer.start(1000)  # updates every second
 
-        self.button = QPushButton("Toggle Mode", self)
-        self.button.clicked.connect(self.toggle_mode)
-        self.button.setGeometry(405, 0, 100, 22)
-
-        self.table_widget.setStyleSheet("QTableWidget { background-color: white; color: black; }")
-
         self.show()
-
-    def toggle_mode(self):
-        if self.table_widget.styleSheet() == "QTableWidget { background-color: white; color: black; }":
-            self.table_widget.setStyleSheet("QTableWidget { background-color: black; color: white; }")
-            self.table_widget.update()
-
-        else:
-            self.table_widget.setStyleSheet("QTableWidget { background-color: white; color: black; }")
-            self.table_widget.update()
 
     def update_compilation_table_data(self):
         """updates row data on table every second"""
