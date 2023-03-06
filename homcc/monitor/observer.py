@@ -1,4 +1,7 @@
+"""observer class to track state files"""
+
 import logging
+from homcc.common.constants import ENCODING
 from datetime import datetime
 from pathlib import Path
 from typing import List
@@ -19,6 +22,7 @@ class CompilationInfo:
 
 
 class StateFileObserver(PatternMatchingEventHandler):
+    """tracks state files and adds or removes state files into a list based on their creation or deletion"""
     table_info: List[CompilationInfo] = []
 
     def on_created(self, event: FileSystemEvent):
@@ -37,15 +41,15 @@ class StateFileObserver(PatternMatchingEventHandler):
         state: StateFile = StateFile.from_bytes(file)
 
         data_list.event_src_path = event.src_path
-        data_list.state_hostname = state.hostname.decode("utf-8")
+        data_list.state_hostname = state.hostname.decode(ENCODING)
         data_list.phase_name = StateFile.ClientPhase(state.phase).name
-        data_list.source_base_filename = state.source_base_filename.decode("utf-8")
+        data_list.source_base_filename = state.source_base_filename.decode(ENCODING)
 
         self.table_info.append(data_list)
 
         logger.debug(
             "Created entry for hostname '%s' in Phase '%s' with source base filename '%s' ",
-            state.hostname.decode("utf-8"),
+            state.hostname.decode(ENCODING),
             StateFile.ClientPhase(state.phase).name,
             state.source_base_filename,
         )
