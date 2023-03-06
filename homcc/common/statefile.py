@@ -8,6 +8,7 @@ import os
 import struct
 from enum import Enum, auto
 from pathlib import Path
+from typing import ClassVar
 
 from homcc.common.arguments import Arguments
 from homcc.common.constants import ENCODING
@@ -52,21 +53,21 @@ class StateFile:
     __slots__ = "pid", "source_base_filename", "hostname", "slot", "phase", "filepath"
 
     # size_t; unsigned long; unsigned long; char[128]; char[128]; int; enum (int); struct* (void*)
-    DISTCC_TASK_STATE_STRUCT_FORMAT: str = "NLL128s128siiP"
+    DISTCC_TASK_STATE_STRUCT_FORMAT: ClassVar[str] = "NLL128s128siiP"
     """Format string for the dcc_task_state struct to pack to and unpack from bytes for the state file."""
 
     # constant dcc_task_state fields
-    DISTCC_TASK_STATE_STRUCT_SIZE: int = struct.calcsize(DISTCC_TASK_STATE_STRUCT_FORMAT)
+    DISTCC_TASK_STATE_STRUCT_SIZE: ClassVar[int] = struct.calcsize(DISTCC_TASK_STATE_STRUCT_FORMAT)
     """Total size of the dcc_task_state struct."""
-    DISTCC_STATE_MAGIC: int = 0x44_49_48_00  # equal to: b"DIH\0"
+    DISTCC_STATE_MAGIC: ClassVar[int] = 0x44_49_48_00  # equal to: b"DIH\0"
     """Magic number for the dcc_task_state struct."""
-    DISTCC_NEXT_TASK_STATE: int = 0xFF_FF_FF_FF_FF_FF_FF_FF
+    DISTCC_NEXT_TASK_STATE: ClassVar[int] = 0xFF_FF_FF_FF_FF_FF_FF_FF
     """Undefined and unused pointer address for the next dcc_task_state struct*."""
 
     HOMCC_STATE_DIR: Path = Path.home() / ".distcc" / "state"  # TODO(s.pirsch): temporarily share state dir with distcc
     """Path to the directory storing temporary homcc state files."""
     STATE_FILE_PREFIX: str = "binstate"
-    """Prefix for for state files."""
+    """Prefix for state files."""
 
     # none-constant dcc_task_state fields
     pid: int

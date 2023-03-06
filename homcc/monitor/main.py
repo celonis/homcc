@@ -3,12 +3,13 @@
 homcc monitor
 """
 import sys
-from pathlib import Path
+from typing import List
 
 from PySide2 import QtCore, QtWidgets
 from PySide2.QtWidgets import QApplication, QMainWindow
 from watchdog.observers import Observer
 
+from homcc.common.statefile import StateFile
 from homcc.monitor.observer import StateFileObserver
 
 
@@ -18,13 +19,11 @@ class MainWindow(QMainWindow):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-        state_file_event_handler = StateFileObserver(
+        self.state_file_event_handler = StateFileObserver(
             patterns=["*"], ignore_patterns=None, ignore_directories=False, case_sensitive=True
         )
-
-        path = Path.home() / ".distcc" / "state"
         file_observer = Observer()
-        file_observer.schedule(state_file_event_handler, str(path), recursive=True)
+        file_observer.schedule(self.state_file_event_handler, str(StateFile.HOMCC_STATE_DIR), recursive=True)
 
         file_observer.start()
 
@@ -45,15 +44,17 @@ class MainWindow(QMainWindow):
         self.add_row_timer.timeout.connect(self.ready_row_data)
         self.add_row_timer.start(1000)  # updates every second
 
+        self.show()
+
     def ready_row_data(self):
         """updates row data on table every second"""
-        if len(StateFileObserver.table_info) != 0:
-            for data in StateFileObserver.table_info:
+        if self.state_file_event_handler.table_info:
+            for data in self.state_file_event_handler.table_info:
                 row = [data.state_hostname, data.phase_name, data.source_base_filename, "0"]
                 self.add_row_to_table(row)
-            StateFileObserver.table_info.clear()
+            self.state_file_event_handler.table_info.clear()
 
-    def add_row_to_table(self, row):
+    def add_row_to_table(self, row: List):
         """sets the table widget rows to row data"""
 
         row_index = self.table_widget.rowCount()
@@ -79,5 +80,4 @@ class MainWindow(QMainWindow):
 if __name__ == "__main__":
     app = QApplication(sys.argv)
     window = MainWindow()
-    window.show()
     app.exec_()

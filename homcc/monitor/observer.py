@@ -1,6 +1,7 @@
 """observer class to track state files"""
 
 import logging
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import List
@@ -13,8 +14,8 @@ from homcc.common.statefile import StateFile
 logger = logging.getLogger(__name__)
 
 
+@dataclass
 class CompilationInfo:
-    # extracted from on_created:data_list
     event_src_path: Path
     state_hostname: str
     phase_name: str
@@ -24,12 +25,12 @@ class CompilationInfo:
 class StateFileObserver(PatternMatchingEventHandler):
     """tracks state files and adds or removes state files into a list based on their creation or deletion"""
 
-    table_info: List[CompilationInfo] = []
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.table_info: List[CompilationInfo] = []
 
     def on_created(self, event: FileSystemEvent):
         """tracks the creation of a state file and reads its data into table_info"""
-
-        data_list = CompilationInfo()
 
         try:
             file = Path.read_bytes(Path(event.src_path))
@@ -41,12 +42,13 @@ class StateFileObserver(PatternMatchingEventHandler):
 
         state: StateFile = StateFile.from_bytes(file)
 
-        data_list.event_src_path = event.src_path
-        data_list.state_hostname = state.hostname.decode(ENCODING)
-        data_list.phase_name = StateFile.ClientPhase(state.phase).name
-        data_list.source_base_filename = state.source_base_filename.decode(ENCODING)
-
-        self.table_info.append(data_list)
+        compilation_info = CompilationInfo(
+            event_src_path=event.src_path,
+            state_hostname=state.hostname.decode(ENCODING),
+            phase_name=StateFile.ClientPhase(state.phase).name,
+            source_base_filename=state.source_base_filename.decode(ENCODING),
+        )
+        self.table_info.append(compilation_info)
 
         logger.debug(
             "Created entry for hostname '%s' in Phase '%s' with source base filename '%s' ",
