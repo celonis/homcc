@@ -7,14 +7,9 @@ from pathlib import Path
 
 from PySide2 import QtCore, QtWidgets
 from PySide2.QtWidgets import QApplication, QMainWindow
-from watchdog.events import PatternMatchingEventHandler
 from watchdog.observers import Observer
 
 from homcc.monitor.observer import StateFileObserver
-
-"""HOMCC monitor: homccm"""
-
-__version__: str = "0.0.1"
 
 
 class MainWindow(QMainWindow):
