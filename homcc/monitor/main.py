@@ -2,6 +2,7 @@
 """
 homcc monitor
 """
+import os
 import sys
 from typing import List
 
@@ -19,8 +20,12 @@ from PySide2.QtWidgets import (
 from watchdog.events import PatternMatchingEventHandler
 from watchdog.observers import Observer
 
-from homcc.common.statefile import StateFile
-from homcc.monitor.event_handler import StateFileEventHandler
+sys.path.append(os.path.join(os.path.dirname(__file__), "../.."))
+
+from homcc.common.statefile import StateFile  # pylint: disable=wrong-import-position
+from homcc.monitor.event_handler import (  # pylint: disable=wrong-import-position
+    StateFileEventHandler,
+)
 
 
 class MainWindow(QMainWindow):
@@ -45,30 +50,23 @@ class MainWindow(QMainWindow):
         self.setWindowTitle('HOMCC Monitor')
 
         self._create_layout()
+        #self.table_widget = QtWidgets.QTableWidget()
+        #self.table_widget.setColumnCount(4)
+        #self.setCentralWidget(self.table_widget)
+        #self.table_widget.setHorizontalHeaderLabels(column_headers)
+        #self.table_widget.setMinimumSize(438, 200)
+
+        # trigger these update methods every second
+        def update():
+            self.update_time()
+            self.update_compilation_table_data()
 
         self.row_counters = {}  # to store time data
-        self.elapsed_time_timer = QtCore.QTimer(self)
-        self.elapsed_time_timer.timeout.connect(self.update_time)
-        self.elapsed_time_timer.start(1000)  # updates every second
-
-        self.add_row_timer = QtCore.QTimer(self)
-        self.add_row_timer.timeout.connect(self.update_compilation_table_data)
-        self.add_row_timer.start(1000)  # updates every second
-
-        self.button.clicked.connect(self.toggle_mode)
-        self.button.setGeometry(405, 0, 100, 22)
-
-        self.table_curr_jobs.setStyleSheet("QTableWidget { background-color: white; color: black; }")
+        self.update_timer = QtCore.QTimer(self)
+        self.update_timer.timeout.connect(update)
+        self.update_timer.start(1000)  # updates every second
 
         self.show()
-
-    def toggle_mode(self):
-        if self.table_curr_jobs.styleSheet() == "QTableWidget { background-color: white; color: black; }":
-            self.table_curr_jobs.setStyleSheet("QTableWidget { background-color: black; color: white; }")
-            self.table_curr_jobs.update()
-        else:
-            self.table_curr_jobs.setStyleSheet("QTableWidget { background-color: white; color: black; }")
-            self.table_curr_jobs.update()
 
     def update_compilation_table_data(self):
         """updates row data on table every second"""
@@ -110,13 +108,11 @@ class MainWindow(QMainWindow):
     def _create_left_layout(self) -> QtWidgets.QWidget:
         self.table_curr_jobs = self._create_table_widget(['Host', 'State', 'Source File', 'Time Elapsed'])
         curr_jobs = self._create_text_widget('Current Jobs', self.HEADER_SIZE)
-        self.button = QPushButton("Toggle Mode", self)
 
         left_layout_1 = QVBoxLayout()
         left_layout_2 = QHBoxLayout()
 
         left_layout_2.addWidget(curr_jobs)
-        left_layout_2.addWidget(self.button)
         left_top_line = QtWidgets.QWidget()
         left_top_line.setLayout(left_layout_2)
 
@@ -171,7 +167,6 @@ class MainWindow(QMainWindow):
         for i, item in enumerate(row):
             self.table_curr_jobs.setItem(row_index, i, QtWidgets.QTableWidgetItem(item))
         self.row_counters[row_index] = 0
-        self.table_curr_jobs.verticalScrollBar().setValue(self.table_curr_jobs.verticalScrollBar().maximum())
 
     def update_time(self):
         """increments time column by 1 everytime it is called and sets time elapsed column"""
