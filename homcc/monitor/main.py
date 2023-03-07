@@ -159,7 +159,43 @@ class MainWindow(QMainWindow):
         right_side.setLayout(right_layout_1)
         return right_side
 
-    def add_row_to_table(self, row: List):
+    @staticmethod
+    def add_row(table: QtWidgets.QTableWidget, row: list[str]):
+        """sets the table widget rows to row data"""
+
+        row_index = table.rowCount()
+        for i, item in enumerate(row):
+            table.setItem(row_index, i, QtWidgets.QTableWidgetItem(item))
+
+    def add_row_to_compiled_file_table(self, row):
+        """sets the table widget rows to row data"""
+
+        row_index = self.table_compiled_files.rowCount()
+        self.table_compiled_files.insertRow(row_index)
+        item = QtWidgets.QTableWidgetItem()
+        item.setData(0, row[0])
+        self.table_compiled_files.setItem(row_index, 0, item)
+        self.table_compiled_files.setItem(row_index, 1, QtWidgets.QTableWidgetItem(row[1]))
+
+    def add_row_to_preprocessed_file_table(self, row):
+        """sets the table widget rows to row data"""
+
+        row_index = self.table_preprocessed_files.rowCount()
+        self.table_preprocessed_files.insertRow(row_index)
+        item = QtWidgets.QTableWidgetItem()
+        item.setData(0, row[0])
+        self.table_preprocessed_files.setItem(row_index, 0, item)
+        self.table_preprocessed_files.setItem(row_index, 1, QtWidgets.QTableWidgetItem(row[1]))
+
+    def add_row_to_host_table(self, row):
+        """sets the table widget rows to row data"""
+
+        row_index = self.table_hosts.rowCount()
+        self.table_hosts.insertRow(row_index)
+        for i, item in enumerate(row):
+            self.table_hosts.setItem(row_index, i, QtWidgets.QTableWidgetItem(item))
+
+    def add_row_to_table(self, row):
         """sets the table widget rows to row data"""
 
         row_index = self.table_curr_jobs.rowCount()
