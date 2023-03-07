@@ -63,6 +63,19 @@ class MainWindow(QMainWindow):
 
         self.show()
 
+    def update_compilation_table_data(self):
+        """updates row data on table every second"""
+        if self.state_file_event_handler.table_info:
+            for _, value in self.state_file_event_handler.table_info.items():
+                row = [
+                    value.hostname,
+                    value.phase,
+                    value.file_path,
+                    "0",
+                ]
+                self.add_row_to_table(row)
+            self.state_file_event_handler.table_info.clear()
+
     @staticmethod
     def _create_text_widget(text: str, font_size: int) -> QtWidgets.QWidget:
         text_widget = QLabel(text)
