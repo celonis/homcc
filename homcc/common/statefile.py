@@ -1,5 +1,5 @@
 """
-TCPClient class and related Exception classes for the homcc client
+StateFile class
 """
 from __future__ import annotations
 
@@ -8,8 +8,10 @@ import os
 import struct
 from enum import Enum, auto
 from pathlib import Path
+from typing import ClassVar
 
 from homcc.common.arguments import Arguments
+from homcc.common.constants import ENCODING
 from homcc.common.host import ConnectionType, Host
 
 logger = logging.getLogger(__name__)
@@ -51,21 +53,21 @@ class StateFile:
     __slots__ = "pid", "source_base_filename", "hostname", "slot", "phase", "filepath"
 
     # size_t; unsigned long; unsigned long; char[128]; char[128]; int; enum (int); struct* (void*)
-    DISTCC_TASK_STATE_STRUCT_FORMAT: str = "NLL128s128siiP"
+    DISTCC_TASK_STATE_STRUCT_FORMAT: ClassVar[str] = "NLL128s128siiP"
     """Format string for the dcc_task_state struct to pack to and unpack from bytes for the state file."""
 
     # constant dcc_task_state fields
-    DISTCC_TASK_STATE_STRUCT_SIZE: int = struct.calcsize(DISTCC_TASK_STATE_STRUCT_FORMAT)
+    DISTCC_TASK_STATE_STRUCT_SIZE: ClassVar[int] = struct.calcsize(DISTCC_TASK_STATE_STRUCT_FORMAT)
     """Total size of the dcc_task_state struct."""
-    DISTCC_STATE_MAGIC: int = 0x44_49_48_00  # equal to: b"DIH\0"
+    DISTCC_STATE_MAGIC: ClassVar[int] = 0x44_49_48_00  # equal to: b"DIH\0"
     """Magic number for the dcc_task_state struct."""
-    DISTCC_NEXT_TASK_STATE: int = 0xFF_FF_FF_FF_FF_FF_FF_FF
+    DISTCC_NEXT_TASK_STATE: ClassVar[int] = 0xFF_FF_FF_FF_FF_FF_FF_FF
     """Undefined and unused pointer address for the next dcc_task_state struct*."""
 
     HOMCC_STATE_DIR: Path = Path.home() / ".distcc" / "state"  # TODO(s.pirsch): temporarily share state dir with distcc
     """Path to the directory storing temporary homcc state files."""
     STATE_FILE_PREFIX: str = "binstate"
-    """Prefix for for state files."""
+    """Prefix for state files."""
 
     # none-constant dcc_task_state fields
     pid: int
@@ -152,7 +154,7 @@ class StateFile:
         state = cls(Arguments.from_vargs("gcc", source_base_filename), Host(type=ConnectionType.LOCAL, name=hostname))
 
         state.pid = pid
-        state.source_base_filename = source_base_filename
+        state.source_base_filename = source_base_filename.encode()
         state.slot = slot
         state.phase = phase
 
@@ -162,7 +164,7 @@ class StateFile:
         if isinstance(other, StateFile):
             return (  # ignore constants: DISTCC_TASK_STATE_STRUCT_SIZE, DISTCC_STATE_MAGIC, 0 (void*)
                 self.pid == other.pid
-                and self.source_base_filename.decode(encoding="utf-8") == other.source_base_filename
+                and self.source_base_filename.decode(encoding=ENCODING) == other.source_base_filename
                 and self.hostname == other.hostname
                 and self.slot == other.slot
                 and self.phase.value == other.phase
