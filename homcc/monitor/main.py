@@ -2,12 +2,15 @@
 """
 homcc monitor
 """
+import os
 import sys
 from typing import List
 
 from PySide2 import QtCore, QtWidgets
 from PySide2.QtWidgets import QApplication, QMainWindow
 from watchdog.observers import Observer
+
+sys.path.append(os.path.join(os.path.dirname(__file__), "../.."))
 
 from homcc.common.statefile import StateFile
 from homcc.monitor.event_handler import StateFileEventHandler
@@ -33,9 +36,19 @@ class MainWindow(QMainWindow):
         self.table_widget.setColumnCount(4)
         self.setCentralWidget(self.table_widget)
         self.table_widget.setHorizontalHeaderLabels(column_headers)
-        self.table_widget.setMinimumSize(520, 200)
+        self.table_widget.setMinimumSize(438, 200)
+
+        # trigger these update methods every second
+        def update():
+            self.update_time()
+            self.update_compilation_table_data()
 
         self.row_counters = {}  # to store time data
+        self.update_timer = QtCore.QTimer(self)
+        self.update_timer.timeout.connect(update)
+        self.update_timer.start(1000)  # updates every second
+
+        """
         self.elapsed_time_timer = QtCore.QTimer(self)
         self.elapsed_time_timer.timeout.connect(self.update_time)
         self.elapsed_time_timer.start(1000)  # updates every second
@@ -43,7 +56,7 @@ class MainWindow(QMainWindow):
         self.add_row_timer = QtCore.QTimer(self)
         self.add_row_timer.timeout.connect(self.update_compilation_table_data)
         self.add_row_timer.start(1000)  # updates every second
-
+        """
         self.show()
 
     def update_compilation_table_data(self):

@@ -62,7 +62,7 @@ class StateFileEventHandler(PatternMatchingEventHandler):
     def on_deleted(self, event: FileSystemEvent):
         """tracks deletion of a state file - not actively used"""
 
-        # self.table_info = [e for e in self.table_info if e.event_src_path != event.src_path]
+        self.table_info = [e for e in self.table_info if e.event_src_path != event.src_path]
 
         logger.debug("'%s' - '%s' has been deleted!", datetime.now().strftime('%d/%m/%Y %H:%M:%S'), event.src_path)
 
