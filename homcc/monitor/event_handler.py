@@ -64,6 +64,10 @@ class StateFileEventHandler(PatternMatchingEventHandler):
 
         self.summary.register_compilation(int(time_stamp.timestamp()), compilation_info.hostname, 
                                           compilation_info.file_path)
+        self.summary.compilation_start(int(time_stamp.timestamp()), compilation_info.file_path)
+        self.summary.compilation_stop(int(time_stamp.timestamp())+len(self.summary.file_stats), compilation_info.file_path)
+        self.summary.preprocessing_start(int(time_stamp.timestamp()), compilation_info.file_path)
+        self.summary.preprocessing_stop(int(time_stamp.timestamp())++len(self.summary.file_stats)+1, compilation_info.file_path)
 
     def on_deleted(self, event: FileSystemEvent):
         """tracks deletion of a state file - not actively used"""

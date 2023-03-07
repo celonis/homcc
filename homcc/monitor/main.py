@@ -50,11 +50,6 @@ class MainWindow(QMainWindow):
         self.setWindowTitle('HOMCC Monitor')
 
         self._create_layout()
-        #self.table_widget = QtWidgets.QTableWidget()
-        #self.table_widget.setColumnCount(4)
-        #self.setCentralWidget(self.table_widget)
-        #self.table_widget.setHorizontalHeaderLabels(column_headers)
-        #self.table_widget.setMinimumSize(438, 200)
 
         # trigger these update methods every second
         def update():
@@ -67,14 +62,6 @@ class MainWindow(QMainWindow):
         self.update_timer.start(1000)  # updates every second
 
         self.show()
-
-    def update_compilation_table_data(self):
-        """updates row data on table every second"""
-        if self.state_file_event_handler.table_info:
-            for data in self.state_file_event_handler.table_info:
-                row = [data.hostname, data.phase, data.file_path, "0"]
-                self.add_row_to_table(row)
-            self.state_file_event_handler.table_info.clear()
 
     @staticmethod
     def _create_text_widget(text: str, font_size: int) -> QtWidgets.QWidget:
@@ -159,41 +146,40 @@ class MainWindow(QMainWindow):
         right_side.setLayout(right_layout_1)
         return right_side
 
+    def update_compilation_table_data(self):
+        """updates row data on table every second"""
+        if self.state_file_event_handler.table_info:
+            for data in self.state_file_event_handler.table_info:
+                row = [data.hostname, data.phase, data.file_path, "0"]
+                self.add_row_to_table(row)
+            self.state_file_event_handler.table_info.clear()
+
+            self.table_compiled_files.setRowCount(0)
+            self.table_preprocessed_files.setRowCount(0)
+            for file_stat in self.state_file_event_handler.summary.file_stats.values():
+                compilation_time = file_stat.get_compilation_time()
+                if compilation_time >= 0:
+                    row = [compilation_time, file_stat.filepath]
+                    self.add_row(self.table_compiled_files, row, True)
+                preprocessing_time = file_stat.get_preprocessing_time()
+                if preprocessing_time >= 0:
+                    row = [preprocessing_time, file_stat.filepath]
+                    self.add_row(self.table_preprocessed_files, row, True)
+
     @staticmethod
-    def add_row(table: QtWidgets.QTableWidget, row: list[str]):
+    def add_row(table: QtWidgets.QTableWidget, row: List[str], is_file_table: bool = False):
         """sets the table widget rows to row data"""
 
         row_index = table.rowCount()
-        for i, item in enumerate(row):
-            table.setItem(row_index, i, QtWidgets.QTableWidgetItem(item))
-
-    def add_row_to_compiled_file_table(self, row):
-        """sets the table widget rows to row data"""
-
-        row_index = self.table_compiled_files.rowCount()
-        self.table_compiled_files.insertRow(row_index)
-        item = QtWidgets.QTableWidgetItem()
-        item.setData(0, row[0])
-        self.table_compiled_files.setItem(row_index, 0, item)
-        self.table_compiled_files.setItem(row_index, 1, QtWidgets.QTableWidgetItem(row[1]))
-
-    def add_row_to_preprocessed_file_table(self, row):
-        """sets the table widget rows to row data"""
-
-        row_index = self.table_preprocessed_files.rowCount()
-        self.table_preprocessed_files.insertRow(row_index)
-        item = QtWidgets.QTableWidgetItem()
-        item.setData(0, row[0])
-        self.table_preprocessed_files.setItem(row_index, 0, item)
-        self.table_preprocessed_files.setItem(row_index, 1, QtWidgets.QTableWidgetItem(row[1]))
-
-    def add_row_to_host_table(self, row):
-        """sets the table widget rows to row data"""
-
-        row_index = self.table_hosts.rowCount()
-        self.table_hosts.insertRow(row_index)
-        for i, item in enumerate(row):
-            self.table_hosts.setItem(row_index, i, QtWidgets.QTableWidgetItem(item))
+        table.insertRow(row_index)
+        if is_file_table:
+            item = QtWidgets.QTableWidgetItem()
+            item.setData(0, row[0])
+            table.setItem(row_index, 0, item)
+            table.setItem(row_index, 1, QtWidgets.QTableWidgetItem(row[1]))
+        else:
+            for i, item in enumerate(row):
+                table.setItem(row_index, i, QtWidgets.QTableWidgetItem(item))
 
     def add_row_to_table(self, row):
         """sets the table widget rows to row data"""

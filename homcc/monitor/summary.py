@@ -30,9 +30,13 @@ class FileStats:
     compilation_stop: Optional[int] = None
 
     def get_compilation_time(self) -> int:
+        if (self.compilation_start is None) or (self.compilation_stop is None):
+            return -1
         return self.compilation_stop - self.compilation_start
 
     def get_preprocessing_time(self) -> int:
+        if (self.preprocessing_stop is None) or (self.preprocessing_start is None):
+            return -1
         return self.preprocessing_stop - self.preprocessing_start
 
 
