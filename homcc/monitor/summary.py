@@ -50,6 +50,10 @@ class SummaryStats:
     host_stats: Dict[str, HostStats] = {}
     file_stats: Dict[str, FileStats] = {}
 
+    def __init__(self):
+        self.host_stats = {}
+        self.file_stats = {}
+
     def register_compilation(self, filename: str, hostname: str, timestamp: int):
         # if new host add to dict and default its stats
         # track host stats
