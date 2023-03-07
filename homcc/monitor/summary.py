@@ -1,11 +1,12 @@
 """summarized statistics to keep track of files over time"""
-from typing import Dict, Optional
 from dataclasses import dataclass, field
+from typing import Dict, Optional
 
 
 @dataclass
 class HostStats:
     """summarized statistics of hosts"""
+
     name: str
     current_compilations: int = 0
     total_compilations: int = 0
@@ -22,6 +23,7 @@ class HostStats:
 @dataclass
 class FileStats:
     """summarized statistics of files"""
+
     filepath: str = field(hash=True)
     creation_time: int = field(hash=True)
 
@@ -31,7 +33,7 @@ class FileStats:
     compilation_stop: Optional[int] = None
 
     def get_compilation_time(self) -> int:
-        if self.compilation_start is None or self. compilation_stop is None:
+        if self.compilation_start is None or self.compilation_stop is None:
             raise ValueError("Compilation start or stop was not set yet!")
         return self.compilation_stop - self.compilation_start
 

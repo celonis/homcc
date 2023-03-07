@@ -24,6 +24,7 @@ class CompilationInfo:
 
 class StateFileEventHandler(PatternMatchingEventHandler):
     """tracks state files and adds or removes state files into a list based on their creation or deletion"""
+
     summary: SummaryStats = SummaryStats()
 
     def __init__(self, *args, **kwargs):

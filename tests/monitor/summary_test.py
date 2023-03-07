@@ -6,6 +6,7 @@ from homcc.monitor.summary import SummaryStats
 
 class TestSummaryStats:
     """Tests for summary.py"""
+
     def test_register_compilation(self):
         summary = SummaryStats()
 
