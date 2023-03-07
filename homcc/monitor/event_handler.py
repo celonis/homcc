@@ -40,7 +40,6 @@ class StateFileEventHandler(PatternMatchingEventHandler):
         return None
 
     def on_any_event(self, event: FileSystemEvent):
-
         if event.is_directory:
             return None
 
@@ -69,21 +68,19 @@ class StateFileEventHandler(PatternMatchingEventHandler):
                 state.source_base_filename,
             )
 
-            logger.debug("'%s' - '%s' has been created!", datetime.now().strftime('%d/%m/%Y %H:%M:%S'), event.src_path)
+            logger.debug("'%s' - '%s' has been created!", datetime.now().strftime("%d/%m/%Y %H:%M:%S"), event.src_path)
 
         elif event.event_type == "modified":
-            """tracks modification of a state file"""
-
+            # tracks modification of a state file
             if statefile := self.read_statefile(Path(event.src_path)) and self.table_info.get(event.src_path):
                 self.table_info[event.src_path].phase = statefile.phase
             else:
                 # file was already deleted
                 self.table_info.pop(event.src_path, None)
 
-            logger.debug("'%s' - '%s' has been modified!", datetime.now().strftime('%d/%m/%Y %H:%M:%S'), event.src_path)
+            logger.debug("'%s' - '%s' has been modified!", datetime.now().strftime("%d/%m/%Y %H:%M:%S"), event.src_path)
 
         elif event.event_type == "deleted":
-            """tracks deletion of a state file"""
-
+            # tracks deletion of a state file
             self.table_info.pop(event.src_path, None)
-            logger.debug("'%s' - '%s' has been deleted!", datetime.now().strftime('%d/%m/%Y %H:%M:%S'), event.src_path)
+            logger.debug("'%s' - '%s' has been deleted!", datetime.now().strftime("%d/%m/%Y %H:%M:%S"), event.src_path)
