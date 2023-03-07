@@ -1,10 +1,12 @@
 """summarized statistics to keep track of files over time"""
-from typing import Optional, Dict
 from dataclasses import dataclass, field
+from typing import Dict, Optional
 
 
 @dataclass
 class HostStats:
+    """summarized statistics of hosts"""
+
     name: str
     current_compilations: int = 0
     total_compilations: int = 0
@@ -20,9 +22,10 @@ class HostStats:
 
 @dataclass
 class FileStats:
+    """summarized statistics of files"""
+
     filepath: str = field(hash=True)
     creation_time: int = field(hash=True)
-    # phase: CompilationPhase  # might be unnecessary
 
     preprocessing_start: Optional[int] = None
     preprocessing_stop: Optional[int] = None
@@ -30,26 +33,31 @@ class FileStats:
     compilation_stop: Optional[int] = None
 
     def get_compilation_time(self) -> int:
-        if (self.compilation_start is None) or (self.compilation_stop is None):
-            return -1
+        if self.compilation_start is None or self.compilation_stop is None:
+            raise ValueError("Compilation start or stop was not set yet!")
         return self.compilation_stop - self.compilation_start
 
     def get_preprocessing_time(self) -> int:
-        if (self.preprocessing_stop is None) or (self.preprocessing_start is None):
-            return -1
+        if self.preprocessing_start is None or self.preprocessing_stop is None:
+            raise ValueError("Preprocessing start or stop was not set yet!")
         return self.preprocessing_stop - self.preprocessing_start
 
 
 class SummaryStats:
     """summarized statistics to not lose information about files over time"""
+
     # these two fields will be resettable in the future via the RESET button
     host_stats: Dict[str, HostStats] = {}
     file_stats: Dict[str, FileStats] = {}
 
+    def __init__(self):
+        self.host_stats = {}
+        self.file_stats = {}
+
     def register_compilation(self, filename: str, hostname: str, timestamp: int):
         # if new host add to dict and default its stats
         # track host stats
-        if not (hostname in self.host_stats):
+        if hostname not in self.host_stats:
             self.host_stats[hostname] = HostStats(hostname)
         self.host_stats[hostname].register_compilation()
 
@@ -62,7 +70,9 @@ class SummaryStats:
 
     def preprocessing_stop(self, filename: str, timestamp: int):
         file_stat = self.file_stats[filename]
-        if file_stat.preprocessing_start > timestamp:
+        if file_stat.preprocessing_start is None:
+            raise ValueError("Preprocessing start was not initialized yet!")
+        elif file_stat.preprocessing_start > timestamp:
             raise ValueError("Timestamp of preprocessing start cannot be after timestamp of preprocessing end!")
         file_stat.preprocessing_stop = timestamp
 
@@ -73,7 +83,9 @@ class SummaryStats:
 
     def compilation_stop(self, filename: str, timestamp: int):
         file_stat = self.file_stats[filename]
-        if file_stat.compilation_start > timestamp:
+        if file_stat.compilation_start is None:
+            raise ValueError("Compilation start was not initialized yet!")
+        elif file_stat.compilation_start > timestamp:
             raise ValueError("Timestamp of compilation start cannot be after timestamp of compilation end!")
         file_stat.compilation_stop = timestamp
 

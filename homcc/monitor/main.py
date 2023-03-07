@@ -4,10 +4,8 @@ homcc monitor
 """
 import os
 import sys
-from typing import List
 
 from PySide2 import QtCore, QtWidgets
-from PySide2.QtWidgets import QApplication, QMainWindow, QPushButton
 from PySide2.QtCore import Qt
 from PySide2.QtWidgets import (
     QApplication,
@@ -17,10 +15,9 @@ from PySide2.QtWidgets import (
     QPushButton,
     QVBoxLayout,
 )
-from watchdog.events import PatternMatchingEventHandler
 from watchdog.observers import Observer
 
-sys.path.append(os.path.join(os.path.dirname(__file__), "../.."))
+sys.path.append(os.path.join(os.path.dirname(__file__), '../..'))
 
 from homcc.common.statefile import StateFile  # pylint: disable=wrong-import-position
 from homcc.monitor.event_handler import (  # pylint: disable=wrong-import-position
@@ -40,7 +37,7 @@ class MainWindow(QMainWindow):
         super().__init__(*args, **kwargs)
 
         self.state_file_event_handler = StateFileEventHandler(
-            patterns=["*"], ignore_patterns=None, ignore_directories=False, case_sensitive=True
+            patterns=['*'], ignore_patterns=None, ignore_directories=False, case_sensitive=True
         )
         file_observer = Observer()
         file_observer.schedule(self.state_file_event_handler, str(StateFile.HOMCC_STATE_DIR), recursive=True)
@@ -154,7 +151,7 @@ class MainWindow(QMainWindow):
                     value.hostname,
                     value.phase,
                     value.file_path,
-                    "0",
+                    '0',
                 ]
                 self.add_row_to_table(row)
             self.state_file_event_handler.table_info.clear()
@@ -166,7 +163,7 @@ class MainWindow(QMainWindow):
                 if preprocessing_time >= 0:
                     row = [preprocessing_time, file_stat.filepath]
                     self.add_row(self.table_preprocessed_files, row, True)
-                    
+
         if self.state_file_event_handler.finished_compiling_files:
             self.table_compiled_files.setRowCount(0)
             for file_stat in self.state_file_event_handler.summary.file_stats.values():
@@ -207,12 +204,8 @@ class MainWindow(QMainWindow):
             count_item = QtWidgets.QTableWidgetItem(str(self.row_counters[row_index]) + 's')
             self.table_curr_jobs.setItem(row_index, 3, count_item)
 
-    #def __del__(self):
-    #    self.my_observer.stop()
-    #    self.my_observer.join()
 
-
-if __name__ == "__main__":
+if __name__ == '__main__':
     app = QApplication(sys.argv)
     window = MainWindow()
     app.exec_()

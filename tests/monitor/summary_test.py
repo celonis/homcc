@@ -1,12 +1,12 @@
 """Tests regarding the summary stats module of homcc."""
-from datetime import datetime
-
 import pytest
 
 from homcc.monitor.summary import SummaryStats
 
 
 class TestSummaryStats:
+    """Tests for summary.py"""
+
     def test_register_compilation(self):
         summary = SummaryStats()
 
@@ -60,7 +60,7 @@ class TestSummaryStats:
 
     def test_time_measures(self):
         summary = SummaryStats()
-        summary.register_compilation("foo.cpp", "localhost",0)
+        summary.register_compilation("foo.cpp", "localhost", 0)
 
         foo_start_comp = 0
         summary.compilation_start("foo.cpp", foo_start_comp)

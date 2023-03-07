@@ -44,7 +44,6 @@ class StateFileEventHandler(PatternMatchingEventHandler):
         return None
 
     def on_any_event(self, event: FileSystemEvent):
-
         if event.is_directory:
             return None
         try:
@@ -74,13 +73,14 @@ class StateFileEventHandler(PatternMatchingEventHandler):
             )
 
             time_stamp = datetime.now()
-            logger.debug("'%s' - '%s' has been created!", time_stamp.strftime('%d/%m/%Y %H:%M:%S'), event.src_path)
+            logger.debug("'%s' - '%s' has been created!", time_stamp.strftime("%d/%m/%Y %H:%M:%S"), event.src_path)
 
             self.summary.register_compilation(compilation_info.file_path, compilation_info.hostname,
                                               int(time_stamp.timestamp()))
 
-        elif event.event_type == 'modified':
-            """tracks modification of a state file"""
+        elif event.event_type == "modified":
+            # tracks modification of a state file
+
             if statefile := self.read_statefile(Path(event.src_path)) and self.table_info.get(event.src_path):
                 test = statefile.phase == 'COMPILE'
                 if statefile.phase == 'COMPILE':
@@ -98,10 +98,10 @@ class StateFileEventHandler(PatternMatchingEventHandler):
                 # file was already deleted
                 self.table_info.pop(event.src_path, None)
 
-            logger.debug("'%s' - '%s' has been modified!", datetime.now().strftime('%d/%m/%Y %H:%M:%S'), event.src_path)
+            logger.debug("'%s' - '%s' has been modified!", datetime.now().strftime("%d/%m/%Y %H:%M:%S"), event.src_path)
 
         elif event.event_type == "deleted":
-            """tracks deletion of a state file"""
+            # tracks deletion of a state file
 
             self.table_info.pop(event.src_path, None)
-            logger.debug("'%s' - '%s' has been deleted!", datetime.now().strftime('%d/%m/%Y %H:%M:%S'), event.src_path)
+            logger.debug("'%s' - '%s' has been deleted!", datetime.now().strftime("%d/%m/%Y %H:%M:%S"), event.src_path)
