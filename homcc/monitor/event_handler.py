@@ -1,11 +1,8 @@
 """observer class to track state files"""
 
 import logging
-import os
-import time
 from dataclasses import dataclass
 from datetime import datetime
-from fileinput import filename
 from pathlib import Path
 from typing import Dict, Optional
 
@@ -26,6 +23,7 @@ class CompilationInfo:
 
 class StateFileEventHandler(PatternMatchingEventHandler):
     """tracks state files and adds or removes state files into a list based on their creation or deletion"""
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.table_info: Dict[Path, CompilationInfo] = {}
@@ -46,7 +44,7 @@ class StateFileEventHandler(PatternMatchingEventHandler):
         if event.is_directory:
             return None
 
-        elif event.event_type == 'created':
+        elif event.event_type == "created":
             try:
                 file = Path.read_bytes(Path(event.src_path))
             except FileNotFoundError:
@@ -71,10 +69,9 @@ class StateFileEventHandler(PatternMatchingEventHandler):
                 state.source_base_filename,
             )
 
-            print("'%s' - '%s' has been created!", datetime.now().strftime('%d/%m/%Y %H:%M:%S'), event.src_path)
             logger.debug("'%s' - '%s' has been created!", datetime.now().strftime('%d/%m/%Y %H:%M:%S'), event.src_path)
 
-        elif event.event_type == 'modified':
+        elif event.event_type == "modified":
             """tracks modification of a state file"""
 
             if statefile := self.read_statefile(Path(event.src_path)) and self.table_info.get(event.src_path):
@@ -82,13 +79,11 @@ class StateFileEventHandler(PatternMatchingEventHandler):
             else:
                 # file was already deleted
                 self.table_info.pop(event.src_path, None)
-            print("'%s' - '%s' has been modified!", datetime.now().strftime('%d/%m/%Y %H:%M:%S'), event.src_path)
 
             logger.debug("'%s' - '%s' has been modified!", datetime.now().strftime('%d/%m/%Y %H:%M:%S'), event.src_path)
 
-        elif event.event_type == 'deleted':
+        elif event.event_type == "deleted":
             """tracks deletion of a state file"""
 
             self.table_info.pop(event.src_path, None)
-            print("'%s' - '%s' has been deleted!", datetime.now().strftime('%d/%m/%Y %H:%M:%S'), event.src_path)
             logger.debug("'%s' - '%s' has been deleted!", datetime.now().strftime('%d/%m/%Y %H:%M:%S'), event.src_path)
