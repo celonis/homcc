@@ -24,6 +24,7 @@ class CompilationInfo:
 
 class StateFileEventHandler(PatternMatchingEventHandler):
     """tracks state files and adds or removes state files into a list based on their creation or deletion"""
+
     summary: SummaryStats = SummaryStats()
     finished_preprocessing_files: bool = False
     finished_compiling_files: bool = False
@@ -75,22 +76,23 @@ class StateFileEventHandler(PatternMatchingEventHandler):
             time_stamp = datetime.now()
             logger.debug("'%s' - '%s' has been created!", time_stamp.strftime("%d/%m/%Y %H:%M:%S"), event.src_path)
 
-            self.summary.register_compilation(compilation_info.file_path, compilation_info.hostname,
-                                              int(time_stamp.timestamp()))
+            self.summary.register_compilation(
+                compilation_info.file_path, compilation_info.hostname, int(time_stamp.timestamp())
+            )
 
         elif event.event_type == "modified":
             # tracks modification of a state file
 
             if statefile := self.read_statefile(Path(event.src_path)) and self.table_info.get(event.src_path):
-                test = statefile.phase == 'COMPILE'
-                if statefile.phase == 'COMPILE':
+                test = statefile.phase == "COMPILE"
+                if statefile.phase == "COMPILE":
                     self.summary.compilation_start(compilation_info.file_path, int(datetime.now().timestamp()))
-                elif self.table_info[event.src_path].phase == 'COMPILE':
+                elif self.table_info[event.src_path].phase == "COMPILE":
                     self.summary.compilation_stop(compilation_info.file_path, int(datetime.now().timestamp()))
                     self.finished_compiling_files = True
-                elif statefile.phase == 'CPP':
+                elif statefile.phase == "CPP":
                     self.summary.preprocessing_start(compilation_info.file_path, int(datetime.now().timestamp()))
-                elif self.table_info[event.src_path].phase == 'CPP':
+                elif self.table_info[event.src_path].phase == "CPP":
                     self.summary.preprocessing_stop(compilation_info.file_path, int(datetime.now().timestamp()))
                     self.finished_preprocessing_files = True
                 self.table_info[event.src_path].phase = statefile.phase

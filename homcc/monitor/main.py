@@ -4,6 +4,7 @@ homcc monitor
 """
 import os
 import sys
+from typing import List
 
 from PySide2 import QtCore, QtWidgets
 from PySide2.QtCore import Qt
@@ -71,7 +72,7 @@ class MainWindow(QMainWindow):
 
     @staticmethod
     def _create_table_widget(
-        col_header: list[str], width: int = MIN_TABLE_WIDTH, height: int = MIN_TABLE_HEIGHT
+        col_header: List[str], width: int = MIN_TABLE_WIDTH, height: int = MIN_TABLE_HEIGHT
     ) -> QtWidgets.QTableWidget:
         table = QtWidgets.QTableWidget()
         table.setColumnCount(len(col_header))
@@ -179,15 +180,15 @@ class MainWindow(QMainWindow):
         row_index = table.rowCount()
         table.insertRow(row_index)
         if is_file_table:
-            item = QtWidgets.QTableWidgetItem()
-            item.setData(0, row[0])
-            table.setItem(row_index, 0, item)
+            widget_item = QtWidgets.QTableWidgetItem()
+            widget_item.setData(0, row[0])
+            table.setItem(row_index, 0, widget_item)
             table.setItem(row_index, 1, QtWidgets.QTableWidgetItem(row[1]))
         else:
             for i, item in enumerate(row):
                 table.setItem(row_index, i, QtWidgets.QTableWidgetItem(item))
 
-    def add_row_to_table(self, row):
+    def add_row_to_table(self, row: List[str]):
         """sets the table widget rows to row data"""
 
         row_index = self.table_curr_jobs.rowCount()
