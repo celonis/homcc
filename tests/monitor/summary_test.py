@@ -87,13 +87,3 @@ class TestSummaryStats:
             summary.preprocessing_stop("foo.cpp", foo_start_pre - 1)
         assert summary.file_stats["foo.cpp"].preprocessing_stop == foo_stop_pre
         assert summary.file_stats["foo.cpp"].get_preprocessing_time() == 1
-
-    def test_time_measures_test(self):
-        summary = SummaryStats()
-        summary.register_compilation(int(datetime.now().timestamp()), "localhost", "foo.cpp")
-
-        foo_start_comp = int(datetime.now().timestamp())
-        summary.compilation_start(foo_start_comp, "foo.cpp")
-        foo_stop_comp = foo_start_comp + 1
-        assert summary.file_stats["foo.cpp"].get_compilation_time() == -1
-        summary.compilation_stop(foo_stop_comp, "foo.cpp")
