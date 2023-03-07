@@ -10,12 +10,12 @@ class TestSummaryStats:
     def test_register_compilation(self):
         summary = SummaryStats()
 
-        summary.register_compilation(1000000, "remote-server.de:1337", "main.cpp")
+        summary.register_compilation(1_000_000, "remote-server.de:1337", "main.cpp")
         assert len(summary.host_stats) == 1
         assert len(summary.file_stats) == 1
         assert summary.host_stats["remote-server.de:1337"].current_compilations == 1
         assert summary.host_stats["remote-server.de:1337"].total_compilations == 1
-        assert summary.file_stats["main.cpp"].creation_time == 1000000
+        assert summary.file_stats["main.cpp"].creation_time == 1_000_000
 
     def test_register_same_file_twice(self):
         summary = SummaryStats()
