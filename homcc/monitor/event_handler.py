@@ -84,7 +84,6 @@ class StateFileEventHandler(PatternMatchingEventHandler):
             # tracks modification of a state file
 
             if statefile := self.read_statefile(Path(event.src_path)) and self.table_info.get(event.src_path):
-                test = statefile.phase == "COMPILE"
                 if statefile.phase == "COMPILE":
                     self.summary.compilation_start(compilation_info.file_path, int(datetime.now().timestamp()))
                 elif self.table_info[event.src_path].phase == "COMPILE":
