@@ -24,6 +24,7 @@ class CompilationInfo:
 
 class StateFileEventHandler(PatternMatchingEventHandler):
     """tracks state files and adds or removes state files into a list based on their creation or deletion"""
+    summary: SummaryStats = SummaryStats()
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -70,10 +71,11 @@ class StateFileEventHandler(PatternMatchingEventHandler):
             )
 
             time_stamp = datetime.now()
-            logger.debug("'%s' - '%s' has been created!", time_stamp.strftime('%d/%m/%Y %H:%M:%S'), event.src_path)
+            logger.debug("'%s' - '%s' has been created!", time_stamp.strftime("%d/%m/%Y %H:%M:%S"), event.src_path)
 
-            self.summary.register_compilation(int(time_stamp.timestamp()), compilation_info.hostname,
-                                          compilation_info.file_path)
+            self.summary.register_compilation(
+                compilation_info.file_path, compilation_info.hostname, int(time_stamp.timestamp())
+            )
 
         elif event.event_type == "modified":
             # tracks modification of a state file
