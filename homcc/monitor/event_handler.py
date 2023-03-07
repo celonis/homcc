@@ -1,30 +1,36 @@
+"""observer class to track state files"""
+
 import logging
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import List
 
 from watchdog.events import FileSystemEvent, PatternMatchingEventHandler
 
+from homcc.common.constants import ENCODING
 from homcc.common.statefile import StateFile
 
 logger = logging.getLogger(__name__)
 
 
+@dataclass
 class CompilationInfo:
-    # extracted from on_created:data_list
     event_src_path: Path
-    state_hostname: str
-    phase_name: str
-    source_base_filename: str
+    hostname: str
+    phase: str
+    file_path: str
 
 
-class StateFileObserver(PatternMatchingEventHandler):
-    table_info: List[CompilationInfo] = []
+class StateFileEventHandler(PatternMatchingEventHandler):
+    """tracks state files and adds or removes state files into a list based on their creation or deletion"""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.table_info: List[CompilationInfo] = []
 
     def on_created(self, event: FileSystemEvent):
         """tracks the creation of a state file and reads its data into table_info"""
-
-        data_list = CompilationInfo()
 
         try:
             file = Path.read_bytes(Path(event.src_path))
@@ -36,18 +42,19 @@ class StateFileObserver(PatternMatchingEventHandler):
 
         state: StateFile = StateFile.from_bytes(file)
 
-        data_list.event_src_path = event.src_path
-        data_list.state_hostname = state.hostname.decode("utf-8")
-        data_list.phase_name = StateFile.ClientPhase(state.phase).name
-        data_list.source_base_filename = state.source_base_filename.decode("utf-8")
-
-        self.table_info.append(data_list)
+        compilation_info = CompilationInfo(
+            event_src_path=event.src_path,
+            hostname=state.hostname.decode(ENCODING),
+            phase=StateFile.ClientPhase(state.phase).name,
+            file_path=state.source_base_filename.decode(ENCODING),
+        )
+        self.table_info.append(compilation_info)
 
         logger.debug(
             "Created entry for hostname '%s' in Phase '%s' with source base filename '%s' ",
-            state.hostname.decode("utf-8"),
+            state.hostname.decode(ENCODING),
             StateFile.ClientPhase(state.phase).name,
-            state.source_base_filename.decode("utf-8"),
+            state.source_base_filename,
         )
 
         logger.debug("'%s' - '%s' has been created!", datetime.now().strftime('%d/%m/%Y %H:%M:%S'), event.src_path)
@@ -55,9 +62,8 @@ class StateFileObserver(PatternMatchingEventHandler):
     def on_deleted(self, event: FileSystemEvent):
         """tracks deletion of a state file - not actively used"""
 
-        for e in self.table_info:
-            if e.event_src_path == event.src_path:
-                self.table_info.remove(e)
+        self.table_info = [e for e in self.table_info if e.event_src_path != event.src_path]
+
         logger.debug("'%s' - '%s' has been deleted!", datetime.now().strftime('%d/%m/%Y %H:%M:%S'), event.src_path)
 
     @staticmethod

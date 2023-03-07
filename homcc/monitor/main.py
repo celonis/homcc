@@ -3,10 +3,10 @@
 homcc monitor
 """
 import sys
-import time
-from pathlib import Path
+from typing import List
 
 from PySide2 import QtCore, QtWidgets
+from PySide2.QtWidgets import QApplication, QMainWindow, QPushButton
 from PySide2.QtCore import Qt
 from PySide2.QtWidgets import (
     QApplication,
@@ -19,29 +19,8 @@ from PySide2.QtWidgets import (
 from watchdog.events import PatternMatchingEventHandler
 from watchdog.observers import Observer
 
-from homcc.monitor.observer import StateFileObserver
-
-""" HOMCC monitor: homccm"""
-
-__version__: str = "0.0.1"
-
-
-class WorkerThread(QtCore.QThread):
-    """thread that sleeps for one second and emits row_ready signal to alert QMainWindow when new data arrives"""
-
-    def __init__(self, parent=None):
-        super().__init__(parent)
-
-    def run(self):
-        while True:
-            time.sleep(1)
-            if len(StateFileObserver.table_info) != 0:
-                for data in StateFileObserver.table_info:
-                    row = [data.state_hostname, data.phase_name, data.source_base_filename, "0"]
-                    self.row_ready.emit(row)
-                StateFileObserver.table_info.clear()
-
-    row_ready = QtCore.Signal(list)
+from homcc.common.statefile import StateFile
+from homcc.monitor.event_handler import StateFileEventHandler
 
 
 class MainWindow(QMainWindow):
@@ -53,36 +32,51 @@ class MainWindow(QMainWindow):
     SUB_HEADER_SIZE: int = 12
 
     def __init__(self, *args, **kwargs):
-        super(MainWindow, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
 
-        file_event_handler = PatternMatchingEventHandler(
+        self.state_file_event_handler = StateFileEventHandler(
             patterns=["*"], ignore_patterns=None, ignore_directories=False, case_sensitive=True
         )
+        file_observer = Observer()
+        file_observer.schedule(self.state_file_event_handler, str(StateFile.HOMCC_STATE_DIR), recursive=True)
 
-        state_file_observer = StateFileObserver(file_event_handler)
-        file_event_handler.on_created = state_file_observer.on_created
-        file_event_handler.on_deleted = state_file_observer.on_deleted
-        file_event_handler.on_modified = state_file_observer.on_modified
-        file_event_handler.on_moved = state_file_observer.on_moved
-
-        path = Path.home() / ".distcc" / "state"
-        self.my_observer = Observer()
-        self.my_observer.schedule(file_event_handler, str(path), recursive=True)
-
-        self.my_observer.start()
+        file_observer.start()
 
         self.setWindowTitle('HOMCC Monitor')
 
         self._create_layout()
 
         self.row_counters = {}  # to store time data
-        self.timer = QtCore.QTimer(self)
-        self.timer.timeout.connect(self.update_time)
-        self.timer.start(1000)  # updates every second
+        self.elapsed_time_timer = QtCore.QTimer(self)
+        self.elapsed_time_timer.timeout.connect(self.update_time)
+        self.elapsed_time_timer.start(1000)  # updates every second
 
-        self.worker_thread = WorkerThread(self)
-        self.worker_thread.row_ready.connect(self.add_row_to_table)  # connects to add_row_to_table when signal is ready
-        self.worker_thread.start()
+        self.add_row_timer = QtCore.QTimer(self)
+        self.add_row_timer.timeout.connect(self.update_compilation_table_data)
+        self.add_row_timer.start(1000)  # updates every second
+
+        self.button.clicked.connect(self.toggle_mode)
+        self.button.setGeometry(405, 0, 100, 22)
+
+        self.table_curr_jobs.setStyleSheet("QTableWidget { background-color: white; color: black; }")
+
+        self.show()
+
+    def toggle_mode(self):
+        if self.table_curr_jobs.styleSheet() == "QTableWidget { background-color: white; color: black; }":
+            self.table_curr_jobs.setStyleSheet("QTableWidget { background-color: black; color: white; }")
+            self.table_curr_jobs.update()
+        else:
+            self.table_curr_jobs.setStyleSheet("QTableWidget { background-color: white; color: black; }")
+            self.table_curr_jobs.update()
+
+    def update_compilation_table_data(self):
+        """updates row data on table every second"""
+        if self.state_file_event_handler.table_info:
+            for data in self.state_file_event_handler.table_info:
+                row = [data.hostname, data.phase, data.file_path, "0"]
+                self.add_row_to_table(row)
+            self.state_file_event_handler.table_info.clear()
 
     @staticmethod
     def _create_text_widget(text: str, font_size: int) -> QtWidgets.QWidget:
@@ -116,11 +110,13 @@ class MainWindow(QMainWindow):
     def _create_left_layout(self) -> QtWidgets.QWidget:
         self.table_curr_jobs = self._create_table_widget(['Host', 'State', 'Source File', 'Time Elapsed'])
         curr_jobs = self._create_text_widget('Current Jobs', self.HEADER_SIZE)
+        self.button = QPushButton("Toggle Mode", self)
 
         left_layout_1 = QVBoxLayout()
         left_layout_2 = QHBoxLayout()
 
         left_layout_2.addWidget(curr_jobs)
+        left_layout_2.addWidget(self.button)
         left_top_line = QtWidgets.QWidget()
         left_top_line.setLayout(left_layout_2)
 
@@ -167,7 +163,7 @@ class MainWindow(QMainWindow):
         right_side.setLayout(right_layout_1)
         return right_side
 
-    def add_row_to_table(self, row):
+    def add_row_to_table(self, row: List):
         """sets the table widget rows to row data"""
 
         row_index = self.table_curr_jobs.rowCount()
@@ -185,13 +181,12 @@ class MainWindow(QMainWindow):
             count_item = QtWidgets.QTableWidgetItem(str(self.row_counters[row_index]) + 's')
             self.table_curr_jobs.setItem(row_index, 3, count_item)
 
-    def __del__(self):
-        self.my_observer.stop()
-        self.my_observer.join()
+    #def __del__(self):
+    #    self.my_observer.stop()
+    #    self.my_observer.join()
 
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
     window = MainWindow()
-    window.show()
     app.exec_()
