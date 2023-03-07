@@ -11,7 +11,6 @@ from pathlib import Path
 from typing import ClassVar
 
 from homcc.common.arguments import Arguments
-from homcc.common.constants import ENCODING
 from homcc.common.host import ConnectionType, Host
 
 logger = logging.getLogger(__name__)
