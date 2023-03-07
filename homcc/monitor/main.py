@@ -72,7 +72,7 @@ class MainWindow(QMainWindow):
         """updates row data on table every second"""
         if self.state_file_event_handler.table_info:
             for data in self.state_file_event_handler.table_info:
-                row = [data.hostname, data.phase, data.file_path, "0"]
+                row = [self.state_file_event_handler.table_info[data].hostname, self.state_file_event_handler.table_info[data].phase, self.state_file_event_handler.table_info[data].file_path, "0"]
                 self.add_row_to_table(row)
             self.state_file_event_handler.table_info.clear()
 

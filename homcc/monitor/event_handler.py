@@ -1,10 +1,13 @@
 """observer class to track state files"""
 
 import logging
+import os
+import time
 from dataclasses import dataclass
 from datetime import datetime
+from fileinput import filename
 from pathlib import Path
-from typing import List
+from typing import Dict, Optional
 
 from watchdog.events import FileSystemEvent, PatternMatchingEventHandler
 
@@ -16,7 +19,6 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class CompilationInfo:
-    event_src_path: Path
     hostname: str
     phase: str
     file_path: str
@@ -24,56 +26,69 @@ class CompilationInfo:
 
 class StateFileEventHandler(PatternMatchingEventHandler):
     """tracks state files and adds or removes state files into a list based on their creation or deletion"""
-
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.table_info: List[CompilationInfo] = []
+        self.table_info: Dict[Path, CompilationInfo] = {}
 
-    def on_created(self, event: FileSystemEvent):
-        """tracks the creation of a state file and reads its data into table_info"""
+    @staticmethod
+    def read_statefile(filepath: Path) -> Optional[StateFile]:
+        """return read StateFile if existent and not empty"""
 
         try:
-            file = Path.read_bytes(Path(event.src_path))
+            if file_bytes := Path.read_bytes(filepath):
+                return StateFile.from_bytes(file_bytes)
         except FileNotFoundError:
-            return
+            logger.debug("File %s was deleted again before being read.", filepath)
+        return None
 
-        if len(file) == 0:
-            return
+    def on_any_event(self, event: FileSystemEvent):
 
-        state: StateFile = StateFile.from_bytes(file)
+        if event.is_directory:
+            return None
 
-        compilation_info = CompilationInfo(
-            event_src_path=event.src_path,
-            hostname=state.hostname.decode(ENCODING),
-            phase=StateFile.ClientPhase(state.phase).name,
-            file_path=state.source_base_filename.decode(ENCODING),
-        )
-        self.table_info.append(compilation_info)
+        elif event.event_type == 'created':
+            try:
+                file = Path.read_bytes(Path(event.src_path))
+            except FileNotFoundError:
+                return
 
-        logger.debug(
-            "Created entry for hostname '%s' in Phase '%s' with source base filename '%s' ",
-            state.hostname.decode(ENCODING),
-            StateFile.ClientPhase(state.phase).name,
-            state.source_base_filename,
-        )
+            if len(file) == 0:
+                return
 
-        logger.debug("'%s' - '%s' has been created!", datetime.now().strftime('%d/%m/%Y %H:%M:%S'), event.src_path)
+            state: StateFile = StateFile.from_bytes(file)
 
-    def on_deleted(self, event: FileSystemEvent):
-        """tracks deletion of a state file - not actively used"""
+            compilation_info = CompilationInfo(
+                hostname=state.hostname.decode(ENCODING),
+                phase=StateFile.ClientPhase(state.phase).name,
+                file_path=state.source_base_filename.decode(ENCODING),
+            )
+            self.table_info[event.src_path] = compilation_info
 
-        logger.debug("'%s' - '%s' has been deleted!", datetime.now().strftime('%d/%m/%Y %H:%M:%S'), event.src_path)
+            logger.debug(
+                "Created entry for hostname '%s' in Phase '%s' with source base filename '%s' ",
+                state.hostname.decode(ENCODING),
+                StateFile.ClientPhase(state.phase).name,
+                state.source_base_filename,
+            )
 
-        self.table_info = [e for e in self.table_info if e.event_src_path != event.src_path]
+            print("'%s' - '%s' has been created!", datetime.now().strftime('%d/%m/%Y %H:%M:%S'), event.src_path)
+            logger.debug("'%s' - '%s' has been created!", datetime.now().strftime('%d/%m/%Y %H:%M:%S'), event.src_path)
 
-    @staticmethod
-    def on_modified(event: FileSystemEvent):
-        """tracks modification of a state file - not actively used"""
+        elif event.event_type == 'modified':
+            """tracks modification of a state file"""
 
-        logger.debug("'%s' - '%s' has been modified!", datetime.now().strftime('%d/%m/%Y %H:%M:%S'), event.src_path)
+            if statefile := self.read_statefile(Path(event.src_path)) and self.table_info.get(event.src_path):
+                self.table_info[event.src_path].phase = statefile.phase
+            else:
+                # file was already deleted
+                self.table_info.pop(event.src_path, None)
+            print("'%s' - '%s' has been modified!", datetime.now().strftime('%d/%m/%Y %H:%M:%S'), event.src_path)
 
-    @staticmethod
-    def on_moved(event: FileSystemEvent):
-        """tracks path movement of a state file - not actively used"""
+            logger.debug("'%s' - '%s' has been modified!", datetime.now().strftime('%d/%m/%Y %H:%M:%S'), event.src_path)
 
-        logger.debug("'%s' - '%s' has been moved!", datetime.now().strftime('%d/%m/%Y %H:%M:%S'), event.src_path)
+        elif event.event_type == 'deleted':
+            """tracks deletion of a state file"""
+
+            self.table_info.pop(event.src_path, None)
+            print("'%s' - '%s' has been deleted!", datetime.now().strftime('%d/%m/%Y %H:%M:%S'), event.src_path)
+            logger.debug("'%s' - '%s' has been deleted!", datetime.now().strftime('%d/%m/%Y %H:%M:%S'), event.src_path)
