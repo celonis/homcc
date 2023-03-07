@@ -12,8 +12,8 @@ from watchdog.observers import Observer
 
 sys.path.append(os.path.join(os.path.dirname(__file__), "../.."))
 
-from homcc.common.statefile import StateFile
-from homcc.monitor.event_handler import StateFileEventHandler
+from homcc.common.statefile import StateFile  # pylint: disable=wrong-import-position
+from homcc.monitor.event_handler import StateFileEventHandler  # pylint: disable=wrong-import-position
 
 
 class MainWindow(QMainWindow):
@@ -48,15 +48,6 @@ class MainWindow(QMainWindow):
         self.update_timer.timeout.connect(update)
         self.update_timer.start(1000)  # updates every second
 
-        """
-        self.elapsed_time_timer = QtCore.QTimer(self)
-        self.elapsed_time_timer.timeout.connect(self.update_time)
-        self.elapsed_time_timer.start(1000)  # updates every second
-
-        self.add_row_timer = QtCore.QTimer(self)
-        self.add_row_timer.timeout.connect(self.update_compilation_table_data)
-        self.add_row_timer.start(1000)  # updates every second
-        """
         self.show()
 
     def update_compilation_table_data(self):
