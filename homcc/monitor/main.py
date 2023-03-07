@@ -63,19 +63,6 @@ class MainWindow(QMainWindow):
 
         self.show()
 
-    def update_compilation_table_data(self):
-        """updates row data on table every second"""
-        if self.state_file_event_handler.table_info:
-            for _, value in self.state_file_event_handler.table_info.items():
-                row = [
-                    value.hostname,
-                    value.phase,
-                    value.file_path,
-                    "0",
-                ]
-                self.add_row_to_table(row)
-            self.state_file_event_handler.table_info.clear()
-
     @staticmethod
     def _create_text_widget(text: str, font_size: int) -> QtWidgets.QWidget:
         text_widget = QLabel(text)
@@ -162,22 +149,31 @@ class MainWindow(QMainWindow):
     def update_compilation_table_data(self):
         """updates row data on table every second"""
         if self.state_file_event_handler.table_info:
-            for data in self.state_file_event_handler.table_info:
-                row = [data.hostname, data.phase, data.file_path, "0"]
+            for _, value in self.state_file_event_handler.table_info.items():
+                row = [
+                    value.hostname,
+                    value.phase,
+                    value.file_path,
+                    "0",
+                ]
                 self.add_row_to_table(row)
             self.state_file_event_handler.table_info.clear()
 
-            self.table_compiled_files.setRowCount(0)
+        if self.state_file_event_handler.finished_preprocessing_files:
             self.table_preprocessed_files.setRowCount(0)
+            for file_stat in self.state_file_event_handler.summary.file_stats.values():
+                preprocessing_time = file_stat.get_preprocessing_time()
+                if preprocessing_time >= 0:
+                    row = [preprocessing_time, file_stat.filepath]
+                    self.add_row(self.table_preprocessed_files, row, True)
+                    
+        if self.state_file_event_handler.finished_compiling_files:
+            self.table_compiled_files.setRowCount(0)
             for file_stat in self.state_file_event_handler.summary.file_stats.values():
                 compilation_time = file_stat.get_compilation_time()
                 if compilation_time >= 0:
                     row = [compilation_time, file_stat.filepath]
                     self.add_row(self.table_compiled_files, row, True)
-                preprocessing_time = file_stat.get_preprocessing_time()
-                if preprocessing_time >= 0:
-                    row = [preprocessing_time, file_stat.filepath]
-                    self.add_row(self.table_preprocessed_files, row, True)
 
     @staticmethod
     def add_row(table: QtWidgets.QTableWidget, row: List[str], is_file_table: bool = False):
