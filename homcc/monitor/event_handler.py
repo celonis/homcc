@@ -86,9 +86,6 @@ class StateFileEventHandler(PatternMatchingEventHandler):
             if statefile := self.read_statefile(Path(event.src_path)) and self.table_info.get(event.src_path):
                 if statefile.phase == "COMPILE":
                     self.summary.compilation_start(compilation_info.file_path, int(datetime.now().timestamp()))
-                elif self.table_info[event.src_path].phase == "COMPILE":
-                    self.summary.compilation_stop(compilation_info.file_path, int(datetime.now().timestamp()))
-                    self.finished_compiling_files = True
                 elif statefile.phase == "CPP":
                     self.summary.preprocessing_start(compilation_info.file_path, int(datetime.now().timestamp()))
                 elif self.table_info[event.src_path].phase == "CPP":
@@ -106,3 +103,7 @@ class StateFileEventHandler(PatternMatchingEventHandler):
 
             self.table_info.pop(event.src_path, None)
             logger.debug("'%s' - '%s' has been deleted!", datetime.now().strftime("%d/%m/%Y %H:%M:%S"), event.src_path)
+            self.summary.deregister_compilation(
+                compilation_info.file_path, compilation_info.hostname, int(datetime.now().timestamp())
+            )
+            self.finished_compiling_files = True
