@@ -65,31 +65,45 @@ class StateFileEventHandler(PatternMatchingEventHandler):
         if event.event_type == "moved":
             return
 
+        time_stamp = datetime.now()
+
         logger.debug(
             "'%s' - '%s' has been %s!",
-            datetime.now().strftime("%d/%m/%Y %H:%M:%S"),
+            time_stamp.strftime("%d/%m/%Y %H:%M:%S"),
             event.src_path,
             event.event_type,
         )
 
         # statefile does not exist anymore or deletion was detected
         if not statefile or event.event_type == "deleted":
+            compilation_info = self.table_info[event.src_path]
+            self.summary.deregister_compilation(
+                compilation_info.filename, compilation_info.hostname, int(time_stamp.timestamp())
+            )
             self.table_info.pop(event.src_path, None)
             return
 
         # statefile creation detected
         if event.event_type == "created":
-            time_stamp = datetime.now()
-            self.summary.register_compilation(
-                compilation_info.file_path, compilation_info.hostname, int(time_stamp.timestamp())
-            )
             self.table_info[event.src_path] = CompilationInfo(statefile)
+            self.summary.register_compilation(
+                self.table_info[event.src_path].filename, self.table_info[event.src_path].hostname,
+                int(time_stamp.timestamp())
+            )
             return
 
         # statefile modification detected
         if event.event_type == "modified":
             # check if modification event is also a creation
+            compilation_info = self.table_info[event.src_path]
+            timestamp_now = int(time_stamp.timestamp())
+            if statefile.phase == StateFile.ClientPhase.COMPILE.name:
+                self.summary.compilation_start(compilation_info.filename, timestamp_now)
+            elif statefile.phase == StateFile.ClientPhase.CPP.name:
+                self.summary.preprocessing_start(compilation_info.filename, timestamp_now)
             if event.src_path in self.table_info:
+                if self.table_info[event.src_path].phase == StateFile.ClientPhase.CPP.name:
+                    self.summary.preprocessing_stop(compilation_info.filename, timestamp_now)
                 self.table_info[event.src_path].phase = StateFile.ClientPhase(statefile.phase).name
             else:
                 self.table_info[event.src_path] = CompilationInfo(statefile)
