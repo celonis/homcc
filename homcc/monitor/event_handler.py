@@ -46,14 +46,12 @@ class StateFileEventHandler(PatternMatchingEventHandler):
 
     def on_any_event(self, event: FileSystemEvent):
         if event.is_directory:
-
             return
 
         statefile = self.read_statefile(Path(event.src_path))
 
         if event.event_type == "created":
             if statefile:
-
                 compilation_info = CompilationInfo(statefile)
                 self.table_info[event.src_path] = compilation_info
 
