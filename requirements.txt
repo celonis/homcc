@@ -7,7 +7,7 @@ isort[colors]
 mypy==0.990
 pylint
 PySide2~=5.15
-pytest~=7.2.1
+pytest
 pytest-asyncio
 pytest-cov
 pytest-timeout
