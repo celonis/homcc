@@ -41,46 +41,41 @@ class StateFileEventHandler(PatternMatchingEventHandler):
 
     def on_any_event(self, event: FileSystemEvent):
         if event.is_directory:
-            return None
+            return
 
-        elif event.event_type == "created":
-            try:
-                file = Path.read_bytes(Path(event.src_path))
-            except FileNotFoundError:
-                return
+        statefile = self.read_statefile(Path(event.src_path))
 
-            if len(file) == 0:
-                return
+        if event.event_type == "created":
+            if statefile:
+                compilation_info = CompilationInfo(
+                    hostname=statefile.hostname.decode(ENCODING),
+                    phase=StateFile.ClientPhase(statefile.phase).name,
+                    file_path=statefile.source_base_filename.decode(ENCODING),
+                )
+                self.table_info[event.src_path] = compilation_info
 
-            state: StateFile = StateFile.from_bytes(file)
+                logger.debug(
+                    "Created entry for hostname '%s' in Phase '%s' with source base filename '%s' ",
+                    statefile.hostname.decode(ENCODING),
+                    StateFile.ClientPhase(statefile.phase).name,
+                    statefile.source_base_filename,
+                )
 
-            compilation_info = CompilationInfo(
-                hostname=state.hostname.decode(ENCODING),
-                phase=StateFile.ClientPhase(state.phase).name,
-                file_path=state.source_base_filename.decode(ENCODING),
-            )
-            self.table_info[event.src_path] = compilation_info
+                logger.debug(
+                    "'%s' - '%s' has been created!", datetime.now().strftime("%d/%m/%Y %H:%M:%S"), event.src_path
+                )
 
-            logger.debug(
-                "Created entry for hostname '%s' in Phase '%s' with source base filename '%s' ",
-                state.hostname.decode(ENCODING),
-                StateFile.ClientPhase(state.phase).name,
-                state.source_base_filename,
-            )
-
-            logger.debug("'%s' - '%s' has been created!", datetime.now().strftime("%d/%m/%Y %H:%M:%S"), event.src_path)
+            else:
+                self.table_info.pop(event.src_path, None)
 
         elif event.event_type == "modified":
-            # tracks modification of a state file
-            if statefile := self.read_statefile(Path(event.src_path)) and self.table_info.get(event.src_path):
-                self.table_info[event.src_path].phase = statefile.phase
+            if state := self.read_statefile(Path(event.src_path)) and self.table_info.get(event.src_path):
+                self.table_info[event.src_path].phase = state.phase
             else:
-                # file was already deleted
                 self.table_info.pop(event.src_path, None)
 
             logger.debug("'%s' - '%s' has been modified!", datetime.now().strftime("%d/%m/%Y %H:%M:%S"), event.src_path)
 
         elif event.event_type == "deleted":
-            # tracks deletion of a state file
             self.table_info.pop(event.src_path, None)
             logger.debug("'%s' - '%s' has been deleted!", datetime.now().strftime("%d/%m/%Y %H:%M:%S"), event.src_path)
