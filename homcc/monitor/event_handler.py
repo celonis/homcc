@@ -84,12 +84,13 @@ class StateFileEventHandler(PatternMatchingEventHandler):
             # tracks modification of a state file
 
             if statefile := self.read_statefile(Path(event.src_path)) and self.table_info.get(event.src_path):
-                if statefile.phase == "COMPILE":
-                    self.summary.compilation_start(compilation_info.file_path, int(datetime.now().timestamp()))
-                elif statefile.phase == "CPP":
-                    self.summary.preprocessing_start(compilation_info.file_path, int(datetime.now().timestamp()))
-                elif self.table_info[event.src_path].phase == "CPP":
-                    self.summary.preprocessing_stop(compilation_info.file_path, int(datetime.now().timestamp()))
+                timestamp_now = int(datetime.now().timestamp())
+                if statefile.phase == StateFile.ClientPhase.COMPILE.name:
+                    self.summary.compilation_start(compilation_info.file_path, timestamp_now)
+                elif statefile.phase == StateFile.ClientPhase.CPP.name:
+                    self.summary.preprocessing_start(compilation_info.file_path, timestamp_now)
+                elif self.table_info[event.src_path].phase == StateFile.ClientPhase.CPP.name:
+                    self.summary.preprocessing_stop(compilation_info.file_path, timestamp_now)
                     self.finished_preprocessing_files = True
                 self.table_info[event.src_path].phase = statefile.phase
             else:

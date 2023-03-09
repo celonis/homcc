@@ -164,6 +164,7 @@ class MainWindow(QMainWindow):
                 if preprocessing_time >= 0:
                     row = [preprocessing_time, file_stat.filepath]
                     self.add_row(self.table_preprocessed_files, row, True)
+            self.state_file_event_handler.finished_preprocessing_files = False
 
         if self.state_file_event_handler.finished_compiling_files:
             self.table_compiled_files.setRowCount(0)
@@ -172,6 +173,7 @@ class MainWindow(QMainWindow):
                 if compilation_time >= 0:
                     row = [compilation_time, file_stat.filepath]
                     self.add_row(self.table_compiled_files, row, True)
+            self.state_file_event_handler.finished_compiling_files = True
 
     @staticmethod
     def add_row(table: QtWidgets.QTableWidget, row: List[str], is_file_table: bool = False):
