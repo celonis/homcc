@@ -4,6 +4,7 @@ homcc monitor
 """
 import os
 import sys
+from typing import ClassVar
 from typing import List
 
 from PySide2 import QtCore, QtWidgets
@@ -18,7 +19,7 @@ from PySide2.QtWidgets import (
 )
 from watchdog.observers import Observer
 
-sys.path.append(os.path.join(os.path.dirname(__file__), '../..'))
+sys.path.append(os.path.join(os.path.dirname(__file__), "../.."))
 
 from homcc.common.statefile import StateFile  # pylint: disable=wrong-import-position
 from homcc.monitor.event_handler import (  # pylint: disable=wrong-import-position
@@ -29,30 +30,32 @@ from homcc.monitor.event_handler import (  # pylint: disable=wrong-import-positi
 class MainWindow(QMainWindow):
     """MainWindow class where table activities are carried out"""
 
-    MIN_TABLE_WIDTH: int = 438
-    MIN_TABLE_HEIGHT: int = 200
-    HEADER_SIZE: int = 18
-    SUB_HEADER_SIZE: int = 12
+    MIN_TABLE_WIDTH: ClassVar[int] = 438
+    MIN_TABLE_HEIGHT: ClassVar[int] = 200
+    HEADER_SIZE: ClassVar[int] = 18
+    SUB_HEADER_SIZE: ClassVar[int] = 12
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
         self.state_file_event_handler = StateFileEventHandler(
-            patterns=['*'], ignore_patterns=None, ignore_directories=False, case_sensitive=True
+            patterns=["*"], ignore_patterns=None, ignore_directories=False, case_sensitive=True
         )
         file_observer = Observer()
         file_observer.schedule(self.state_file_event_handler, str(StateFile.HOMCC_STATE_DIR), recursive=True)
 
         file_observer.start()
 
-        self.setWindowTitle('HOMCC Monitor')
+        self.setWindowTitle("HOMCC Monitor")
 
         self._create_layout()
 
         # trigger these update methods every second
         def update():
             self.update_time()
-            self.update_compilation_table_data()
+            self.update_current_jobs_table()
+            self.update_summary_compilation_table()
+            self.update_summary_preprocessing_table()
 
         self.row_counters = {}  # to store time data
         self.update_timer = QtCore.QTimer(self)
@@ -91,34 +94,34 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(widget)
 
     def _create_left_layout(self) -> QtWidgets.QWidget:
-        self.table_curr_jobs = self._create_table_widget(['Host', 'State', 'Source File', 'Time Elapsed'])
-        curr_jobs = self._create_text_widget('Current Jobs', self.HEADER_SIZE)
+        self.table_curr_jobs = self._create_table_widget(["Host", "State", "Source File", "Time Elapsed"])
+        curr_jobs = self._create_text_widget("Current Jobs", self.HEADER_SIZE)
 
-        left_layout_1 = QVBoxLayout()
-        left_layout_2 = QHBoxLayout()
+        left_layout = QVBoxLayout()
+        left_layout_topline = QHBoxLayout()
 
-        left_layout_2.addWidget(curr_jobs)
+        left_layout_topline.addWidget(curr_jobs)
         left_top_line = QtWidgets.QWidget()
-        left_top_line.setLayout(left_layout_2)
+        left_top_line.setLayout(left_layout_topline)
 
-        left_layout_1.addWidget(left_top_line)
-        left_layout_1.addWidget(self.table_curr_jobs)
+        left_layout.addWidget(left_top_line)
+        left_layout.addWidget(self.table_curr_jobs)
 
         left_side = QtWidgets.QWidget()
-        left_side.setLayout(left_layout_1)
+        left_side.setLayout(left_layout)
         return left_side
 
     def _create_right_layout(self) -> QtWidgets.QWidget:
-        summary = self._create_text_widget('Summary', self.HEADER_SIZE)
-        files = self._create_text_widget('    Files', self.SUB_HEADER_SIZE)
-        hosts = self._create_text_widget('    Hosts', self.SUB_HEADER_SIZE)
+        summary = self._create_text_widget("Summary", self.HEADER_SIZE)
+        files = self._create_text_widget("    Files", self.SUB_HEADER_SIZE)
+        hosts = self._create_text_widget("    Hosts", self.SUB_HEADER_SIZE)
 
-        self.reset = QPushButton('RESET')
-        self.table_hosts = self._create_table_widget(['name', 'total', 'current', 'failed'])
-        table_files = self._create_table_widget(['Compilation (top 5 max)', 'Preprocessing (top 5 max)'])
-        self.table_compiled_files = self._create_table_widget(['sec', 'file-name'], int((self.MIN_TABLE_WIDTH - 3) / 2))
+        self.reset = QPushButton("RESET")
+        self.table_hosts = self._create_table_widget(["name", "total", "current", "failed"])
+        table_files = self._create_table_widget(["Compilation (top 5 max)", "Preprocessing (top 5 max)"])
+        self.table_compiled_files = self._create_table_widget(["sec", "file-name"], int((self.MIN_TABLE_WIDTH - 3) / 2))
         self.table_preprocessed_files = self._create_table_widget(
-            ['sec', 'file-name'], int((self.MIN_TABLE_WIDTH - 2) / 2)
+            ["sec", "file-name"], int((self.MIN_TABLE_WIDTH - 2) / 2)
         )
         self.table_compiled_files.setSortingEnabled(True)
         self.table_preprocessed_files.setSortingEnabled(True)
@@ -127,24 +130,24 @@ class MainWindow(QMainWindow):
         table_files.setCellWidget(0, 1, self.table_preprocessed_files)
         table_files.verticalHeader().setVisible(False)
 
-        right_layout_1 = QVBoxLayout()
-        right_layout_2 = QHBoxLayout()
-        right_layout_2.addWidget(summary)
-        right_layout_2.addWidget(self.reset)
+        right_layout = QVBoxLayout()
+        right_layout_file_line = QHBoxLayout()
+        right_layout_file_line.addWidget(summary)
+        right_layout_file_line.addWidget(self.reset)
         top_right_line = QtWidgets.QWidget()
-        top_right_line.setLayout(right_layout_2)
+        top_right_line.setLayout(right_layout_file_line)
 
-        right_layout_1.addWidget(top_right_line)
-        right_layout_1.addWidget(files)
-        right_layout_1.addWidget(table_files)
-        right_layout_1.addWidget(hosts)
-        right_layout_1.addWidget(self.table_hosts)
+        right_layout.addWidget(top_right_line)
+        right_layout.addWidget(files)
+        right_layout.addWidget(table_files)
+        right_layout.addWidget(hosts)
+        right_layout.addWidget(self.table_hosts)
 
         right_side = QtWidgets.QWidget()
-        right_side.setLayout(right_layout_1)
+        right_side.setLayout(right_layout)
         return right_side
 
-    def update_compilation_table_data(self):
+    def update_current_jobs_table(self):
         """updates row data on table every second"""
         if self.state_file_event_handler.table_info:
             for _, value in self.state_file_event_handler.table_info.items():
@@ -157,6 +160,8 @@ class MainWindow(QMainWindow):
                 self.add_row_to_table(row)
             self.state_file_event_handler.table_info.clear()
 
+    def update_summary_preprocessing_table(self):
+        """updates row data on table every second"""
         if self.state_file_event_handler.finished_preprocessing_files:
             self.table_preprocessed_files.setRowCount(0)
             for file_stat in self.state_file_event_handler.summary.file_stats.values():
@@ -166,6 +171,8 @@ class MainWindow(QMainWindow):
                     self.add_row(self.table_preprocessed_files, row, True)
             self.state_file_event_handler.finished_preprocessing_files = False
 
+    def update_summary_compilation_table(self):
+        """updates row data on table every second"""
         if self.state_file_event_handler.finished_compiling_files:
             self.table_compiled_files.setRowCount(0)
             for file_stat in self.state_file_event_handler.summary.file_stats.values():
@@ -173,7 +180,7 @@ class MainWindow(QMainWindow):
                 if compilation_time >= 0:
                     row = [compilation_time, file_stat.filepath]
                     self.add_row(self.table_compiled_files, row, True)
-            self.state_file_event_handler.finished_compiling_files = True
+            self.state_file_event_handler.finished_compiling_files = False
 
     @staticmethod
     def add_row(table: QtWidgets.QTableWidget, row: List[str], is_file_table: bool = False):
@@ -204,11 +211,11 @@ class MainWindow(QMainWindow):
 
         for row_index in range(self.table_curr_jobs.rowCount()):
             self.row_counters[row_index] += 1
-            count_item = QtWidgets.QTableWidgetItem(str(self.row_counters[row_index]) + 's')
+            count_item = QtWidgets.QTableWidgetItem(str(self.row_counters[row_index]) + "s")
             self.table_curr_jobs.setItem(row_index, 3, count_item)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     app = QApplication(sys.argv)
     window = MainWindow()
     app.exec_()

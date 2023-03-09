@@ -25,13 +25,12 @@ class CompilationInfo:
 class StateFileEventHandler(PatternMatchingEventHandler):
     """tracks state files and adds or removes state files into a list based on their creation or deletion"""
 
-    summary: SummaryStats = SummaryStats()
-    finished_preprocessing_files: bool = False
-    finished_compiling_files: bool = False
-
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.table_info: Dict[Path, CompilationInfo] = {}
+        self.summary: SummaryStats = SummaryStats()
+        self.finished_preprocessing_files: bool = False
+        self.finished_compiling_files: bool = False
 
     @staticmethod
     def read_statefile(filepath: Path) -> Optional[StateFile]:
@@ -46,45 +45,44 @@ class StateFileEventHandler(PatternMatchingEventHandler):
 
     def on_any_event(self, event: FileSystemEvent):
         if event.is_directory:
-            return None
-        try:
-            file = Path.read_bytes(Path(event.src_path))
-        except FileNotFoundError:
             return
 
-        if len(file) == 0:
-            return
-
-        state: StateFile = StateFile.from_bytes(file)
-
-        compilation_info = CompilationInfo(
-            hostname=state.hostname.decode(ENCODING),
-            phase=StateFile.ClientPhase(state.phase).name,
-            file_path=state.source_base_filename.decode(ENCODING),
-        )
+        statefile = self.read_statefile(Path(event.src_path))
 
         if event.event_type == "created":
-            self.table_info[event.src_path] = compilation_info
+            if statefile:
+                compilation_info = CompilationInfo(
+                    hostname=statefile.hostname.decode(ENCODING),
+                    phase=StateFile.ClientPhase(statefile.phase).name,
+                    file_path=statefile.source_base_filename.decode(ENCODING),
+                )
+                self.table_info[event.src_path] = compilation_info
 
-            logger.debug(
-                "Created entry for hostname '%s' in Phase '%s' with source base filename '%s' ",
-                state.hostname.decode(ENCODING),
-                StateFile.ClientPhase(state.phase).name,
-                state.source_base_filename,
-            )
+                logger.debug(
+                    "Created entry for hostname '%s' in Phase '%s' with source base filename '%s' ",
+                    statefile.hostname.decode(ENCODING),
+                    StateFile.ClientPhase(statefile.phase).name,
+                    statefile.source_base_filename,
+                )
 
-            time_stamp = datetime.now()
-            logger.debug("'%s' - '%s' has been created!", time_stamp.strftime("%d/%m/%Y %H:%M:%S"), event.src_path)
+                time_stamp = datetime.now()
+                logger.debug("'%s' - '%s' has been created!", time_stamp.strftime("%d/%m/%Y %H:%M:%S"), event.src_path)
 
-            self.summary.register_compilation(
-                compilation_info.file_path, compilation_info.hostname, int(time_stamp.timestamp())
-            )
+                self.summary.register_compilation(
+                    compilation_info.file_path, compilation_info.hostname, int(time_stamp.timestamp())
+                )
+
+            else:
+                self.table_info.pop(event.src_path, None)
 
         elif event.event_type == "modified":
-            # tracks modification of a state file
-
-            if statefile := self.read_statefile(Path(event.src_path)) and self.table_info.get(event.src_path):
+            if statefile and self.table_info.get(event.src_path):
                 timestamp_now = int(datetime.now().timestamp())
+                compilation_info = CompilationInfo(
+                    hostname=statefile.hostname.decode(ENCODING),
+                    phase=StateFile.ClientPhase(statefile.phase).name,
+                    file_path=statefile.source_base_filename.decode(ENCODING),
+                )
                 if statefile.phase == StateFile.ClientPhase.COMPILE.name:
                     self.summary.compilation_start(compilation_info.file_path, timestamp_now)
                 elif statefile.phase == StateFile.ClientPhase.CPP.name:
@@ -92,19 +90,12 @@ class StateFileEventHandler(PatternMatchingEventHandler):
                 elif self.table_info[event.src_path].phase == StateFile.ClientPhase.CPP.name:
                     self.summary.preprocessing_stop(compilation_info.file_path, timestamp_now)
                     self.finished_preprocessing_files = True
-                self.table_info[event.src_path].phase = statefile.phase
+                self.table_info[event.src_path].phase = compilation_info.phase
             else:
-                # file was already deleted
                 self.table_info.pop(event.src_path, None)
 
             logger.debug("'%s' - '%s' has been modified!", datetime.now().strftime("%d/%m/%Y %H:%M:%S"), event.src_path)
 
         elif event.event_type == "deleted":
-            # tracks deletion of a state file
-
             self.table_info.pop(event.src_path, None)
             logger.debug("'%s' - '%s' has been deleted!", datetime.now().strftime("%d/%m/%Y %H:%M:%S"), event.src_path)
-            self.summary.deregister_compilation(
-                compilation_info.file_path, compilation_info.hostname, int(datetime.now().timestamp())
-            )
-            self.finished_compiling_files = True
