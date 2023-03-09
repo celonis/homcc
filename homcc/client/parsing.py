@@ -12,11 +12,11 @@ from typing import Any, Dict, List, Optional, Tuple
 from homcc import client
 from homcc.client.compilation import scan_includes
 from homcc.client.config import ClientConfig, ClientEnvironmentVariables, parse_config
-from homcc.client.host import Host
 from homcc.common.arguments import Arguments, Compiler
 from homcc.common.compression import Compression
 from homcc.common.constants import ENCODING
 from homcc.common.errors import HostParsingError, NoHostsFoundError
+from homcc.common.host import Host
 from homcc.common.logging import (
     Formatter,
     FormatterConfig,
