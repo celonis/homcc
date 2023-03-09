@@ -148,7 +148,7 @@ class MainWindow(QMainWindow):
         self.reset = QPushButton("RESET")
         self.table_hosts = self._create_table_widget(["name", "total", "current", "failed"])
         table_files = self._create_table_widget(["Compilation (top 5 max)", "Preprocessing (top 5 max)"])
-        self.table_compiled_files = self._create_table_widget(["sec", "file-name"], int((self.MIN_TABLE_WIDTH - 3) / 2))
+        self.table_compiled_files = self._create_table_widget(["sec", "file-name"], int((self.MIN_TABLE_WIDTH - 2) / 2))
         self.table_preprocessed_files = self._create_table_widget(
             ["sec", "file-name"], int((self.MIN_TABLE_WIDTH - 2) / 2)
         )
