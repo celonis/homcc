@@ -28,12 +28,10 @@ class MainWindow(QMainWindow):
         self.state_file_event_handler = StateFileEventHandler(
             patterns=["*"], ignore_patterns=None, ignore_directories=False, case_sensitive=True
         )
-        self.file_observer = Observer()
-        self.file_observer.schedule(self.state_file_event_handler, str(StateFile.HOMCC_STATE_DIR), recursive=True)
+        self.state_file_observer = Observer()
+        self.state_file_observer.schedule(self.state_file_event_handler, str(StateFile.HOMCC_STATE_DIR), recursive=True)
 
-        self.file_observer.start()
-
-        self.rows: Dict[Path, int] = {}
+        self.state_file_observer.start()
 
         column_headers = ["Host", "State", "Source File", "Time Elapsed"]
 
@@ -45,10 +43,10 @@ class MainWindow(QMainWindow):
 
         # trigger these update methods every second
         def update():
-            self.update_time()
+            self.update_elapsed_times()
             self.update_compilation_table_data()
 
-        self.file_elapsed_times: Dict[Path, int] = {}  # to store time data
+        self.compilation_elapsed_times: Dict[Path, int] = {}  # to store time data
         self.update_timer = QtCore.QTimer(self)
         self.update_timer.timeout.connect(update)
         self.update_timer.start(1000)  # updates every second
@@ -56,38 +54,39 @@ class MainWindow(QMainWindow):
         self.show()
 
     def update_compilation_table_data(self):
-        """updates row data on table every second"""
+        """updates the Current Jobs table"""
 
         self.table_widget.setRowCount(0)
         for key, value in self.state_file_event_handler.table_info.items():
-            if key not in self.file_elapsed_times:
-                self.file_elapsed_times[key] = 0
+            if key not in self.compilation_elapsed_times:
+                self.compilation_elapsed_times[key] = 0
             row = [
                 value.hostname,
                 value.phase,
                 value.filename,
-                f"{self.file_elapsed_times[key]}s",
+                f"{self.compilation_elapsed_times[key]}s",
             ]
             self.add_row_to_table(row)
 
-    def add_row_to_table(self, row: List):
+    def add_row_to_table(self, row_data: List[str]):
         """sets the table widget rows to row data"""
 
+        # get last row_index
         row_index = self.table_widget.rowCount()
         self.table_widget.insertRow(row_index)
 
-        for i, item in enumerate(row):
-            self.table_widget.setItem(row_index, i, QtWidgets.QTableWidgetItem(item))
+        for i, row in enumerate(row_data):
+            self.table_widget.setItem(row_index, i, QtWidgets.QTableWidgetItem(row))
 
-    def update_time(self):
+    def update_elapsed_times(self):
         """increments time column by 1 everytime it is called and sets time elapsed column"""
 
-        for key in self.file_elapsed_times:
-            self.file_elapsed_times[key] += 1
+        for key in self.compilation_elapsed_times:
+            self.compilation_elapsed_times[key] += 1
 
     def __del__(self):
-        self.file_observer.stop()
-        self.file_observer.join()
+        self.state_file_observer.stop()
+        self.state_file_observer.join()
 
 
 if __name__ == "__main__":
