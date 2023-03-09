@@ -17,9 +17,23 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class CompilationInfo:
+    """class to encapsulate all relevant compilation info"""
+
     hostname: str
     phase: str
-    file_path: str
+    filename: str
+
+    def __init__(self, statefile: StateFile):
+        self.hostname = statefile.hostname.decode(ENCODING)
+        self.phase = StateFile.ClientPhase(statefile.phase).name
+        self.filename = statefile.source_base_filename.decode(ENCODING)
+
+        logger.debug(
+            "Created entry for hostname '%s' in Phase '%s' with source base filename '%s' ",
+            self.hostname,
+            self.phase,
+            self.filename,
+        )
 
 
 class StateFileEventHandler(PatternMatchingEventHandler):
@@ -47,40 +61,35 @@ class StateFileEventHandler(PatternMatchingEventHandler):
 
         statefile = self.read_statefile(Path(event.src_path))
 
-        if event.event_type == "created":
-            if statefile:
-                compilation_info = CompilationInfo(
-                    hostname=statefile.hostname.decode(ENCODING),
-                    phase=StateFile.ClientPhase(statefile.phase).name,
-                    file_path=statefile.source_base_filename.decode(ENCODING),
-                )
-                self.table_info[event.src_path] = compilation_info
+        # do nothing for moved events
+        if event.event_type == "moved":
+            return
 
-                logger.debug(
-                    "Created entry for hostname '%s' in Phase '%s' with source base filename '%s' ",
-                    statefile.hostname.decode(ENCODING),
-                    StateFile.ClientPhase(statefile.phase).name,
-                    statefile.source_base_filename,
-                )
+        logger.debug(
+            "'%s' - '%s' has been %s!",
+            datetime.now().strftime("%d/%m/%Y %H:%M:%S"),
+            event.src_path,
+            event.event_type,
+        )
 
-                time_stamp = datetime.now()
-                logger.debug("'%s' - '%s' has been created!", time_stamp.strftime("%d/%m/%Y %H:%M:%S"), event.src_path)
-
-                self.summary.register_compilation(
-                    compilation_info.file_path, compilation_info.hostname, int(time_stamp.timestamp())
-                )
-
-            else:
-                self.table_info.pop(event.src_path, None)
-
-        elif event.event_type == "modified":
-            if state := self.read_statefile(Path(event.src_path)) and self.table_info.get(event.src_path):
-                self.table_info[event.src_path].phase = state.phase
-            else:
-                self.table_info.pop(event.src_path, None)
-
-            logger.debug("'%s' - '%s' has been modified!", datetime.now().strftime("%d/%m/%Y %H:%M:%S"), event.src_path)
-
-        elif event.event_type == "deleted":
+        # statefile does not exist anymore or deletion was detected
+        if not statefile or event.event_type == "deleted":
             self.table_info.pop(event.src_path, None)
-            logger.debug("'%s' - '%s' has been deleted!", datetime.now().strftime("%d/%m/%Y %H:%M:%S"), event.src_path)
+            return
+
+        # statefile creation detected
+        if event.event_type == "created":
+            time_stamp = datetime.now()
+            self.summary.register_compilation(
+                compilation_info.file_path, compilation_info.hostname, int(time_stamp.timestamp())
+            )
+            self.table_info[event.src_path] = CompilationInfo(statefile)
+            return
+
+        # statefile modification detected
+        if event.event_type == "modified":
+            # check if modification event is also a creation
+            if event.src_path in self.table_info:
+                self.table_info[event.src_path].phase = StateFile.ClientPhase(statefile.phase).name
+            else:
+                self.table_info[event.src_path] = CompilationInfo(statefile)
