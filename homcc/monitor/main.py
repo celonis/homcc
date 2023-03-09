@@ -116,34 +116,35 @@ class MainWindow(QMainWindow):
 
     def _create_layout(self):
         layout = QHBoxLayout()
-        layout.addWidget(self._create_left_layout())
-        layout.addWidget(self._create_right_layout())
+        layout.addWidget(self._create_curr_jobs_layout())
+        layout.addWidget(self._create_summary_layout())
         widget = QtWidgets.QWidget()
         widget.setLayout(layout)
         self.setCentralWidget(widget)
 
-    def _create_left_layout(self) -> QtWidgets.QWidget:
+    def _create_curr_jobs_layout(self) -> QtWidgets.QWidget:
         self.table_curr_jobs = self._create_table_widget(["Host", "State", "Source File", "Time Elapsed"])
-        curr_jobs = self._create_text_widget("Current Jobs", self.HEADER_SIZE)
+        curr_jobs_text = self._create_text_widget("Current Jobs", self.HEADER_SIZE)
 
-        left_layout = QVBoxLayout()
-        left_layout_topline = QHBoxLayout()
+        curr_jobs_layout = QVBoxLayout()
+        # needs to be created to have the same length of the linebreak as on the right side
+        top_line_curr_jobs_layout = QHBoxLayout()
 
-        left_layout_topline.addWidget(curr_jobs)
-        left_top_line = QtWidgets.QWidget()
-        left_top_line.setLayout(left_layout_topline)
+        top_line_curr_jobs_layout.addWidget(curr_jobs_text)
+        top_line_curr_jobs_widget = QtWidgets.QWidget()
+        top_line_curr_jobs_widget.setLayout(top_line_curr_jobs_layout)
 
-        left_layout.addWidget(left_top_line)
-        left_layout.addWidget(self.table_curr_jobs)
+        curr_jobs_layout.addWidget(top_line_curr_jobs_widget)
+        curr_jobs_layout.addWidget(self.table_curr_jobs)
 
-        left_side = QtWidgets.QWidget()
-        left_side.setLayout(left_layout)
-        return left_side
+        curr_jobs_widget = QtWidgets.QWidget()
+        curr_jobs_widget.setLayout(curr_jobs_layout)
+        return curr_jobs_widget
 
-    def _create_right_layout(self) -> QtWidgets.QWidget:
-        summary = self._create_text_widget("Summary", self.HEADER_SIZE)
-        files = self._create_text_widget("    Files", self.SUB_HEADER_SIZE)
-        hosts = self._create_text_widget("    Hosts", self.SUB_HEADER_SIZE)
+    def _create_summary_layout(self) -> QtWidgets.QWidget:
+        summary_text = self._create_text_widget("Summary", self.HEADER_SIZE)
+        files_text = self._create_text_widget("    Files", self.SUB_HEADER_SIZE)
+        hosts_text = self._create_text_widget("    Hosts", self.SUB_HEADER_SIZE)
 
         self.reset = QPushButton("RESET")
         self.table_hosts = self._create_table_widget(["name", "total", "current", "failed"])
@@ -159,22 +160,22 @@ class MainWindow(QMainWindow):
         table_files.setCellWidget(0, 1, self.table_preprocessed_files)
         table_files.verticalHeader().setVisible(False)
 
-        right_layout = QVBoxLayout()
-        right_layout_file_line = QHBoxLayout()
-        right_layout_file_line.addWidget(summary)
-        right_layout_file_line.addWidget(self.reset)
-        top_right_line = QtWidgets.QWidget()
-        top_right_line.setLayout(right_layout_file_line)
+        summary_layout = QVBoxLayout()
+        top_line_summary_layout = QHBoxLayout()
+        top_line_summary_layout.addWidget(summary_text)
+        top_line_summary_layout.addWidget(self.reset)
+        top_line_summary_widget = QtWidgets.QWidget()
+        top_line_summary_widget.setLayout(top_line_summary_layout)
 
-        right_layout.addWidget(top_right_line)
-        right_layout.addWidget(files)
-        right_layout.addWidget(table_files)
-        right_layout.addWidget(hosts)
-        right_layout.addWidget(self.table_hosts)
+        summary_layout.addWidget(top_line_summary_widget)
+        summary_layout.addWidget(files_text)
+        summary_layout.addWidget(table_files)
+        summary_layout.addWidget(hosts_text)
+        summary_layout.addWidget(self.table_hosts)
 
-        right_side = QtWidgets.QWidget()
-        right_side.setLayout(right_layout)
-        return right_side
+        summary_widget = QtWidgets.QWidget()
+        summary_widget.setLayout(summary_layout)
+        return summary_widget
 
     def __del__(self):
         self.state_file_observer.stop()
