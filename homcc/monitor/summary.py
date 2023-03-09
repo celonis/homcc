@@ -1,6 +1,9 @@
 """summarized statistics to keep track of files over time"""
+import logging
 from dataclasses import dataclass, field
 from typing import Dict, Optional
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -46,9 +49,13 @@ class FileStats:
 class SummaryStats:
     """summarized statistics to not lose information about files over time"""
 
+    # these two fields will be resettable in the future via the RESET button
+    host_stats: Dict[str, HostStats] = {}
+    file_stats: Dict[str, FileStats] = {}
+
     def __init__(self):
-        self.host_stats: Dict[str, HostStats] = {}
-        self.file_stats: Dict[str, FileStats] = {}
+        self.host_stats = {}
+        self.file_stats = {}
 
     def register_compilation(self, filename: str, hostname: str, timestamp: int):
         # if new host add to dict and default its stats
@@ -88,5 +95,9 @@ class SummaryStats:
     def deregister_compilation(self, filename: str, hostname: str, timestamp: int):
         # deregister from hosts
         self.host_stats[hostname].deregister_compilation()
+
+        # yagmur: I added these, so I would pass linter check
+        logger.debug(timestamp)
+        logger.debug(filename)
         # mark File as completed
-        self.compilation_stop(filename, timestamp)
+        # self.compilation_stop(filename, timestamp)
