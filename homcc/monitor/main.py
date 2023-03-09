@@ -4,7 +4,8 @@ homcc monitor
 """
 import os
 import sys
-from typing import List
+from pathlib import Path
+from typing import Dict, List
 
 from PySide2 import QtCore, QtWidgets
 from PySide2.QtWidgets import QApplication, QMainWindow
@@ -27,10 +28,12 @@ class MainWindow(QMainWindow):
         self.state_file_event_handler = StateFileEventHandler(
             patterns=["*"], ignore_patterns=None, ignore_directories=False, case_sensitive=True
         )
-        file_observer = Observer()
-        file_observer.schedule(self.state_file_event_handler, str(StateFile.HOMCC_STATE_DIR), recursive=True)
+        self.file_observer = Observer()
+        self.file_observer.schedule(self.state_file_event_handler, str(StateFile.HOMCC_STATE_DIR), recursive=True)
 
-        file_observer.start()
+        self.file_observer.start()
+
+        self.rows: Dict[Path, int] = {}
 
         column_headers = ["Host", "State", "Source File", "Time Elapsed"]
 
@@ -45,7 +48,7 @@ class MainWindow(QMainWindow):
             self.update_time()
             self.update_compilation_table_data()
 
-        self.row_counters = {}  # to store time data
+        self.file_elapsed_times: Dict[Path, int] = {}  # to store time data
         self.update_timer = QtCore.QTimer(self)
         self.update_timer.timeout.connect(update)
         self.update_timer.start(1000)  # updates every second
@@ -54,37 +57,37 @@ class MainWindow(QMainWindow):
 
     def update_compilation_table_data(self):
         """updates row data on table every second"""
-        if self.state_file_event_handler.table_info:
-            for _, value in self.state_file_event_handler.table_info.items():
-                row = [
-                    value.hostname,
-                    value.phase,
-                    value.file_path,
-                    "0",
-                ]
-                self.add_row_to_table(row)
-            self.state_file_event_handler.table_info.clear()
+
+        self.table_widget.setRowCount(0)
+        for key, value in self.state_file_event_handler.table_info.items():
+            if key not in self.file_elapsed_times:
+                self.file_elapsed_times[key] = 0
+            row = [
+                value.hostname,
+                value.phase,
+                value.filename,
+                f"{self.file_elapsed_times[key]}s",
+            ]
+            self.add_row_to_table(row)
 
     def add_row_to_table(self, row: List):
         """sets the table widget rows to row data"""
 
         row_index = self.table_widget.rowCount()
         self.table_widget.insertRow(row_index)
+
         for i, item in enumerate(row):
             self.table_widget.setItem(row_index, i, QtWidgets.QTableWidgetItem(item))
-        self.row_counters[row_index] = 0
 
     def update_time(self):
         """increments time column by 1 everytime it is called and sets time elapsed column"""
 
-        for row_index in range(self.table_widget.rowCount()):
-            self.row_counters[row_index] += 1
-            count_item = QtWidgets.QTableWidgetItem(str(self.row_counters[row_index]) + "s")
-            self.table_widget.setItem(row_index, 3, count_item)
+        for key in self.file_elapsed_times:
+            self.file_elapsed_times[key] += 1
 
     def __del__(self):
-        self.my_observer.stop()
-        self.my_observer.join()
+        self.file_observer.stop()
+        self.file_observer.join()
 
 
 if __name__ == "__main__":

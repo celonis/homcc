@@ -18,7 +18,12 @@ logger = logging.getLogger(__name__)
 class CompilationInfo:
     hostname: str
     phase: str
-    file_path: str
+    filename: str
+
+    def __init__(self, statefile: StateFile):
+        self.hostname = statefile.hostname.decode(ENCODING)
+        self.phase = StateFile.ClientPhase(statefile.phase).name
+        self.filename = statefile.source_base_filename.decode(ENCODING)
 
 
 class StateFileEventHandler(PatternMatchingEventHandler):
@@ -41,24 +46,22 @@ class StateFileEventHandler(PatternMatchingEventHandler):
 
     def on_any_event(self, event: FileSystemEvent):
         if event.is_directory:
+
             return
 
         statefile = self.read_statefile(Path(event.src_path))
 
         if event.event_type == "created":
             if statefile:
-                compilation_info = CompilationInfo(
-                    hostname=statefile.hostname.decode(ENCODING),
-                    phase=StateFile.ClientPhase(statefile.phase).name,
-                    file_path=statefile.source_base_filename.decode(ENCODING),
-                )
+
+                compilation_info = CompilationInfo(statefile)
                 self.table_info[event.src_path] = compilation_info
 
                 logger.debug(
                     "Created entry for hostname '%s' in Phase '%s' with source base filename '%s' ",
-                    statefile.hostname.decode(ENCODING),
-                    StateFile.ClientPhase(statefile.phase).name,
-                    statefile.source_base_filename,
+                    compilation_info.hostname,
+                    compilation_info.phase,
+                    compilation_info.filename,
                 )
 
                 logger.debug(
@@ -69,8 +72,11 @@ class StateFileEventHandler(PatternMatchingEventHandler):
                 self.table_info.pop(event.src_path, None)
 
         elif event.event_type == "modified":
-            if state := self.read_statefile(Path(event.src_path)) and self.table_info.get(event.src_path):
-                self.table_info[event.src_path].phase = state.phase
+            if statefile:
+                if self.table_info.get(event.src_path):
+                    self.table_info[event.src_path].phase = StateFile.ClientPhase(statefile.phase).name
+                else:
+                    self.table_info[event.src_path] = CompilationInfo(statefile)
             else:
                 self.table_info.pop(event.src_path, None)
 
@@ -78,4 +84,5 @@ class StateFileEventHandler(PatternMatchingEventHandler):
 
         elif event.event_type == "deleted":
             self.table_info.pop(event.src_path, None)
+
             logger.debug("'%s' - '%s' has been deleted!", datetime.now().strftime("%d/%m/%Y %H:%M:%S"), event.src_path)
