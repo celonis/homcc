@@ -154,7 +154,7 @@ class MainWindow(QMainWindow):
                     value.hostname,
                     value.phase,
                     value.file_path,
-                    '0',
+                    "0",
                 ]
                 self.add_row_to_table(row)
             self.state_file_event_handler.table_info.clear()
