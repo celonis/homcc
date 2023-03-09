@@ -4,8 +4,7 @@ homcc monitor
 """
 import os
 import sys
-from typing import ClassVar
-from typing import List
+from typing import ClassVar, List
 
 from PySide2 import QtCore, QtWidgets
 from PySide2.QtCore import Qt
