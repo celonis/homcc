@@ -99,12 +99,11 @@ class StateFileEventHandler(PatternMatchingEventHandler):
             compilation_info = self.table_info[event.src_path]
             timestamp_now = int(time_stamp.timestamp())
             if statefile.phase == StateFile.ClientPhase.COMPILE.name:
+                self.summary.preprocessing_stop(compilation_info.filename, timestamp_now)
                 self.summary.compilation_start(compilation_info.filename, timestamp_now)
             elif statefile.phase == StateFile.ClientPhase.CPP.name:
                 self.summary.preprocessing_start(compilation_info.filename, timestamp_now)
             if event.src_path in self.table_info:
-                if self.table_info[event.src_path].phase == StateFile.ClientPhase.CPP.name:
-                    self.summary.preprocessing_stop(compilation_info.filename, timestamp_now)
                 self.table_info[event.src_path].phase = StateFile.ClientPhase(statefile.phase).name
             else:
                 self.table_info[event.src_path] = CompilationInfo(statefile)

@@ -67,21 +67,15 @@ class TestSummaryStats:
         foo_stop_comp = foo_start_comp + 1
         summary.compilation_stop("foo.cpp", foo_stop_comp)
         assert summary.file_stats["foo.cpp"].compilation_start == foo_start_comp
-        with pytest.raises(
-            ValueError, match=r"Timestamp of compilation start cannot be after timestamp of compilation end!"
-        ):
-            summary.compilation_stop("foo.cpp", foo_start_comp - 1)
-        assert summary.file_stats["foo.cpp"].compilation_stop == foo_stop_comp
-        assert summary.file_stats["foo.cpp"].get_compilation_time() == 1
+        summary.compilation_stop("foo.cpp", foo_start_comp - 1)
+        assert summary.file_stats["foo.cpp"].compilation_stop == foo_start_comp - 1
+        assert summary.file_stats["foo.cpp"].get_compilation_time() == -1
 
         foo_start_pre = foo_start_comp + 2
         summary.preprocessing_start("foo.cpp", foo_start_pre)
         foo_stop_pre = foo_start_pre + 1
         summary.preprocessing_stop("foo.cpp", foo_stop_pre)
         assert summary.file_stats["foo.cpp"].preprocessing_start == foo_start_pre
-        with pytest.raises(
-            ValueError, match=r"Timestamp of preprocessing start cannot be after timestamp of preprocessing end!"
-        ):
-            summary.preprocessing_stop("foo.cpp", foo_start_pre - 1)
-        assert summary.file_stats["foo.cpp"].preprocessing_stop == foo_stop_pre
-        assert summary.file_stats["foo.cpp"].get_preprocessing_time() == 1
+        summary.preprocessing_stop("foo.cpp", foo_start_pre - 1)
+        assert summary.file_stats["foo.cpp"].preprocessing_stop == 1
+        assert summary.file_stats["foo.cpp"].get_preprocessing_time() == -1
