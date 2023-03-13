@@ -5,10 +5,18 @@ homcc monitor
 import os
 import sys
 from pathlib import Path
-from typing import Dict, List
+from typing import ClassVar, Dict, List
 
 from PySide2 import QtCore, QtWidgets
-from PySide2.QtWidgets import QApplication, QMainWindow
+from PySide2.QtCore import Qt
+from PySide2.QtWidgets import (
+    QApplication,
+    QHBoxLayout,
+    QLabel,
+    QMainWindow,
+    QPushButton,
+    QVBoxLayout,
+)
 from watchdog.observers import Observer
 
 sys.path.append(os.path.join(os.path.dirname(__file__), "../.."))
@@ -22,6 +30,11 @@ from homcc.monitor.event_handler import (  # pylint: disable=wrong-import-positi
 class MainWindow(QMainWindow):
     """MainWindow class where table activities are carried out"""
 
+    MIN_TABLE_WIDTH: ClassVar[int] = 438
+    MIN_TABLE_HEIGHT: ClassVar[int] = 200
+    HEADER_FONT_SIZE: ClassVar[int] = 18
+    SUB_HEADER_FONT_SIZE: ClassVar[int] = 12
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
@@ -33,13 +46,9 @@ class MainWindow(QMainWindow):
 
         self.state_file_observer.start()
 
-        column_headers = ["Host", "State", "Source File", "Time Elapsed"]
+        self.setWindowTitle("HOMCC Monitor")
 
-        self.table_widget = QtWidgets.QTableWidget()
-        self.table_widget.setColumnCount(4)
-        self.setCentralWidget(self.table_widget)
-        self.table_widget.setHorizontalHeaderLabels(column_headers)
-        self.table_widget.setMinimumSize(438, 200)
+        self._create_layout()
 
         # trigger these update methods every second
         def update():
@@ -56,7 +65,7 @@ class MainWindow(QMainWindow):
     def update_compilation_table_data(self):
         """updates the Current Jobs table"""
 
-        self.table_widget.setRowCount(0)
+        self.table_curr_jobs.setRowCount(0)
         for key, value in self.state_file_event_handler.table_info.items():
             if key not in self.compilation_elapsed_times:
                 self.compilation_elapsed_times[key] = 0
@@ -72,17 +81,101 @@ class MainWindow(QMainWindow):
         """sets the table widget rows to row data"""
 
         # get last row_index
-        row_index = self.table_widget.rowCount()
-        self.table_widget.insertRow(row_index)
+        row_index = self.table_curr_jobs.rowCount()
+        self.table_curr_jobs.insertRow(row_index)
 
         for i, row in enumerate(row_data):
-            self.table_widget.setItem(row_index, i, QtWidgets.QTableWidgetItem(row))
+            self.table_curr_jobs.setItem(row_index, i, QtWidgets.QTableWidgetItem(row))
 
     def update_elapsed_times(self):
         """increments time column by 1 everytime it is called and sets time elapsed column"""
 
         for key in self.compilation_elapsed_times:
             self.compilation_elapsed_times[key] += 1
+
+    @staticmethod
+    def _create_text_widget(text: str, font_size: int) -> QtWidgets.QWidget:
+        text_widget = QLabel(text)
+        font = text_widget.font()
+        font.setPointSize(font_size)
+        text_widget.setFont(font)
+        text_widget.setAlignment(Qt.AlignLeft | Qt.AlignTop)
+        return text_widget
+
+    @staticmethod
+    def _create_table_widget(
+        col_header: list[str], width: int = MIN_TABLE_WIDTH, height: int = MIN_TABLE_HEIGHT
+    ) -> QtWidgets.QTableWidget:
+        table = QtWidgets.QTableWidget()
+        table.setColumnCount(len(col_header))
+        table.setHorizontalHeaderLabels(col_header)
+        table.setMinimumSize(width, height)
+        table_files_header = table.horizontalHeader()
+        table_files_header.setMinimumSectionSize(int((width - 2) / len(col_header)))
+        return table
+
+    def _create_layout(self):
+        layout = QHBoxLayout()
+        layout.addWidget(self._create_curr_jobs_layout())
+        layout.addWidget(self._create_summary_layout())
+        widget = QtWidgets.QWidget()
+        widget.setLayout(layout)
+        self.setCentralWidget(widget)
+
+    def _create_curr_jobs_layout(self) -> QtWidgets.QWidget:
+        self.table_curr_jobs = self._create_table_widget(["Host", "State", "Source File", "Time Elapsed"])
+        curr_jobs_text = self._create_text_widget("Current Jobs", self.HEADER_FONT_SIZE)
+
+        curr_jobs_layout = QVBoxLayout()
+        # needs to be created to have the same length of the linebreak as on the right side
+        top_line_curr_jobs_layout = QHBoxLayout()
+
+        top_line_curr_jobs_layout.addWidget(curr_jobs_text)
+        top_line_curr_jobs_widget = QtWidgets.QWidget()
+        top_line_curr_jobs_widget.setLayout(top_line_curr_jobs_layout)
+
+        curr_jobs_layout.addWidget(top_line_curr_jobs_widget)
+        curr_jobs_layout.addWidget(self.table_curr_jobs)
+
+        curr_jobs_widget = QtWidgets.QWidget()
+        curr_jobs_widget.setLayout(curr_jobs_layout)
+        return curr_jobs_widget
+
+    def _create_summary_layout(self) -> QtWidgets.QWidget:
+        summary_text = self._create_text_widget("Summary", self.HEADER_FONT_SIZE)
+        files_text = self._create_text_widget("Files", self.SUB_HEADER_FONT_SIZE)
+        hosts_text = self._create_text_widget("Hosts", self.SUB_HEADER_FONT_SIZE)
+
+        self.reset = QPushButton("RESET")
+        self.table_hosts = self._create_table_widget(["name", "total", "current", "failed"])
+        table_files = self._create_table_widget(["Compilation", "Preprocessing"])
+        self.table_compiled_files = self._create_table_widget(["sec", "filename"], int((self.MIN_TABLE_WIDTH - 2) / 2))
+        self.table_preprocessed_files = self._create_table_widget(
+            ["sec", "filename"], int((self.MIN_TABLE_WIDTH - 2) / 2)
+        )
+        self.table_compiled_files.setSortingEnabled(True)
+        self.table_preprocessed_files.setSortingEnabled(True)
+        table_files.insertRow(0)
+        table_files.setCellWidget(0, 0, self.table_compiled_files)
+        table_files.setCellWidget(0, 1, self.table_preprocessed_files)
+        table_files.verticalHeader().setVisible(False)
+
+        summary_layout = QVBoxLayout()
+        top_line_summary_layout = QHBoxLayout()
+        top_line_summary_layout.addWidget(summary_text)
+        top_line_summary_layout.addWidget(self.reset)
+        top_line_summary_widget = QtWidgets.QWidget()
+        top_line_summary_widget.setLayout(top_line_summary_layout)
+
+        summary_layout.addWidget(top_line_summary_widget)
+        summary_layout.addWidget(files_text)
+        summary_layout.addWidget(table_files)
+        summary_layout.addWidget(hosts_text)
+        summary_layout.addWidget(self.table_hosts)
+
+        summary_widget = QtWidgets.QWidget()
+        summary_widget.setLayout(summary_layout)
+        return summary_widget
 
     def __del__(self):
         self.state_file_observer.stop()
