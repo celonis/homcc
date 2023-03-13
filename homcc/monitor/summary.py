@@ -1,8 +1,9 @@
 """summarized statistics to keep track of files over time"""
+import logging
 from dataclasses import dataclass, field
 from typing import Dict, Optional
 
-from homcc.client.client import logger
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -89,9 +90,10 @@ class SummaryStats:
 
     def deregister_compilation(self, filename: str, hostname: str, timestamp: int):
         if filename not in self.file_stats:
-            logger.warn(
+            logger.info(
                 "Tried to deregister compilation with filename '%s' which was not registered before. Ignoring it.",
-                filename)
+                filename,
+            )
             return
         # deregister from hosts
         self.host_stats[hostname].deregister_compilation()
