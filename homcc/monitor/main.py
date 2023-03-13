@@ -32,8 +32,8 @@ class MainWindow(QMainWindow):
 
     MIN_TABLE_WIDTH: ClassVar[int] = 438
     MIN_TABLE_HEIGHT: ClassVar[int] = 200
-    HEADER_SIZE: ClassVar[int] = 18
-    SUB_HEADER_SIZE: ClassVar[int] = 12
+    HEADER_FONT_SIZE: ClassVar[int] = 18
+    SUB_HEADER_FONT_SIZE: ClassVar[int] = 12
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -124,7 +124,7 @@ class MainWindow(QMainWindow):
 
     def _create_curr_jobs_layout(self) -> QtWidgets.QWidget:
         self.table_curr_jobs = self._create_table_widget(["Host", "State", "Source File", "Time Elapsed"])
-        curr_jobs_text = self._create_text_widget("Current Jobs", self.HEADER_SIZE)
+        curr_jobs_text = self._create_text_widget("Current Jobs", self.HEADER_FONT_SIZE)
 
         curr_jobs_layout = QVBoxLayout()
         # needs to be created to have the same length of the linebreak as on the right side
@@ -142,16 +142,16 @@ class MainWindow(QMainWindow):
         return curr_jobs_widget
 
     def _create_summary_layout(self) -> QtWidgets.QWidget:
-        summary_text = self._create_text_widget("Summary", self.HEADER_SIZE)
-        files_text = self._create_text_widget("    Files", self.SUB_HEADER_SIZE)
-        hosts_text = self._create_text_widget("    Hosts", self.SUB_HEADER_SIZE)
+        summary_text = self._create_text_widget("Summary", self.HEADER_FONT_SIZE)
+        files_text = self._create_text_widget("Files", self.SUB_HEADER_FONT_SIZE)
+        hosts_text = self._create_text_widget("Hosts", self.SUB_HEADER_FONT_SIZE)
 
         self.reset = QPushButton("RESET")
         self.table_hosts = self._create_table_widget(["name", "total", "current", "failed"])
-        table_files = self._create_table_widget(["Compilation (top 5 max)", "Preprocessing (top 5 max)"])
-        self.table_compiled_files = self._create_table_widget(["sec", "file-name"], int((self.MIN_TABLE_WIDTH - 2) / 2))
+        table_files = self._create_table_widget(["Compilation", "Preprocessing"])
+        self.table_compiled_files = self._create_table_widget(["sec", "filename"], int((self.MIN_TABLE_WIDTH - 2) / 2))
         self.table_preprocessed_files = self._create_table_widget(
-            ["sec", "file-name"], int((self.MIN_TABLE_WIDTH - 2) / 2)
+            ["sec", "filename"], int((self.MIN_TABLE_WIDTH - 2) / 2)
         )
         self.table_compiled_files.setSortingEnabled(True)
         self.table_preprocessed_files.setSortingEnabled(True)
