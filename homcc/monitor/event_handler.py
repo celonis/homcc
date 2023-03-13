@@ -87,8 +87,9 @@ class StateFileEventHandler(PatternMatchingEventHandler):
         if event.event_type == "created":
             self.table_info[event.src_path] = CompilationInfo(statefile)
             self.summary.register_compilation(
-                self.table_info[event.src_path].filename, self.table_info[event.src_path].hostname,
-                int(time_stamp.timestamp())
+                self.table_info[event.src_path].filename,
+                self.table_info[event.src_path].hostname,
+                int(time_stamp.timestamp()),
             )
             return
 
