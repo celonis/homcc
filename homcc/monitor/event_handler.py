@@ -78,9 +78,7 @@ class StateFileEventHandler(PatternMatchingEventHandler):
         # statefile does not exist anymore or deletion was detected
         if not statefile or event.event_type == "deleted":
             compilation_info = self.table_info[event.src_path]
-            self.summary.deregister_compilation(
-                compilation_info.filename, compilation_info.hostname, time_now_sec
-            )
+            self.summary.deregister_compilation(compilation_info.filename, compilation_info.hostname, time_now_sec)
             self.table_info.pop(event.src_path, None)
             return
 
