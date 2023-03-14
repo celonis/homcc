@@ -57,6 +57,15 @@ class StateFileEventHandler(PatternMatchingEventHandler):
             logger.debug("File %s was deleted again before being read.", filepath)
         return None
 
+    def _register_compilation(self, src_path: Path, state_file: StateFile, time_now_sec: int):
+        compilation_info = CompilationInfo(state_file)
+        self.table_info[src_path] = compilation_info
+        self.summary.register_compilation(
+            compilation_info.filename,
+            compilation_info.hostname,
+            time_now_sec,
+        )
+
     def on_any_event(self, event: FileSystemEvent):
         if event.is_directory:
             return
@@ -67,11 +76,12 @@ class StateFileEventHandler(PatternMatchingEventHandler):
         if event.event_type == "moved":
             return
 
-        time_stamp = datetime.now()
+        time_now = datetime.now()
+        time_now_sec = int(time_now.timestamp())
 
         logger.debug(
             "'%s' - '%s' has been %s!",
-            time_stamp.strftime("%d/%m/%Y %H:%M:%S"),
+            time_now.strftime("%d/%m/%Y %H:%M:%S"),
             event.src_path,
             event.event_type,
         )
@@ -83,36 +93,31 @@ class StateFileEventHandler(PatternMatchingEventHandler):
                     self.summary.file_stats[compilation_info.filename].get_preprocessing_time() is None:
                 self.finished_preprocessing_files.append(compilation_info.filename)
             self.summary.deregister_compilation(
-                compilation_info.filename, compilation_info.hostname, int(time_stamp.timestamp())
+                compilation_info.filename, compilation_info.hostname, time_now_sec
             )
             self.finished_compiling_files.append(compilation_info.filename)
-            self.table_info.pop(event.src_path, None)
+            self.table_info.pop(event.src_path)
+            return
+
+        if statefile is None:
             return
 
         # statefile creation detected
-        if event.event_type == "created" and statefile:
-            self.table_info[event.src_path] = CompilationInfo(statefile)
-            self.summary.register_compilation(
-                self.table_info[event.src_path].filename,
-                self.table_info[event.src_path].hostname,
-                int(time_stamp.timestamp()),
-            )
+        if event.event_type == "created":
+            self._register_compilation(event.src_path, statefile, time_now_sec)
             return
 
         # statefile modification detected
-        if event.event_type == "modified" and statefile:
+        if event.event_type == "modified":
             # check if modification event is also a creation
             if event.src_path in self.table_info:
                 self.table_info[event.src_path].phase = StateFile.ClientPhase(statefile.phase).name
             else:
-                self.table_info[event.src_path] = CompilationInfo(statefile)
+                self._register_compilation(event.src_path, statefile, time_now_sec)
             compilation_info = self.table_info[event.src_path]
-            timestamp_now = int(time_stamp.timestamp())
-            if statefile.phase == StateFile.ClientPhase.COMPILE.name:
-                print("finished preprocessing")
-                self.summary.preprocessing_stop(compilation_info.filename, timestamp_now)
+            if statefile.phase == StateFile.ClientPhase.COMPILE:
+                self.summary.preprocessing_stop(compilation_info.filename, time_now_sec)
                 self.finished_preprocessing_files.append(compilation_info.filename)
-                self.summary.compilation_start(compilation_info.filename, timestamp_now)
-            elif statefile.phase == StateFile.ClientPhase.CPP.name:
-                self.summary.preprocessing_start(compilation_info.filename, timestamp_now)
-                print("started preprocessing")
+                self.summary.compilation_start(compilation_info.filename, time_now_sec)
+            elif statefile.phase == StateFile.ClientPhase.CPP:
+                self.summary.preprocessing_start(compilation_info.filename, time_now_sec)

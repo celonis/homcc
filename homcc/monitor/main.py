@@ -135,8 +135,8 @@ class MainWindow(QMainWindow):
         self.table_preprocessed_files.setColumnWidth(0, self.MIN_SMALL_TABLE_WIDTH)
         self.table_preprocessed_files.horizontalHeader().setStretchLastSection(True)
 
-        self.table_compiled_files.setSortingEnabled(True)
-        self.table_preprocessed_files.setSortingEnabled(True)
+        self.table_compiled_files.sortByColumn(0, QtCore.Qt.SortOrder.DescendingOrder)
+        self.table_preprocessed_files.sortByColumn(0, QtCore.Qt.SortOrder.DescendingOrder)
         table_files.insertRow(0)
         table_files.setCellWidget(0, 0, self.table_compiled_files)
         table_files.setCellWidget(0, 1, self.table_preprocessed_files)
@@ -184,6 +184,7 @@ class MainWindow(QMainWindow):
                     row = [preprocessing_time, preprocessed_file]
                     self.add_row(self.table_preprocessed_files, row, True)
             self.state_file_event_handler.finished_preprocessing_files = []
+            self.table_preprocessed_files.sortByColumn(0, QtCore.Qt.SortOrder.DescendingOrder)
 
     def update_summary_compilation_table_data(self):
         """updates the compilation table on the summary side"""
@@ -195,6 +196,7 @@ class MainWindow(QMainWindow):
                     row = [compilation_time, compiled_file]
                     self.add_row(self.table_compiled_files, row, True)
             self.state_file_event_handler.finished_compiling_files = []
+            self.table_compiled_files.sortByColumn(0, QtCore.Qt.SortOrder.DescendingOrder)
 
     @staticmethod
     def add_row(table: QtWidgets.QTableWidget, row: List[str], is_file_table: bool = False):
