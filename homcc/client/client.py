@@ -109,7 +109,11 @@ class HostSemaphore(ABC):
                 time.sleep(0.1)
 
     def _acquire(self, timeout: float):
-        self._semaphore.acquire(timeout)
+        try:
+            self._semaphore.acquire(timeout)
+        except sysv_ipc.ExistentialError:
+            logger.debug("Semaphore has been deleted while trying to acquire it. Recreating it again now.")
+            self._create_semaphore()
 
     def __init__(self, host: Host):
         # signal handling to properly remove the semaphore
@@ -228,9 +232,6 @@ class LocalHostSemaphore(HostSemaphore):
                 # inverse exponential backoff: https://www.desmos.com/calculator/uniats0s4c
                 time.sleep(self._timeout)
                 self._timeout = self._timeout / 3 * 2
-            except sysv_ipc.ExistentialError:
-                logger.debug("Semaphore has been deleted while trying to acquire it. Recreating it again now.")
-                self._create_semaphore()
 
 
 class TCPClient:
