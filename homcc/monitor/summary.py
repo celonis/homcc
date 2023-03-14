@@ -89,6 +89,7 @@ class SummaryStats:
             file_stat.compilation_start = timestamp
             if file_stat.get_preprocessing_time() is None:
                 self.preprocessing_stop(filename, timestamp)
+                logger.info("Preprocessing time was invalid, assuming zero duration")
             logger.info("Compilation start timestamp was invalid, assuming zero duration")
         file_stat.compilation_stop = timestamp
 

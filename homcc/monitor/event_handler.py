@@ -115,9 +115,9 @@ class StateFileEventHandler(PatternMatchingEventHandler):
             else:
                 self._register_compilation(event.src_path, statefile, time_now_sec)
             compilation_info = self.table_info[event.src_path]
-            if statefile.phase == StateFile.ClientPhase.COMPILE:
+            if statefile.phase == StateFile.ClientPhase.CPP:
+                self.summary.preprocessing_start(compilation_info.filename, time_now_sec)
+            elif statefile.phase == StateFile.ClientPhase.COMPILE:
                 self.summary.preprocessing_stop(compilation_info.filename, time_now_sec)
                 self.finished_preprocessing_files.append(compilation_info.filename)
                 self.summary.compilation_start(compilation_info.filename, time_now_sec)
-            elif statefile.phase == StateFile.ClientPhase.CPP:
-                self.summary.preprocessing_start(compilation_info.filename, time_now_sec)
