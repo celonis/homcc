@@ -176,7 +176,7 @@ class RemoteHostSemaphore(HostSemaphore):
         logger.debug("Entering semaphore '%s' with value '%i'", self._semaphore.id, self._semaphore.value)
 
         try:
-            super()._acquire(0) # non-blocking acquisition
+            super()._acquire(0)  # non-blocking acquisition
         except sysv_ipc.BusyError as error:
             raise SlotsExhaustedError(f"All compilation slots for host {self._host} are occupied.") from error
         return self
@@ -221,7 +221,7 @@ class LocalHostSemaphore(HostSemaphore):
 
         while True:
             try:
-                super()._acquire(self._compilation_time - self._timeout) # blocking acquisition
+                super()._acquire(self._compilation_time - self._timeout)  # blocking acquisition
                 return self
             except sysv_ipc.BusyError:
                 logger.debug("All compilation slots for localhost are occupied.")
