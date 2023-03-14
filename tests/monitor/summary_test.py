@@ -60,6 +60,9 @@ class TestSummaryStats:
         summary = SummaryStats()
         summary.register_compilation("foo.cpp", "localhost", 0)
 
+        summary.compilation_stop("foo.cpp", 3)
+        assert summary.file_stats["foo.cpp"].compilation_stop == summary.file_stats["foo.cpp"].compilation_start
+        assert summary.file_stats["foo.cpp"].get_compilation_time() == 0
         foo_start_comp = 0
         summary.compilation_start("foo.cpp", foo_start_comp)
         foo_stop_comp = foo_start_comp + 1
@@ -69,6 +72,9 @@ class TestSummaryStats:
         assert summary.file_stats["foo.cpp"].compilation_stop == foo_start_comp - 1
         assert summary.file_stats["foo.cpp"].get_compilation_time() == -1
 
+        summary.preprocessing_stop("foo.cpp", 3)
+        assert summary.file_stats["foo.cpp"].preprocessing_stop == summary.file_stats["foo.cpp"].preprocessing_start
+        assert summary.file_stats["foo.cpp"].get_preprocessing_time() == 0
         foo_start_pre = foo_start_comp + 2
         summary.preprocessing_start("foo.cpp", foo_start_pre)
         foo_stop_pre = foo_start_pre + 1
