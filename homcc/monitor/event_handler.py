@@ -4,7 +4,7 @@ import logging
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Dict, Optional, List
 
 from watchdog.events import FileSystemEvent, PatternMatchingEventHandler
 
@@ -43,8 +43,8 @@ class StateFileEventHandler(PatternMatchingEventHandler):
         super().__init__(*args, **kwargs)
         self.table_info: Dict[Path, CompilationInfo] = {}
         self.summary: SummaryStats = SummaryStats()
-        self.finished_preprocessing_files: bool = False
-        self.finished_compiling_files: bool = False
+        self.finished_preprocessing_files: List[str] = []
+        self.finished_compiling_files: List[str] = []
 
     @staticmethod
     def read_statefile(filepath: Path) -> Optional[StateFile]:
@@ -77,16 +77,20 @@ class StateFileEventHandler(PatternMatchingEventHandler):
         )
 
         # statefile does not exist anymore or deletion was detected
-        if not statefile or event.event_type == "deleted":
+        if (not statefile or event.event_type == "deleted") and event.src_path in self.table_info:
             compilation_info = self.table_info[event.src_path]
+            if compilation_info.filename in self.summary.file_stats and \
+                    self.summary.file_stats[compilation_info.filename].get_preprocessing_time() is None:
+                self.finished_preprocessing_files.append(compilation_info.filename)
             self.summary.deregister_compilation(
                 compilation_info.filename, compilation_info.hostname, int(time_stamp.timestamp())
             )
+            self.finished_compiling_files.append(compilation_info.filename)
             self.table_info.pop(event.src_path, None)
             return
 
         # statefile creation detected
-        if event.event_type == "created":
+        if event.event_type == "created" and statefile:
             self.table_info[event.src_path] = CompilationInfo(statefile)
             self.summary.register_compilation(
                 self.table_info[event.src_path].filename,
@@ -96,17 +100,19 @@ class StateFileEventHandler(PatternMatchingEventHandler):
             return
 
         # statefile modification detected
-        if event.event_type == "modified":
+        if event.event_type == "modified" and statefile:
             # check if modification event is also a creation
-            compilation_info = self.table_info[event.src_path]
-            timestamp_now = int(time_stamp.timestamp())
-            if statefile.phase == StateFile.ClientPhase.COMPILE.name:
-                self.summary.preprocessing_stop(compilation_info.filename, timestamp_now)
-                self.finished_preprocessing_files = True
-                self.summary.compilation_start(compilation_info.filename, timestamp_now)
-            elif statefile.phase == StateFile.ClientPhase.CPP.name:
-                self.summary.preprocessing_start(compilation_info.filename, timestamp_now)
             if event.src_path in self.table_info:
                 self.table_info[event.src_path].phase = StateFile.ClientPhase(statefile.phase).name
             else:
                 self.table_info[event.src_path] = CompilationInfo(statefile)
+            compilation_info = self.table_info[event.src_path]
+            timestamp_now = int(time_stamp.timestamp())
+            if statefile.phase == StateFile.ClientPhase.COMPILE.name:
+                print("finished preprocessing")
+                self.summary.preprocessing_stop(compilation_info.filename, timestamp_now)
+                self.finished_preprocessing_files.append(compilation_info.filename)
+                self.summary.compilation_start(compilation_info.filename, timestamp_now)
+            elif statefile.phase == StateFile.ClientPhase.CPP.name:
+                self.summary.preprocessing_start(compilation_info.filename, timestamp_now)
+                print("started preprocessing")

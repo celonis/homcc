@@ -35,14 +35,14 @@ class FileStats:
     compilation_start: Optional[int] = None
     compilation_stop: Optional[int] = None
 
-    def get_compilation_time(self) -> int:
+    def get_compilation_time(self) -> Optional[int]:
         if self.compilation_start is None or self.compilation_stop is None:
-            raise ValueError("Compilation start or stop was not set yet!")
+            return None
         return self.compilation_stop - self.compilation_start
 
-    def get_preprocessing_time(self) -> int:
+    def get_preprocessing_time(self) -> Optional[int]:
         if self.preprocessing_start is None or self.preprocessing_stop is None:
-            raise ValueError("Preprocessing start or stop was not set yet!")
+            return None
         return self.preprocessing_stop - self.preprocessing_start
 
 
@@ -52,6 +52,12 @@ class SummaryStats:
     def __init__(self):
         self.host_stats: Dict[str, HostStats] = {}
         self.file_stats: Dict[str, FileStats] = {}
+
+    def get_file_stat(self, filename: str) -> FileStats:
+        #necessary because some files are created to fast and the creation is not tracked properly
+        if filename in self.file_stats:
+            return self.file_stats[filename]
+        return FileStats(filename, 0)
 
     def register_compilation(self, filename: str, hostname: str, timestamp: int):
         # if new host, add to dict and default its stats
@@ -81,6 +87,8 @@ class SummaryStats:
         file_stat = self.file_stats[filename]
         if file_stat.compilation_start is None:
             file_stat.compilation_start = timestamp
+            if file_stat.get_preprocessing_time() is None:
+                self.preprocessing_stop(filename, timestamp)
             logger.info("Compilation start timestamp was invalid, assuming zero duration")
         file_stat.compilation_stop = timestamp
 
