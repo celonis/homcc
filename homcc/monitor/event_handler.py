@@ -55,6 +55,15 @@ class StateFileEventHandler(PatternMatchingEventHandler):
             logger.debug("File %s was deleted again before being read.", filepath)
         return None
 
+    def _register_compilation(self, src_path: Path, state_file: StateFile, time_now_sec: int):
+        compilation_info = CompilationInfo(state_file)
+        self.table_info[src_path] = compilation_info
+        self.summary.register_compilation(
+            compilation_info.filename,
+            compilation_info.hostname,
+            time_now_sec,
+        )
+
     def on_any_event(self, event: FileSystemEvent):
         if event.is_directory:
             return
@@ -76,10 +85,13 @@ class StateFileEventHandler(PatternMatchingEventHandler):
         )
 
         # statefile does not exist anymore or deletion was detected
-        if not statefile or event.event_type == "deleted":
+        if (not statefile or event.event_type == "deleted") and event.src_path in self.table_info:
             compilation_info = self.table_info[event.src_path]
             self.summary.deregister_compilation(compilation_info.filename, compilation_info.hostname, time_now_sec)
-            self.table_info.pop(event.src_path, None)
+            self.table_info.pop(event.src_path)
+            return
+
+        if statefile is None:
             return
 
         # statefile creation detected
@@ -100,8 +112,8 @@ class StateFileEventHandler(PatternMatchingEventHandler):
             else:
                 self.table_info[event.src_path] = CompilationInfo(statefile)
             compilation_info = self.table_info[event.src_path]
-            if statefile.phase == StateFile.ClientPhase.CPP.name:
+            if statefile.phase == StateFile.ClientPhase.CPP:
                 self.summary.preprocessing_start(compilation_info.filename, time_now_sec)
-            elif statefile.phase == StateFile.ClientPhase.COMPILE.name:
+            elif statefile.phase == StateFile.ClientPhase.COMPILE:
                 self.summary.preprocessing_stop(compilation_info.filename, time_now_sec)
                 self.summary.compilation_start(compilation_info.filename, time_now_sec)

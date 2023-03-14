@@ -37,12 +37,12 @@ class FileStats:
 
     def get_compilation_time(self) -> int:
         if self.compilation_start is None or self.compilation_stop is None:
-            raise ValueError("Compilation start or stop was not set yet!")
+            return None
         return self.compilation_stop - self.compilation_start
 
     def get_preprocessing_time(self) -> int:
         if self.preprocessing_start is None or self.preprocessing_stop is None:
-            raise ValueError("Preprocessing start or stop was not set yet!")
+            return None
         return self.preprocessing_stop - self.preprocessing_start
 
 
@@ -85,6 +85,9 @@ class SummaryStats:
         file_stat = self.file_stats[filename]
         if file_stat.compilation_start is None:
             file_stat.compilation_start = timestamp
+            if file_stat.get_preprocessing_time() is None:
+                self.preprocessing_stop(filename, timestamp)
+                logger.info("Preprocessing time was invalid, assuming zero duration")
             logger.info("Compilation start timestamp was invalid, assuming zero duration")
         file_stat.compilation_stop = timestamp
 
