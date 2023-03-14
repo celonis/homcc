@@ -4,7 +4,7 @@ import logging
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, Optional, List
+from typing import Dict, List, Optional
 
 from watchdog.events import FileSystemEvent, PatternMatchingEventHandler
 
@@ -89,12 +89,12 @@ class StateFileEventHandler(PatternMatchingEventHandler):
         # statefile does not exist anymore or deletion was detected
         if (not statefile or event.event_type == "deleted") and event.src_path in self.table_info:
             compilation_info = self.table_info[event.src_path]
-            if compilation_info.filename in self.summary.file_stats and \
-                    self.summary.file_stats[compilation_info.filename].get_preprocessing_time() is None:
+            if (
+                compilation_info.filename in self.summary.file_stats
+                and self.summary.file_stats[compilation_info.filename].get_preprocessing_time() is None
+            ):
                 self.finished_preprocessing_files.append(compilation_info.filename)
-            self.summary.deregister_compilation(
-                compilation_info.filename, compilation_info.hostname, time_now_sec
-            )
+            self.summary.deregister_compilation(compilation_info.filename, compilation_info.hostname, time_now_sec)
             self.finished_compiling_files.append(compilation_info.filename)
             self.table_info.pop(event.src_path)
             return

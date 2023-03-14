@@ -15,7 +15,7 @@ from PySide2.QtWidgets import (
     QLabel,
     QMainWindow,
     QPushButton,
-    QVBoxLayout, QHeaderView,
+    QVBoxLayout,
 )
 from watchdog.observers import Observer
 
@@ -127,9 +127,7 @@ class MainWindow(QMainWindow):
         self.table_hosts = self._create_table_widget(["name", "total", "current", "failed"])
         table_files = self._create_table_widget(["Compilation", "Preprocessing"])
         self.table_compiled_files = self._create_table_widget(["sec", "filename"], self.MIN_SMALL_TABLE_WIDTH)
-        self.table_preprocessed_files = self._create_table_widget(
-            ["sec", "filename"], self.MIN_SMALL_TABLE_WIDTH
-        )
+        self.table_preprocessed_files = self._create_table_widget(["sec", "filename"], self.MIN_SMALL_TABLE_WIDTH)
         self.table_compiled_files.setColumnWidth(0, self.MIN_SMALL_TABLE_WIDTH)
         self.table_compiled_files.horizontalHeader().setStretchLastSection(True)
         self.table_preprocessed_files.setColumnWidth(0, self.MIN_SMALL_TABLE_WIDTH)
