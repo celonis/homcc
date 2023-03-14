@@ -1,6 +1,9 @@
 """summarized statistics to keep track of files over time"""
+import logging
 from dataclasses import dataclass, field
 from typing import Dict, Optional
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -51,14 +54,12 @@ class SummaryStats:
         self.file_stats: Dict[str, FileStats] = {}
 
     def register_compilation(self, filename: str, hostname: str, timestamp: int):
-        # if new host add to dict and default its stats
-        # track host stats
+        # if new host, add to dict and default its stats
         if hostname not in self.host_stats:
             self.host_stats[hostname] = HostStats(hostname)
         self.host_stats[hostname].register_compilation()
 
-        # track file stats
-        # only current
+        # track current file stats
         self.file_stats[filename] = FileStats(filename, timestamp)
 
     def preprocessing_start(self, filename: str, timestamp: int):
@@ -67,9 +68,8 @@ class SummaryStats:
     def preprocessing_stop(self, filename: str, timestamp: int):
         file_stat = self.file_stats[filename]
         if file_stat.preprocessing_start is None:
-            raise ValueError("Preprocessing start was not initialized yet!")
-        elif file_stat.preprocessing_start > timestamp:
-            raise ValueError("Timestamp of preprocessing start cannot be after timestamp of preprocessing end!")
+            file_stat.preprocessing_start = timestamp
+            logger.info("Preprocessing start timestamp was invalid, assuming zero duration")
         file_stat.preprocessing_stop = timestamp
 
     # for now this would always be preprocessing stop time but this will change in the future once we know when the
@@ -80,12 +80,17 @@ class SummaryStats:
     def compilation_stop(self, filename: str, timestamp: int):
         file_stat = self.file_stats[filename]
         if file_stat.compilation_start is None:
-            raise ValueError("Compilation start was not initialized yet!")
-        elif file_stat.compilation_start > timestamp:
-            raise ValueError("Timestamp of compilation start cannot be after timestamp of compilation end!")
+            file_stat.compilation_start = timestamp
+            logger.info("Compilation start timestamp was invalid, assuming zero duration")
         file_stat.compilation_stop = timestamp
 
     def deregister_compilation(self, filename: str, hostname: str, timestamp: int):
+        if filename not in self.file_stats:
+            logger.info(
+                "Tried to deregister compilation with filename '%s' which was not registered before. Ignoring it.",
+                filename,
+            )
+            return
         # deregister from hosts
         self.host_stats[hostname].deregister_compilation()
         # mark File as completed
