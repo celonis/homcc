@@ -52,8 +52,8 @@ class MainWindow(QMainWindow):
 
         # trigger these update methods every second
         def update():
-            self.update_elapsed_times()
-            self.update_curr_jobs_table_data()
+            self._update_elapsed_times()
+            self._update_curr_jobs_table_data()
             self._update_summary_table_data(
                 self.table_preprocessed_files,
                 self.state_file_event_handler.finished_preprocessing_files,
@@ -72,7 +72,7 @@ class MainWindow(QMainWindow):
 
         self.show()
 
-    def update_elapsed_times(self):
+    def _update_elapsed_times(self):
         """increments time column by 1 everytime it is called and sets time elapsed column"""
 
         for key in self.compilation_elapsed_times:
@@ -167,7 +167,7 @@ class MainWindow(QMainWindow):
         summary_widget.setLayout(summary_layout)
         return summary_widget
 
-    def update_curr_jobs_table_data(self):
+    def _update_curr_jobs_table_data(self):
         """updates the Current Jobs table"""
 
         self.table_curr_jobs.setRowCount(0)
