@@ -57,7 +57,7 @@ class StateFileEventHandler(PatternMatchingEventHandler):
             logger.debug("File %s was deleted again before being read.", filepath)
         return None
 
-    def _register_compilation(self, src_path: Path, state_file: StateFile, time_now_sec: int):
+    def _register_compilation(self, src_path: Path, state_file: StateFile, time_now_sec: float):
         compilation_info = CompilationInfo(state_file)
         self.table_info[src_path] = compilation_info
         self.summary.register_compilation(
@@ -77,7 +77,7 @@ class StateFileEventHandler(PatternMatchingEventHandler):
             return
 
         time_now = datetime.now()
-        time_now_sec = int(time_now.timestamp())
+        time_now_in_ms = time_now.timestamp()
 
         logger.debug(
             "'%s' - '%s' has been %s!",
@@ -94,7 +94,7 @@ class StateFileEventHandler(PatternMatchingEventHandler):
                 and self.summary.file_stats[compilation_info.filename].get_preprocessing_time() is None
             ):
                 self.finished_preprocessing_files.append(compilation_info.filename)
-            self.summary.deregister_compilation(compilation_info.filename, compilation_info.hostname, time_now_sec)
+            self.summary.deregister_compilation(compilation_info.filename, compilation_info.hostname, time_now_in_ms)
             self.finished_compiling_files.append(compilation_info.filename)
             self.table_info.pop(event.src_path)
             return
@@ -104,7 +104,7 @@ class StateFileEventHandler(PatternMatchingEventHandler):
 
         # statefile creation detected
         if event.event_type == "created":
-            self._register_compilation(event.src_path, statefile, time_now_sec)
+            self._register_compilation(event.src_path, statefile, time_now_in_ms)
             return
 
         # statefile modification detected
@@ -113,11 +113,11 @@ class StateFileEventHandler(PatternMatchingEventHandler):
             if event.src_path in self.table_info:
                 self.table_info[event.src_path].phase = StateFile.ClientPhase(statefile.phase).name
             else:
-                self._register_compilation(event.src_path, statefile, time_now_sec)
+                self._register_compilation(event.src_path, statefile, time_now_in_ms)
             compilation_info = self.table_info[event.src_path]
             if statefile.phase == StateFile.ClientPhase.CPP:
-                self.summary.preprocessing_start(compilation_info.filename, time_now_sec)
+                self.summary.preprocessing_start(compilation_info.filename, time_now_in_ms)
             elif statefile.phase == StateFile.ClientPhase.COMPILE:
-                self.summary.preprocessing_stop(compilation_info.filename, time_now_sec)
+                self.summary.preprocessing_stop(compilation_info.filename, time_now_in_ms)
                 self.finished_preprocessing_files.append(compilation_info.filename)
-                self.summary.compilation_start(compilation_info.filename, time_now_sec)
+                self.summary.compilation_start(compilation_info.filename, time_now_in_ms)
