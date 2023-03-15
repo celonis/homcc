@@ -94,7 +94,7 @@ class StateFileEventHandler(PatternMatchingEventHandler):
             # table
             if (
                 compilation_info.filename in self.summary.file_stats
-                and self.summary.file_stats[compilation_info.filename].get_preprocessing_time() is None
+                and self.summary.file_stats[compilation_info.filename].get_compilation_time() is None
             ):
                 self.finished_preprocessing_files.append(compilation_info.filename)
             self.summary.deregister_compilation(compilation_info.filename, compilation_info.hostname, time_now_in_ms)
@@ -114,7 +114,11 @@ class StateFileEventHandler(PatternMatchingEventHandler):
         if event.event_type == "modified":
             # check if modification event is also a creation
             if event.src_path in self.table_info:
-                self.table_info[event.src_path].phase = StateFile.ClientPhase(statefile.phase).name
+                prev_phase = self.table_info[event.src_path].phase
+                new_phase = StateFile.ClientPhase(statefile.phase).name
+                self.table_info[event.src_path].phase = new_phase
+                if prev_phase == new_phase:
+                    return
             else:
                 self._register_compilation(event.src_path, statefile, time_now_in_ms)
             compilation_info = self.table_info[event.src_path]
