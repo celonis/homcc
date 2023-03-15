@@ -25,7 +25,7 @@ from homcc.common.statefile import StateFile  # pylint: disable=wrong-import-pos
 from homcc.monitor.event_handler import (  # pylint: disable=wrong-import-position
     StateFileEventHandler,
 )
-from homcc.monitor.summary import SummaryStats # pylint: disable=wrong-import-position
+from homcc.monitor.summary import SummaryStats  # pylint: disable=wrong-import-position
 
 
 class MainWindow(QMainWindow):
