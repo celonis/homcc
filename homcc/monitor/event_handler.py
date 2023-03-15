@@ -100,7 +100,7 @@ class StateFileEventHandler(PatternMatchingEventHandler):
             return
 
         # statefile modification detected
-        if event.event_type == "modified" and statefile:
+        if event.event_type == "modified":
             # check if modification event is also a creation
             if event.src_path in self.table_info:
                 self.table_info[event.src_path].phase = StateFile.ClientPhase(statefile.phase).name
