@@ -22,6 +22,7 @@ from watchdog.observers import Observer
 sys.path.append(os.path.join(os.path.dirname(__file__), "../.."))
 
 from homcc.common.statefile import StateFile  # pylint: disable=wrong-import-position
+from homcc.monitor.summary import SummaryStats
 from homcc.monitor.event_handler import (  # pylint: disable=wrong-import-position
     StateFileEventHandler,
 )
@@ -53,8 +54,16 @@ class MainWindow(QMainWindow):
         def update():
             self.update_elapsed_times()
             self.update_curr_jobs_table_data()
-            self.update_summary_preprocessing_table_data()
-            self.update_summary_compilation_table_data()
+            self._update_summary_table_data(
+                self.table_preprocessed_files,
+                self.state_file_event_handler.finished_preprocessing_files,
+                self.state_file_event_handler.summary,
+            )
+            self._update_summary_table_data(
+                self.table_compiled_files,
+                self.state_file_event_handler.finished_compiling_files,
+                self.state_file_event_handler.summary,
+            )
 
         self.compilation_elapsed_times: Dict[Path, int] = {}  # to store time data
         self.update_timer = QtCore.QTimer(self)
@@ -118,6 +127,13 @@ class MainWindow(QMainWindow):
         curr_jobs_widget.setLayout(curr_jobs_layout)
         return curr_jobs_widget
 
+    def _create_summary_table_widget(self) -> QtWidgets.QTableWidget:
+        table_widget = self._create_table_widget(["sec", "filename"], self.MIN_SMALL_TABLE_WIDTH)
+        table_widget.setColumnWidth(0, self.MIN_SMALL_TABLE_WIDTH)
+        table_widget.horizontalHeader().setStretchLastSection(True)
+        table_widget.sortByColumn(0, QtCore.Qt.SortOrder.DescendingOrder)
+        return table_widget
+
     def _create_summary_layout(self) -> QtWidgets.QWidget:
         summary_text = self._create_text_widget("Summary", self.HEADER_FONT_SIZE)
         files_text = self._create_text_widget("Files", self.SUB_HEADER_FONT_SIZE)
@@ -126,15 +142,9 @@ class MainWindow(QMainWindow):
         self.reset = QPushButton("RESET")
         self.table_hosts = self._create_table_widget(["name", "total", "current", "failed"])
         table_files = self._create_table_widget(["Compilation", "Preprocessing"])
-        self.table_compiled_files = self._create_table_widget(["sec", "filename"], self.MIN_SMALL_TABLE_WIDTH)
-        self.table_preprocessed_files = self._create_table_widget(["sec", "filename"], self.MIN_SMALL_TABLE_WIDTH)
-        self.table_compiled_files.setColumnWidth(0, self.MIN_SMALL_TABLE_WIDTH)
-        self.table_compiled_files.horizontalHeader().setStretchLastSection(True)
-        self.table_preprocessed_files.setColumnWidth(0, self.MIN_SMALL_TABLE_WIDTH)
-        self.table_preprocessed_files.horizontalHeader().setStretchLastSection(True)
+        self.table_compiled_files = self._create_summary_table_widget()
+        self.table_preprocessed_files = self._create_summary_table_widget()
 
-        self.table_compiled_files.sortByColumn(0, QtCore.Qt.SortOrder.DescendingOrder)
-        self.table_preprocessed_files.sortByColumn(0, QtCore.Qt.SortOrder.DescendingOrder)
         table_files.insertRow(0)
         table_files.setCellWidget(0, 0, self.table_compiled_files)
         table_files.setCellWidget(0, 1, self.table_preprocessed_files)
@@ -161,55 +171,45 @@ class MainWindow(QMainWindow):
         """updates the Current Jobs table"""
 
         self.table_curr_jobs.setRowCount(0)
-        for key, value in self.state_file_event_handler.table_info.items():
-            if key not in self.compilation_elapsed_times:
-                self.compilation_elapsed_times[key] = 0
+        for path, compilation_info in self.state_file_event_handler.table_info.items():
+            if path not in self.compilation_elapsed_times:
+                self.compilation_elapsed_times[path] = 0
             row = [
-                value.hostname,
-                value.phase,
-                value.filename,
-                f"{self.compilation_elapsed_times[key]}s",
+                compilation_info.hostname,
+                compilation_info.phase,
+                compilation_info.filename,
+                f"{self.compilation_elapsed_times[path]}s",
             ]
-            self.add_row(self.table_curr_jobs, row)
-
-    def update_summary_preprocessing_table_data(self):
-        """updates the preprocessing table on the summary side"""
-        if self.state_file_event_handler.finished_preprocessing_files:
-            for preprocessed_file in self.state_file_event_handler.finished_preprocessing_files:
-                file_stats = self.state_file_event_handler.summary.get_file_stat(preprocessed_file)
-                preprocessing_time = file_stats.get_preprocessing_time()
-                if preprocessing_time is not None:
-                    row = [preprocessing_time, preprocessed_file]
-                    self.add_row(self.table_preprocessed_files, row, True)
-            self.state_file_event_handler.finished_preprocessing_files = []
-            self.table_preprocessed_files.sortByColumn(0, QtCore.Qt.SortOrder.DescendingOrder)
-
-    def update_summary_compilation_table_data(self):
-        """updates the compilation table on the summary side"""
-        if self.state_file_event_handler.finished_compiling_files:
-            for compiled_file in self.state_file_event_handler.finished_compiling_files:
-                file_stats = self.state_file_event_handler.summary.get_file_stat(compiled_file)
-                compilation_time = file_stats.get_compilation_time()
-                if compilation_time is not None:
-                    row = [compilation_time, compiled_file]
-                    self.add_row(self.table_compiled_files, row, True)
-            self.state_file_event_handler.finished_compiling_files = []
-            self.table_compiled_files.sortByColumn(0, QtCore.Qt.SortOrder.DescendingOrder)
+            self._add_row(self.table_curr_jobs, row)
 
     @staticmethod
-    def add_row(table: QtWidgets.QTableWidget, row: List[str], is_file_table: bool = False):
-        """adds a given list of rows to a given table widget"""
+    def _sort_table_widget_descending(table_widget: QtWidgets.QTableWidget):
+        table_widget.sortByColumn(0, QtCore.Qt.SortOrder.DescendingOrder)
 
+    @staticmethod
+    def _update_summary_table_data(table: QtWidgets.QTableWidget, finished_files: List[str], summary: SummaryStats):
+        """updates a given table on the summary side"""
+        if finished_files:
+            for preprocessed_file in finished_files:
+                file_stats = summary.get_file_stat(preprocessed_file)
+                preprocessing_time = file_stats.get_preprocessing_time()
+                if preprocessing_time is not None:
+                    MainWindow._add_row(table, [preprocessing_time, preprocessed_file])
+            finished_files.clear()
+            MainWindow._sort_table_widget_descending(table)
+
+    @staticmethod
+    def _add_row(table: QtWidgets.QTableWidget, row: List[object]):
+        """adds a given list of rows to a given table widget"""
         row_index = table.rowCount()
         table.insertRow(row_index)
-        if is_file_table:
-            widget_item = QtWidgets.QTableWidgetItem()
-            widget_item.setData(0, row[0])
-            table.setItem(row_index, 0, widget_item)
-            table.setItem(row_index, 1, QtWidgets.QTableWidgetItem(row[1]))
-        else:
-            for i, item in enumerate(row):
+        for i, item in enumerate(row):
+            if isinstance(item, str):
                 table.setItem(row_index, i, QtWidgets.QTableWidgetItem(item))
+            else:
+                widget_item = QtWidgets.QTableWidgetItem()
+                widget_item.setData(i, item)
+                table.setItem(row_index, i, widget_item)
 
     def __del__(self):
         self.state_file_observer.stop()

@@ -54,7 +54,7 @@ class SummaryStats:
         self.file_stats: Dict[str, FileStats] = {}
 
     def get_file_stat(self, filename: str) -> FileStats:
-        # necessary because some files are created to fast and the creation is not tracked properly
+        # necessary because some files are created too fast and the creation is not tracked properly
         if filename in self.file_stats:
             return self.file_stats[filename]
         return FileStats(filename, 0)
