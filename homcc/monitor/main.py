@@ -19,13 +19,14 @@ from PySide2.QtWidgets import (
 )
 from watchdog.observers import Observer
 
+from homcc.monitor.summary import SummaryStats
+
 sys.path.append(os.path.join(os.path.dirname(__file__), "../.."))
 
 from homcc.common.statefile import StateFile  # pylint: disable=wrong-import-position
 from homcc.monitor.event_handler import (  # pylint: disable=wrong-import-position
     StateFileEventHandler,
 )
-from homcc.monitor.summary import SummaryStats
 
 
 class MainWindow(QMainWindow):
