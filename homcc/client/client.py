@@ -94,6 +94,16 @@ class HostSemaphore(ABC):
     _host_limit: int
     """Maximal semaphore value."""
 
+    def __init__(self, host: Host):
+        # signal handling to properly remove the semaphore
+        signal.signal(signal.SIGINT, self._handle_interrupt)
+        signal.signal(signal.SIGTERM, self._handle_termination)
+
+        self._semaphore_key = int(host)
+        self._host_limit = host.limit
+
+        self._create_semaphore()
+
     def _create_semaphore(self):
         """Create and set host id semaphore with host slot limit if not already existing"""
         try:
@@ -114,16 +124,7 @@ class HostSemaphore(ABC):
         except sysv_ipc.ExistentialError:
             logger.debug("Semaphore has been deleted while trying to acquire it. Recreating it again now.")
             self._create_semaphore()
-
-    def __init__(self, host: Host):
-        # signal handling to properly remove the semaphore
-        signal.signal(signal.SIGINT, self._handle_interrupt)
-        signal.signal(signal.SIGTERM, self._handle_termination)
-
-        self._semaphore_key = int(host)
-        self._host_limit = host.limit
-
-        self._create_semaphore()
+            self._acquire(timeout)
 
     def _handle_interrupt(self, _, frame):
         self.__exit__()
@@ -135,11 +136,7 @@ class HostSemaphore(ABC):
         logger.debug("SIGTERM:\n%s", repr(frame))
         sys.exit("Stopped by SIGTERM signal")
 
-    @abstractmethod
-    def __enter__(self):
-        pass
-
-    def __exit__(self, *_):
+    def _clean_up(self):
         if self._semaphore is not None:
             try:
                 logger.debug("Exiting semaphore '%s' with value '%i'", self._semaphore.id, self._semaphore.value)
@@ -154,6 +151,13 @@ class HostSemaphore(ABC):
 
             # prevent double release while receiving signal during normal context manager exit
             self._semaphore = None  # type: ignore
+
+    @abstractmethod
+    def __enter__(self):
+        pass
+
+    def __exit__(self, *_):
+        self._clean_up()
 
 
 class RemoteHostSemaphore(HostSemaphore):

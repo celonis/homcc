@@ -123,6 +123,18 @@ class TestRemoteHostSemaphore:
             # check if semaphore got cleaned up
             sysv_ipc.Semaphore(host_id)
 
+    def test_delete_acquire_race(self, unused_tcp_port: int):
+        host: Host = Host(type=ConnectionType.TCP, name=self.test_release.__name__, port=unused_tcp_port, limit=2)
+        
+        first_sem = RemoteHostSemaphore(host)
+        first_sem._acquire(1.0) # pylint: disable=protected-access
+
+        second_sem = RemoteHostSemaphore(host)
+        first_sem._clean_up() # pylint: disable=protected-access
+        second_sem._acquire(1.0) # pylint: disable=protected-access
+
+        assert second_sem._semaphore.value == 1 # pylint: disable=protected-access
+
 
 class TestLocalHostSemaphore:
     """Tests for LocalHostSemaphore"""
