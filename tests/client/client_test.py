@@ -124,7 +124,7 @@ class TestRemoteHostSemaphore:
             sysv_ipc.Semaphore(host_id)
 
     def test_delete_acquire_race(self, unused_tcp_port: int):
-        host: Host = Host(type=ConnectionType.TCP, name=self.test_release.__name__, port=unused_tcp_port, limit=2)
+        host: Host = Host(type=ConnectionType.TCP, name=self.test_delete_acquire_race.__name__, port=unused_tcp_port, limit=2)
         first_sem = RemoteHostSemaphore(host)
         first_sem._acquire(1.0)  # pylint: disable=protected-access
 
