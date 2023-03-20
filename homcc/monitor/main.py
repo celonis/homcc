@@ -193,17 +193,19 @@ class MainWindow(QMainWindow):
         table: QtWidgets.QTableWidget, finished_files: List[str], summary: SummaryStats, is_compilation_summary: bool
     ):
         """updates a given table on the summary side"""
-        if finished_files:
-            for file_name in finished_files:
-                file_stats = summary.get_file_stat(file_name)
-                if is_compilation_summary:
-                    processing_time = file_stats.get_compilation_time()
-                else:
-                    processing_time = file_stats.get_preprocessing_time()
+        if not finished_files:
+            return
+            
+        for file_name in finished_files:
+            file_stats = summary.get_file_stat(file_name)
+            if is_compilation_summary:
+                processing_time = file_stats.get_compilation_time()
+            else:
+                processing_time = file_stats.get_preprocessing_time()
                 if processing_time is not None:
                     MainWindow._add_row(table, [processing_time, file_name])
-            finished_files.clear()
-            MainWindow._sort_table_widget_descending(table)
+        finished_files.clear()
+        MainWindow._sort_table_widget_descending(table)
 
     @staticmethod
     def _add_row(table: QtWidgets.QTableWidget, row: List[object]):
