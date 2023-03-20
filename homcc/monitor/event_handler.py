@@ -26,6 +26,7 @@ class CompilationInfo:
         self.hostname = statefile.hostname.decode(ENCODING)
         self.phase = StateFile.ClientPhase(statefile.phase).name
         self.filename = statefile.source_base_filename.decode(ENCODING)
+
         logger.debug(
             "Created entry for hostname '%s' in Phase '%s' with source base filename '%s' ",
             self.hostname,
@@ -45,6 +46,7 @@ class StateFileEventHandler(PatternMatchingEventHandler):
     @staticmethod
     def read_statefile(filepath: Path) -> Optional[StateFile]:
         """return read StateFile if existent and not empty"""
+
         try:
             if file_bytes := Path.read_bytes(filepath):
                 return StateFile.from_bytes(file_bytes)
@@ -52,61 +54,60 @@ class StateFileEventHandler(PatternMatchingEventHandler):
             logger.debug("File %s was deleted again before being read.", filepath)
         return None
 
+    def _register_compilation(self, src_path: Path, state_file: StateFile, time_now_sec: float):
+        compilation_info = CompilationInfo(state_file)
+        self.table_info[src_path] = compilation_info
+        self.summary.register_compilation(
+            compilation_info.filename,
+            compilation_info.hostname,
+            time_now_sec,
+        )
+
     def on_any_event(self, event: FileSystemEvent):
         if event.is_directory:
             return
+
         statefile = self.read_statefile(Path(event.src_path))
+
         # do nothing for moved events
         if event.event_type == "moved":
             return
 
-        time_stamp = datetime.now()
+        time_now = datetime.now()
+        time_now_in_ms = time_now.timestamp()
 
         logger.debug(
             "'%s' - '%s' has been %s!",
-            time_stamp.strftime("%d/%m/%Y %H:%M:%S"),
+            time_now.strftime("%d/%m/%Y %H:%M:%S"),
             event.src_path,
             event.event_type,
         )
 
-        # yagmur: deletion was detected
-        # yagmur: I removed (or not statefile) part from here
-        if event.event_type == "deleted":
-            if event.src_path in self.table_info:
-                compilation_info = self.table_info[event.src_path]
-                self.summary.deregister_compilation(
-                    compilation_info.filename, compilation_info.hostname, int(time_stamp.timestamp())
-                )
-                self.table_info.pop(event.src_path, None)
-                return
+        # statefile does not exist anymore or deletion was detected
+        if (not statefile or event.event_type == "deleted") and event.src_path in self.table_info:
+            compilation_info = self.table_info[event.src_path]
+            self.summary.deregister_compilation(compilation_info.filename, compilation_info.hostname, time_now_in_ms)
+            self.table_info.pop(event.src_path)
+            return
+
+        if statefile is None:
+            return
 
         # statefile creation detected
         if event.event_type == "created":
-            # yagmur: check if statefile exists
-            if statefile:
-                self.table_info[event.src_path] = CompilationInfo(statefile)
-                self.summary.register_compilation(
-                    self.table_info[event.src_path].filename,
-                    self.table_info[event.src_path].hostname,
-                    int(time_stamp.timestamp()),
-                )
-                return
+            self._register_compilation(event.src_path, statefile, time_now_in_ms)
+            return
 
         # statefile modification detected
-        if event.event_type == "modified":
-            # yagmur: check if statefile exists
-            if statefile:
-                # check if modification event is also a creation
-                if event.src_path in self.table_info:
-                    compilation_info = self.table_info[event.src_path]
-                    timestamp_now = int(time_stamp.timestamp())
-                    if statefile.phase == StateFile.ClientPhase.COMPILE.name:
-                        self.summary.compilation_start(compilation_info.filename, timestamp_now)
-                    elif statefile.phase == StateFile.ClientPhase.CPP.name:
-                        self.summary.preprocessing_start(compilation_info.filename, timestamp_now)
-                    if event.src_path in self.table_info:
-                        if self.table_info[event.src_path].phase == StateFile.ClientPhase.CPP.name:
-                            self.summary.preprocessing_stop(compilation_info.filename, timestamp_now)
-                        self.table_info[event.src_path].phase = StateFile.ClientPhase(statefile.phase).name
-                    else:
-                        self.table_info[event.src_path] = CompilationInfo(statefile)
+        if event.event_type == "modified" and statefile:
+            # check if modification event is also a creation
+            if event.src_path in self.table_info:
+                self.table_info[event.src_path].phase = StateFile.ClientPhase(statefile.phase).name
+            else:
+                self._register_compilation(event.src_path, statefile, time_now_in_ms)
+            compilation_info = self.table_info[event.src_path]
+            if statefile.phase == StateFile.ClientPhase.CPP:
+                self.summary.preprocessing_start(compilation_info.filename, time_now_in_ms)
+            elif statefile.phase == StateFile.ClientPhase.COMPILE:
+                self.summary.preprocessing_stop(compilation_info.filename, time_now_in_ms)
+                self.summary.compilation_start(compilation_info.filename, time_now_in_ms)
