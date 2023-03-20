@@ -15,7 +15,7 @@ from PySide2.QtWidgets import (
     QLabel,
     QMainWindow,
     QPushButton,
-    QVBoxLayout,
+    QVBoxLayout, QTableWidget,
 )
 from watchdog.observers import Observer
 
