@@ -1,6 +1,7 @@
 """summarized statistics to keep track of files over time"""
 import logging
 from dataclasses import dataclass, field
+from datetime import datetime
 from typing import Dict, Optional
 
 logger = logging.getLogger(__name__)
@@ -55,9 +56,9 @@ class SummaryStats:
 
     def get_file_stat(self, filename: str) -> FileStats:
         # necessary because some files are created too fast and the creation is not tracked properly
-        if filename in self.file_stats:
-            return self.file_stats[filename]
-        return FileStats(filename, 0)
+        if filename not in self.file_stats:
+            self.file_stats[filename] = FileStats(filename, datetime.now().timestamp())
+        return self.file_stats[filename]
 
     def register_compilation(self, filename: str, hostname: str, timestamp: float):
         # if new host, add to dict and default its stats
