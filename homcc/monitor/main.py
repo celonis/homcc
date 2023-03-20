@@ -58,11 +58,13 @@ class MainWindow(QMainWindow):
                 self.table_preprocessed_files,
                 self.state_file_event_handler.finished_preprocessing_files,
                 self.state_file_event_handler.summary,
+                False,
             )
             self._update_summary_table_data(
                 self.table_compiled_files,
                 self.state_file_event_handler.finished_compiling_files,
                 self.state_file_event_handler.summary,
+                True,
             )
 
         self.compilation_elapsed_times: Dict[Path, int] = {}  # to store time data
@@ -187,14 +189,19 @@ class MainWindow(QMainWindow):
         table_widget.sortByColumn(0, QtCore.Qt.SortOrder.DescendingOrder)
 
     @staticmethod
-    def _update_summary_table_data(table: QtWidgets.QTableWidget, finished_files: List[str], summary: SummaryStats):
+    def _update_summary_table_data(
+        table: QtWidgets.QTableWidget, finished_files: List[str], summary: SummaryStats, is_compilation_summary: bool
+    ):
         """updates a given table on the summary side"""
         if finished_files:
-            for preprocessed_file in finished_files:
-                file_stats = summary.get_file_stat(preprocessed_file)
-                preprocessing_time = file_stats.get_preprocessing_time()
-                if preprocessing_time is not None:
-                    MainWindow._add_row(table, [preprocessing_time, preprocessed_file])
+            for file_name in finished_files:
+                file_stats = summary.get_file_stat(file_name)
+                if is_compilation_summary:
+                    processing_time = file_stats.get_compilation_time()
+                else:
+                    processing_time = file_stats.get_preprocessing_time()
+                if processing_time is not None:
+                    MainWindow._add_row(table, [processing_time, file_name])
             finished_files.clear()
             MainWindow._sort_table_widget_descending(table)
 
