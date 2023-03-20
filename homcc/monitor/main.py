@@ -16,7 +16,6 @@ from PySide2.QtWidgets import (
     QMainWindow,
     QPushButton,
     QVBoxLayout,
-    QTableWidget,
 )
 from watchdog.observers import Observer
 
@@ -190,7 +189,6 @@ class MainWindow(QMainWindow):
         """updates row data on hosts table every second"""
 
         self.table_hosts.setRowCount(0)
-        print(len(self.state_file_event_handler.summary.host_stats))
         for host_stat in self.state_file_event_handler.summary.host_stats.values():
             # failed column set to 0 for now
             row = [
