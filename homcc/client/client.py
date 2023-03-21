@@ -99,14 +99,32 @@ class HostSemaphore(ABC):
         signal.signal(signal.SIGINT, self._handle_interrupt)
         signal.signal(signal.SIGTERM, self._handle_termination)
 
+        self._semaphore_key = int(host)
         self._host_limit = host.limit
 
-        semaphore_key: int = int(host)
-        # create host-id semaphore with host slot limit if not already existing
+        self._create_semaphore()
+
+    def _create_semaphore(self):
+        """Create and set host id semaphore with host slot limit if not already existing"""
         try:
-            self._semaphore = sysv_ipc.Semaphore(key=semaphore_key, flags=sysv_ipc.IPC_CREX, initial_value=host.limit)
+            self._semaphore = sysv_ipc.Semaphore(
+                key=self._semaphore_key, flags=sysv_ipc.IPC_CREX, initial_value=self._host_limit
+            )
         except sysv_ipc.ExistentialError:
-            self._semaphore = sysv_ipc.Semaphore(key=semaphore_key)
+            self._semaphore = sysv_ipc.Semaphore(key=self._semaphore_key)
+
+            # SysV semaphores are broken by design. To work around a race condition, this code is in place.
+            # See https://semanchuk.com/philip/sysv_ipc/#sem_init
+            while not self._semaphore.o_time:
+                time.sleep(0.1)
+
+    def _acquire(self, timeout: float):
+        try:
+            self._semaphore.acquire(timeout)
+        except sysv_ipc.ExistentialError:
+            logger.debug("Semaphore has been deleted while trying to acquire it. Recreating it again now.")
+            self._create_semaphore()
+            self._acquire(timeout)
 
     def _handle_interrupt(self, _, frame):
         self.__exit__()
@@ -118,16 +136,12 @@ class HostSemaphore(ABC):
         logger.debug("SIGTERM:\n%s", repr(frame))
         sys.exit("Stopped by SIGTERM signal")
 
-    @abstractmethod
-    def __enter__(self):
-        pass
-
-    def __exit__(self, *exc):
+    def _clean_up(self):
         if self._semaphore is not None:
             try:
                 logger.debug("Exiting semaphore '%s' with value '%i'", self._semaphore.id, self._semaphore.value)
 
-                self._semaphore.release()  # releases the semaphore
+                self._semaphore.release()
 
                 if self._semaphore.value == self._host_limit:
                     # remove the semaphore from the system if no other process currently holds it
@@ -137,6 +151,13 @@ class HostSemaphore(ABC):
 
             # prevent double release while receiving signal during normal context manager exit
             self._semaphore = None  # type: ignore
+
+    @abstractmethod
+    def __enter__(self):
+        pass
+
+    def __exit__(self, *_):
+        self._clean_up()
 
 
 class RemoteHostSemaphore(HostSemaphore):
@@ -163,7 +184,7 @@ class RemoteHostSemaphore(HostSemaphore):
         logger.debug("Entering semaphore '%s' with value '%i'", self._semaphore.id, self._semaphore.value)
 
         try:
-            self._semaphore.acquire(0)  # non-blocking acquisition
+            self._acquire(0)  # non-blocking acquisition
         except sysv_ipc.BusyError as error:
             raise SlotsExhaustedError(f"All compilation slots for host {self._host} are occupied.") from error
         return self
@@ -208,9 +229,8 @@ class LocalHostSemaphore(HostSemaphore):
 
         while True:
             try:
-                self._semaphore.acquire(self._compilation_time - self._timeout)  # blocking acquisition
+                super()._acquire(self._compilation_time - self._timeout)  # blocking acquisition
                 return self
-
             except sysv_ipc.BusyError:
                 logger.debug("All compilation slots for localhost are occupied.")
                 # inverse exponential backoff: https://www.desmos.com/calculator/uniats0s4c
