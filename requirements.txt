@@ -15,4 +15,4 @@ pytest-mock
 stdeb>=0.10.0
 
 watchdog~=2.3.0
-setuptools~=60.2.0
+setuptools
