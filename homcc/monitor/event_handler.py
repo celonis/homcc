@@ -122,7 +122,7 @@ class StateFileEventHandler(PatternMatchingEventHandler):
                     return
             else:
                 self._register_compilation(event.src_path, statefile, time_now_in_ms)
-        if event.event_type == "modified" or event.event_type == "created":
+        if event.event_type in ["modified", "created"]:
             compilation_info = self.table_info[event.src_path]
             if statefile.phase == StateFile.ClientPhase.CPP.value:
                 self.summary.preprocessing_start(compilation_info.filename, time_now_in_ms)
