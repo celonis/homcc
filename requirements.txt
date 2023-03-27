@@ -7,7 +7,7 @@ isort[colors]
 mypy==0.990
 pylint
 PySide2~=5.15
-pytest~=7.2.1
+pytest
 pytest-asyncio
 pytest-cov
 pytest-timeout
@@ -15,4 +15,4 @@ pytest-mock
 stdeb>=0.10.0
 
 watchdog~=2.3.0
-setuptools~=60.2.0
+setuptools

@@ -54,17 +54,18 @@ class MainWindow(QMainWindow):
         def update():
             self._update_elapsed_times()
             self._update_curr_jobs_table_data()
+            is_compilation_summary = True
             self._update_summary_table_data(
                 self.table_preprocessed_files,
                 self.state_file_event_handler.finished_preprocessing_files,
                 self.state_file_event_handler.summary,
-                False,
+                not is_compilation_summary,
             )
             self._update_summary_table_data(
                 self.table_compiled_files,
                 self.state_file_event_handler.finished_compiling_files,
                 self.state_file_event_handler.summary,
-                True,
+                is_compilation_summary,
             )
             self._update_summary_hosts_table()
 
@@ -208,17 +209,18 @@ class MainWindow(QMainWindow):
         table: QtWidgets.QTableWidget, finished_files: List[str], summary: SummaryStats, is_compilation_summary: bool
     ):
         """updates a given table on the summary side"""
-        if finished_files:
-            for file_name in finished_files:
-                file_stats = summary.get_file_stat(file_name)
-                if is_compilation_summary:
-                    processing_time = file_stats.get_compilation_time()
-                else:
-                    processing_time = file_stats.get_preprocessing_time()
-                if processing_time is not None:
-                    MainWindow._add_row(table, [processing_time, file_name])
-            finished_files.clear()
-            MainWindow._sort_table_widget_descending(table)
+        if not finished_files:
+            return
+
+        for file_name in finished_files:
+            file_stats = summary.get_file_stat(file_name)
+            time_measure = (
+                file_stats.get_compilation_time() if is_compilation_summary else file_stats.get_preprocessing_time()
+            )
+            if time_measure is not None:
+                MainWindow._add_row(table, [time_measure, file_name])
+        finished_files.clear()
+        MainWindow._sort_table_widget_descending(table)
 
     @staticmethod
     def _add_row(table: QtWidgets.QTableWidget, row: List[object]):

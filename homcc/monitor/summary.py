@@ -75,7 +75,7 @@ class SummaryStats:
     def preprocessing_stop(self, filename: str, timestamp: float):
         file_stat = self.file_stats[filename]
         if file_stat.preprocessing_start is None:
-            file_stat.preprocessing_start = timestamp
+            self.preprocessing_start(filename, timestamp)
             logger.info("Preprocessing start timestamp was invalid, assuming zero duration")
         file_stat.preprocessing_stop = timestamp
 

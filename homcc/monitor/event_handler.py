@@ -88,6 +88,8 @@ class StateFileEventHandler(PatternMatchingEventHandler):
         # statefile does not exist anymore or deletion was detected
         if (not statefile or event.event_type == "deleted") and event.src_path in self.table_info:
             compilation_info = self.table_info[event.src_path]
+            self.summary.deregister_compilation(compilation_info.filename, compilation_info.hostname, time_now_in_ms)
+            self.finished_compiling_files.append(compilation_info.filename)
             # if somehow the start or stop of preprocessing was skipped we assume that the time was too short
             # for measuring and set it here to zero and put it in our list for visualizing it in the preprocessing
             # table
@@ -96,8 +98,6 @@ class StateFileEventHandler(PatternMatchingEventHandler):
                 and self.summary.file_stats[compilation_info.filename].get_preprocessing_time() is None
             ):
                 self.finished_preprocessing_files.append(compilation_info.filename)
-            self.summary.deregister_compilation(compilation_info.filename, compilation_info.hostname, time_now_in_ms)
-            self.finished_compiling_files.append(compilation_info.filename)
             self.table_info.pop(event.src_path)
             return
 
@@ -107,7 +107,8 @@ class StateFileEventHandler(PatternMatchingEventHandler):
         # statefile creation detected
         if event.event_type == "created":
             self._register_compilation(event.src_path, statefile, time_now_in_ms)
-            return
+            if statefile.phase == StateFile.ClientPhase.CPP:
+                self.summary.preprocessing_start(self.table_info[event.src_path].filename, time_now_in_ms)
 
         # statefile modification detected
         if event.event_type == "modified":
@@ -121,10 +122,11 @@ class StateFileEventHandler(PatternMatchingEventHandler):
                     return
             else:
                 self._register_compilation(event.src_path, statefile, time_now_in_ms)
+        if event.event_type == "modified" or event.event_type == "created":
             compilation_info = self.table_info[event.src_path]
-            if statefile.phase == StateFile.ClientPhase.CPP:
+            if statefile.phase == StateFile.ClientPhase.CPP.value:
                 self.summary.preprocessing_start(compilation_info.filename, time_now_in_ms)
-            elif statefile.phase == StateFile.ClientPhase.COMPILE:
+            elif statefile.phase == StateFile.ClientPhase.COMPILE.value:
                 self.summary.preprocessing_stop(compilation_info.filename, time_now_in_ms)
                 self.finished_preprocessing_files.append(compilation_info.filename)
                 self.summary.compilation_start(compilation_info.filename, time_now_in_ms)
