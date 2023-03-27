@@ -1,3 +1,7 @@
+# Copyright (c) 2023 Celonis SE
+# Covered under the included MIT License:
+#   https://github.com/celonis/homcc/blob/main/LICENSE
+
 """ Tests for common/compression.py"""
 from homcc.common.compression import LZMA, LZO, CompressedBytes, NoCompression
 
