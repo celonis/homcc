@@ -214,7 +214,6 @@ class MainWindow(QMainWindow):
         table.insertRow(row_index)
         for i, item in enumerate(row):
             if isinstance(item, str):
-                # item.replace(chr(0), "")
                 table.setItem(row_index, i, QtWidgets.QTableWidgetItem(item))
             else:
                 widget_item = QtWidgets.QTableWidgetItem()
