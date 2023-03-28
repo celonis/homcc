@@ -1,3 +1,7 @@
+# Copyright (c) 2023 Celonis SE
+# Covered under the included MIT License:
+#   https://github.com/celonis/homcc/blob/main/LICENSE
+
 """Tests regarding the arguments module of homcc."""
 from pathlib import Path
 from typing import List, Optional

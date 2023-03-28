@@ -1,3 +1,7 @@
+# Copyright (c) 2023 Celonis SE
+# Covered under the included MIT License:
+#   https://github.com/celonis/homcc/blob/main/LICENSE
+
 """Module containing methods to manage the server environment, mostly file and path manipulation."""
 import logging
 import os

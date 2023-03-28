@@ -1,3 +1,7 @@
+# Copyright (c) 2023 Celonis SE
+# Covered under the included MIT License:
+#   https://github.com/celonis/homcc/blob/main/LICENSE
+
 """Tests the messages module of homcc."""
 import os
 from typing import Dict, List
