@@ -58,13 +58,13 @@ class MainWindow(QMainWindow):
                 self.table_preprocessed_files,
                 self.state_file_event_handler.finished_preprocessing_files,
                 self.state_file_event_handler.summary,
-                False,
+                is_compilation_summary=False,
             )
             self._update_summary_table_data(
                 self.table_compiled_files,
                 self.state_file_event_handler.finished_compiling_files,
                 self.state_file_event_handler.summary,
-                True,
+                is_compilation_summary=True,
             )
             self._update_summary_hosts_table()
 
@@ -217,8 +217,7 @@ class MainWindow(QMainWindow):
                 time_measure := (
                     file_stats.get_compilation_time() if is_compilation_summary else file_stats.get_preprocessing_time()
                 )
-                is not None
-            ):
+            ) is not None:
                 MainWindow._add_row(table, [time_measure, file_name])
         finished_files.clear()
         MainWindow._sort_table_widget_descending(table)

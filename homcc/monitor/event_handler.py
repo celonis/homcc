@@ -71,8 +71,8 @@ class StateFileEventHandler(PatternMatchingEventHandler):
 
         statefile = self.read_statefile(Path(event.src_path))
 
-        # do nothing for moved events
-        if event.event_type == "moved":
+        # do nothing for moved, closed and opened events
+        if event.event_type in ["moved", "opened", "closed"]:
             return
 
         time_now = datetime.now()
@@ -87,7 +87,7 @@ class StateFileEventHandler(PatternMatchingEventHandler):
 
         # statefile does not exist anymore or deletion was detected
         if (not statefile or event.event_type == "deleted") and event.src_path in self.table_info:
-            compilation_info = self.table_info[event.src_path]
+            compilation_info = self.table_info.pop(event.src_path)
             # if the start or stop of preprocessing was skipped, we assume that the time was too short for measurement
             # and will therefore be visualized with 0s
             if (
@@ -97,7 +97,6 @@ class StateFileEventHandler(PatternMatchingEventHandler):
                 self.finished_preprocessing_files.append(compilation_info.filename)
             self.summary.deregister_compilation(compilation_info.filename, compilation_info.hostname, time_now_in_ms)
             self.finished_compiling_files.append(compilation_info.filename)
-            self.table_info.pop(event.src_path)
             return
 
         if statefile is None:
@@ -121,11 +120,11 @@ class StateFileEventHandler(PatternMatchingEventHandler):
                     return
             else:
                 self._register_compilation(event.src_path, statefile, time_now_in_ms)
-        if event.event_type in ["modified", "created"]:
-            compilation_info = self.table_info[event.src_path]
-            if statefile.phase == StateFile.ClientPhase.CPP.value:
-                self.summary.preprocessing_start(compilation_info.filename, time_now_in_ms)
-            elif statefile.phase == StateFile.ClientPhase.COMPILE.value:
-                self.summary.preprocessing_stop(compilation_info.filename, time_now_in_ms)
-                self.finished_preprocessing_files.append(compilation_info.filename)
-                self.summary.compilation_start(compilation_info.filename, time_now_in_ms)
+        compilation_info = self.table_info[event.src_path]
+        # TODO(s.pirsch): check correct enum usage (type conversion)
+        if statefile.phase == StateFile.ClientPhase.CPP.value:
+            self.summary.preprocessing_start(compilation_info.filename, time_now_in_ms)
+        elif statefile.phase == StateFile.ClientPhase.COMPILE.value:
+            self.summary.preprocessing_stop(compilation_info.filename, time_now_in_ms)
+            self.finished_preprocessing_files.append(compilation_info.filename)
+            self.summary.compilation_start(compilation_info.filename, time_now_in_ms)
