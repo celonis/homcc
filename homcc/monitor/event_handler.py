@@ -106,8 +106,6 @@ class StateFileEventHandler(PatternMatchingEventHandler):
         # statefile creation detected
         if event.event_type == "created":
             self._register_compilation(event.src_path, statefile, time_now_in_ms)
-            if statefile.phase == StateFile.ClientPhase.CPP:
-                self.summary.preprocessing_start(self.table_info[event.src_path].filename, time_now_in_ms)
 
         # statefile modification detected
         if event.event_type == "modified":
@@ -121,6 +119,7 @@ class StateFileEventHandler(PatternMatchingEventHandler):
                     return
             else:
                 self._register_compilation(event.src_path, statefile, time_now_in_ms)
+
         compilation_info = self.table_info[event.src_path]
         # TODO(s.pirsch): check correct enum usage (type conversion)
         if statefile.phase == StateFile.ClientPhase.CPP.value:
