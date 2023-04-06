@@ -202,8 +202,7 @@ class MainWindow(QMainWindow):
                 time_measure := (
                     file_stats.get_compilation_time() if is_compilation_summary else file_stats.get_preprocessing_time()
                 )
-                is not None
-            ):
+            ) is not None:
                 MainWindow._add_row(table, [time_measure, file_name])
         finished_files.clear()
         MainWindow._sort_table_widget_descending(table)

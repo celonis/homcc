@@ -72,8 +72,8 @@ class StateFileEventHandler(PatternMatchingEventHandler):
 
         statefile = self.read_statefile(Path(event.src_path))
 
-        # do nothing for moved events
-        if event.event_type == "moved":
+        # do nothing for moved, closed and opened events
+        if event.event_type in ["moved", "opened", "closed"]:
             return
 
         time_now = datetime.now()
@@ -122,11 +122,11 @@ class StateFileEventHandler(PatternMatchingEventHandler):
                     return
             else:
                 self._register_compilation(event.src_path, statefile, time_now_in_ms)
-        if event.event_type in ["modified", "created"]:
-            compilation_info = self.table_info[event.src_path]
-            if statefile.phase == StateFile.ClientPhase.CPP.value:
-                self.summary.preprocessing_start(compilation_info.filename, time_now_in_ms)
-            elif statefile.phase == StateFile.ClientPhase.COMPILE.value:
-                self.summary.preprocessing_stop(compilation_info.filename, time_now_in_ms)
-                self.finished_preprocessing_files.append(compilation_info.filename)
-                self.summary.compilation_start(compilation_info.filename, time_now_in_ms)
+        compilation_info = self.table_info[event.src_path]
+        # TODO(s.pirsch): check correct enum usage (type conversion)
+        if statefile.phase == StateFile.ClientPhase.CPP.value:
+            self.summary.preprocessing_start(compilation_info.filename, time_now_in_ms)
+        elif statefile.phase == StateFile.ClientPhase.COMPILE.value:
+            self.summary.preprocessing_stop(compilation_info.filename, time_now_in_ms)
+            self.finished_preprocessing_files.append(compilation_info.filename)
+            self.summary.compilation_start(compilation_info.filename, time_now_in_ms)
