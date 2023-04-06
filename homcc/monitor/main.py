@@ -54,18 +54,17 @@ class MainWindow(QMainWindow):
         def update():
             self._update_elapsed_times()
             self._update_curr_jobs_table_data()
-            is_compilation_summary = True
             self._update_summary_table_data(
                 self.table_preprocessed_files,
                 self.state_file_event_handler.finished_preprocessing_files,
                 self.state_file_event_handler.summary,
-                not is_compilation_summary,
+                False,
             )
             self._update_summary_table_data(
                 self.table_compiled_files,
                 self.state_file_event_handler.finished_compiling_files,
                 self.state_file_event_handler.summary,
-                is_compilation_summary,
+                True,
             )
 
         self.compilation_elapsed_times: Dict[Path, int] = {}  # to store time data
@@ -134,7 +133,7 @@ class MainWindow(QMainWindow):
         table_widget = self._create_table_widget(["sec", "filename"], self.MIN_SMALL_TABLE_WIDTH)
         table_widget.setColumnWidth(0, self.MIN_SMALL_TABLE_WIDTH)
         table_widget.horizontalHeader().setStretchLastSection(True)
-        table_widget.sortByColumn(0, QtCore.Qt.SortOrder.DescendingOrder)
+        self._sort_table_widget_descending(table_widget)
         return table_widget
 
     def _create_summary_layout(self) -> QtWidgets.QWidget:
@@ -199,10 +198,12 @@ class MainWindow(QMainWindow):
 
         for file_name in finished_files:
             file_stats = summary.get_file_stat(file_name)
-            time_measure = (
-                file_stats.get_compilation_time() if is_compilation_summary else file_stats.get_preprocessing_time()
-            )
-            if time_measure is not None:
+            if (
+                time_measure := (
+                    file_stats.get_compilation_time() if is_compilation_summary else file_stats.get_preprocessing_time()
+                )
+                is not None
+            ):
                 MainWindow._add_row(table, [time_measure, file_name])
         finished_files.clear()
         MainWindow._sort_table_widget_descending(table)

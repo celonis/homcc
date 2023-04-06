@@ -89,16 +89,15 @@ class StateFileEventHandler(PatternMatchingEventHandler):
         # statefile does not exist anymore or deletion was detected
         if (not statefile or event.event_type == "deleted") and event.src_path in self.table_info:
             compilation_info = self.table_info[event.src_path]
-            self.summary.deregister_compilation(compilation_info.filename, compilation_info.hostname, time_now_in_ms)
-            self.finished_compiling_files.append(compilation_info.filename)
-            # if somehow the start or stop of preprocessing was skipped we assume that the time was too short
-            # for measuring and set it here to zero and put it in our list for visualizing it in the preprocessing
-            # table
+            # if the start or stop of preprocessing was skipped, we assume that the time was too short for measurement
+            # and will therefore be visualized with 0s
             if (
                 compilation_info.filename in self.summary.file_stats
                 and self.summary.file_stats[compilation_info.filename].get_preprocessing_time() is None
             ):
                 self.finished_preprocessing_files.append(compilation_info.filename)
+            self.summary.deregister_compilation(compilation_info.filename, compilation_info.hostname, time_now_in_ms)
+            self.finished_compiling_files.append(compilation_info.filename)
             self.table_info.pop(event.src_path)
             return
 
