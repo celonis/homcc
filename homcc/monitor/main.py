@@ -58,13 +58,13 @@ class MainWindow(QMainWindow):
                 self.table_preprocessed_files,
                 self.state_file_event_handler.finished_preprocessing_files,
                 self.state_file_event_handler.summary,
-                False,
+                is_compilation_summary=False,
             )
             self._update_summary_table_data(
                 self.table_compiled_files,
                 self.state_file_event_handler.finished_compiling_files,
                 self.state_file_event_handler.summary,
-                True,
+                is_compilation_summary=True,
             )
 
         self.compilation_elapsed_times: Dict[Path, int] = {}  # to store time data
