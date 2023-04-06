@@ -5,6 +5,7 @@
 """summarized statistics to keep track of files over time"""
 import logging
 from dataclasses import dataclass, field
+from datetime import datetime
 from typing import Dict, Optional
 
 logger = logging.getLogger(__name__)
@@ -53,13 +54,15 @@ class FileStats:
 class SummaryStats:
     """summarized statistics to not lose information about files over time"""
 
-    # these two fields will be resettable in the future via the RESET button
-    host_stats: Dict[str, HostStats] = {}
-    file_stats: Dict[str, FileStats] = {}
-
     def __init__(self):
-        self.host_stats = {}
-        self.file_stats = {}
+        self.host_stats: Dict[str, HostStats] = {}
+        self.file_stats: Dict[str, FileStats] = {}
+
+    def get_file_stat(self, filename: str) -> FileStats:
+        # necessary because some files are created too fast and the creation is not tracked properly
+        if filename not in self.file_stats:
+            self.file_stats[filename] = FileStats(filename, datetime.now().timestamp())
+        return self.file_stats[filename]
 
     def register_compilation(self, filename: str, hostname: str, timestamp: float):
         # if new host, add to dict and default its stats
@@ -76,7 +79,7 @@ class SummaryStats:
     def preprocessing_stop(self, filename: str, timestamp: float):
         file_stat = self.file_stats[filename]
         if file_stat.preprocessing_start is None:
-            file_stat.preprocessing_start = timestamp
+            self.preprocessing_start(filename, timestamp)
             logger.info("Preprocessing start timestamp was invalid, assuming zero duration")
         file_stat.preprocessing_stop = timestamp
 
