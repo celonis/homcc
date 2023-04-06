@@ -1,3 +1,7 @@
+# Copyright (c) 2023 Celonis SE
+# Covered under the included MIT License:
+#   https://github.com/celonis/homcc/blob/main/LICENSE
+
 """shared common functionality for server and client regarding compiler arguments"""
 from __future__ import annotations
 

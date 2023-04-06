@@ -1,3 +1,7 @@
+# Copyright (c) 2023 Celonis SE
+# Covered under the included MIT License:
+#   https://github.com/celonis/homcc/blob/main/LICENSE
+
 """Custom logging for the homcc client and server"""
 from __future__ import annotations
 
