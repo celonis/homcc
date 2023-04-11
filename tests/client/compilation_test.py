@@ -119,7 +119,7 @@ class TestCompilation:
         Path(output).unlink(missing_ok=True)
 
         # intentionally execute an erroneous call
-        with pytest.raises(SystemExit) as sys_exit:
+        with pytest.raises(subprocess.CalledProcessError) as sys_exit:
             compile_locally(Arguments.from_vargs(*args, "-OError"), Host.localhost_with_limit(1))
 
         assert sys_exit != os.EX_OK
