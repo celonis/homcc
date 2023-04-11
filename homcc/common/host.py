@@ -83,6 +83,17 @@ class Host:
 
         return Host.localhost_with_limit(default_localhost_limit)
 
+    @staticmethod
+    def default_preprocessing_localhost() -> Host:
+        # TODO(o.layer): adapt
+        default_localhost_limit: int = (
+            len(os.sched_getaffinity(0))  # number of available CPUs for this process
+            or os.cpu_count()  # total number of physical CPUs on the machine
+            or 12  # fallback value to enable minor level of concurrency
+        )
+
+        return Host.preprocessing_localhost_with_limit(default_localhost_limit)
+
     def __int__(self) -> int:
         return self.id()
 
@@ -101,6 +112,10 @@ class Host:
     @classmethod
     def localhost_with_limit(cls, limit: int) -> Host:
         return Host(type=ConnectionType.LOCAL, name="localhost", limit=limit)
+
+    @classmethod
+    def preprocessing_localhost_with_limit(cls, limit: int) -> Host:
+        return Host(type=ConnectionType.LOCAL, name="preprocessing", limit=limit)
 
     def is_local(self) -> bool:
         return self.type == ConnectionType.LOCAL

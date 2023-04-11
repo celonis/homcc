@@ -194,52 +194,74 @@ class RemoteHostSemaphore(HostSemaphore):
         return self
 
 
-class LocalHostSemaphore(HostSemaphore):
+class LocalhostSemaphore(HostSemaphore):
     """
-    Class to track local compilation jobs via a named posix semaphore.
+    Class to track local jobs via an IPC semaphore.
 
+    In order to increase the chance of longer waiting requests to be chosen, an inverse exponential backoff
+    strategy is used, where newer requests have to wait longer and the timeout value increases exponentially. This
+    should increase the chance of keeping the general order of incoming requests as it is desired by build systems and
+    still allows for high throughput when local slots are not exhausted.
+    """
+
+    _expected_average_job_time: float
+    """Expected average operation time [s]."""
+    _timeout: float
+    """Timeout [s] after failing semaphore acquisition."""
+
+    def __init__(self, host: Host, expected_average_job_time: float):
+        self._expected_average_job_time = expected_average_job_time
+        self._timeout = expected_average_job_time - 1
+        super().__init__(host)
+
+    def __enter__(self) -> LocalhostSemaphore:
+        logger.debug("Entering local semaphore '%s' with value '%i'", self._semaphore.id, self._semaphore.value)
+
+        while True:
+            try:
+                super()._acquire(self._expected_average_job_time - self._timeout)  # blocking acquisition
+                return self
+            except sysv_ipc.BusyError:
+                # inverse exponential backoff: https://www.desmos.com/calculator/uniats0s4c
+                time.sleep(self._timeout)
+                self._timeout = self._timeout / 3 * 2
+
+
+class LocalCompilationHostSemaphore(LocalhostSemaphore):
+    """
+    Tracks that we issue a certain maximum amount of compilation jobs on the local machine.
     Due to the behaviour of this class, multiple semaphores may be created in a time period with multiple homcc calls if
     localhost is specified with different limits. Each localhost semaphore blocks for the specified timeout amount in
     seconds during acquisition. Adding multiple different or changing localhost hosts during builds with homcc will
     currently lead to non-deterministic behaviour regarding the total amount of concurrent local compilation jobs.
-
-    In order to increase the chance of longer waiting compilation requests to be chosen, an inverse exponential backoff
-    strategy is used, where newer requests have to wait longer and the timeout value increases exponentially. This
-    should increase the chance of keeping the general order of incoming requests as it is desired by build systems and
-    still allows for high throughput when localhost slots are not exhausted.
     """
 
-    DEFAULT_COMPILATION_TIME: float = 10.0
-    """Default compilation time."""
+    DEFAULT_EXPECTED_COMPILATION_TIME: float = 10.0
+    """Default average expected compilation time. [s]"""
 
-    _compilation_time: float
-    """Expected average compilation time [s], defaults to DEFAULT_COMPILATION_TIME."""
-    _timeout: float
-    """Timeout [s] after failing semaphore acquisition."""
-
-    def __init__(self, host: Host, compilation_time: float = DEFAULT_COMPILATION_TIME):
+    def __init__(self, host: Host, expected_compilation_time: float = DEFAULT_EXPECTED_COMPILATION_TIME):
         if not host.is_local():
             raise ValueError(f"Invalid localhost: '{host}'")
 
-        if compilation_time <= 1.0:
-            raise ValueError(f"Invalid compilation time: {compilation_time}")
+        if expected_compilation_time <= 1.0:
+            raise ValueError(f"Invalid expected compilation time: {expected_compilation_time}")
 
-        self._compilation_time = compilation_time
-        self._timeout = compilation_time - 1
-        super().__init__(host)
+        super().__init__(host, expected_compilation_time)
 
-    def __enter__(self) -> LocalHostSemaphore:
-        logger.debug("Entering semaphore '%s' with value '%i'", self._semaphore.id, self._semaphore.value)
 
-        while True:
-            try:
-                super()._acquire(self._compilation_time - self._timeout)  # blocking acquisition
-                return self
-            except sysv_ipc.BusyError:
-                logger.debug("All compilation slots for localhost are occupied.")
-                # inverse exponential backoff: https://www.desmos.com/calculator/uniats0s4c
-                time.sleep(self._timeout)
-                self._timeout = self._timeout / 3 * 2
+class LocalPreprocessingHostSemaphore(LocalhostSemaphore):
+    """
+    Tracks that we issue a certain maximum amount of preprocessing jobs on the local machine.
+    """
+
+    DEFAULT_EXPECTED_PREPROCESSING_TIME: float = 3.0
+    """Default average expected preprocessing time. [s]"""
+
+    def __init__(self, host: Host, expected_preprocessing_time: float = DEFAULT_EXPECTED_PREPROCESSING_TIME):
+        if expected_preprocessing_time <= 1.0:
+            raise ValueError(f"Invalid expected preprocessing time: {expected_preprocessing_time}")
+
+        super().__init__(host, expected_preprocessing_time)
 
 
 class TCPClient:
