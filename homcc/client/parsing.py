@@ -307,7 +307,7 @@ def setup_client(cli_args: List[str]) -> Tuple[ClientConfig, Arguments, Host, Li
 
     # use the default localhost if no localhost is provided by the user explicitly
     # this dedicated host will limit the amount of locally running compilation jobs
-    localhost: Host = Host.default_localhost()
+    localhost: Host = Host.default_compilation_localhost()
 
     if (host_str := homcc_args_dict.pop("host", None)) is not None:
         remote_hosts = [Host.from_str(host_str)]

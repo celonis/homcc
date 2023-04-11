@@ -60,7 +60,7 @@ def check_recursive_call(compiler: Compiler, error: subprocess.CalledProcessErro
 async def _preprocess(arguments: Arguments) -> Dict[str, str]:
     dependency_dict: Dict[str, str]
     with LocalPreprocessingHostSemaphore(Host.default_preprocessing_localhost()), StateFile(
-        arguments, Host.default_localhost()
+        arguments, Host.default_compilation_localhost()
     ) as state:
         state.set_preprocessing()
         dependency_dict = calculate_dependency_dict(find_dependencies(arguments))
