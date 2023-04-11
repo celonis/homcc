@@ -6,7 +6,6 @@
 
 from typing import Tuple
 
-
 ENCODING: str = "utf-8"
 """General encoding we use."""
 
