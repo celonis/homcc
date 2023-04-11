@@ -201,7 +201,11 @@ class LocalHostSemaphore(HostSemaphore):
     In order to increase the chance of longer waiting requests to be chosen, an inverse exponential backoff
     strategy is used, where newer requests have to wait longer and the timeout value increases exponentially. This
     should increase the chance of keeping the general order of incoming requests as it is desired by build systems and
-    still allows for high throughput when local slots are not exhausted.
+    still allows for high throughput when localhost slots are not exhausted.
+    Due to the behaviour of this class, multiple semaphores may be created in a time period with multiple homcc calls if
+    localhost is specified with different limits. Each localhost semaphore blocks for the specified timeout amount in
+    seconds during acquisition. Adding multiple different or changing localhost hosts during builds with homcc will
+    currently lead to non-deterministic behaviour regarding the total amount of concurrent local compilation jobs.
     """
 
     _expected_average_job_time: float
@@ -232,11 +236,7 @@ class LocalHostSemaphore(HostSemaphore):
 
 class LocalHostCompilationSemaphore(LocalHostSemaphore):
     """
-    Tracks that we issue a certain maximum amount of compilation jobs on the local machine.
-    Due to the behaviour of this class, multiple semaphores may be created in a time period with multiple homcc calls if
-    localhost is specified with different limits. Each localhost semaphore blocks for the specified timeout amount in
-    seconds during acquisition. Adding multiple different or changing localhost hosts during builds with homcc will
-    currently lead to non-deterministic behaviour regarding the total amount of concurrent local compilation jobs.
+    Tracks that we issue a certain maximum amount of concurrent compilation jobs on the local machine.
     """
 
     DEFAULT_EXPECTED_COMPILATION_TIME: float = 10.0

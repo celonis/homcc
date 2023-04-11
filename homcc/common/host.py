@@ -75,13 +75,13 @@ class Host:
 
     @staticmethod
     def default_localhost() -> Host:
-        default_concurrency: int = (
+        default_localhost_limit: int = (
             len(os.sched_getaffinity(0))  # number of available CPUs for this process
             or os.cpu_count()  # total number of physical CPUs on the machine
             or DEFAULT_LOCALHOST_LIMIT  # fallback value to enable minor level of concurrency
         )
 
-        return Host.localhost_with_limit(default_concurrency)
+        return Host.localhost_with_limit(default_localhost_limit)
 
     def __int__(self) -> int:
         return self.id()
