@@ -210,10 +210,10 @@ class MainWindow(QMainWindow):
         """updates row data on hosts table every second"""
 
         self.table_hosts.setRowCount(0)
-        for host_stat in self.state_file_event_handler.summary.host_stats.values():
+        for hostname, host_stat in self.state_file_event_handler.summary.host_stats.items():
             # failed column set to 0 for now
             row = [
-                host_stat.name,
+                hostname,
                 f"{host_stat.total_compilations}",
                 f"{host_stat.current_compilations}",
                 "0",
