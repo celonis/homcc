@@ -20,7 +20,7 @@ from homcc.client.client import (
 )
 from homcc.client.config import ClientConfig
 from homcc.common.arguments import Arguments, ArgumentsExecutionResult, Compiler
-from homcc.common.constants import ENCODING
+from homcc.common.constants import ENCODING, EXCLUDED_DEPENDENCY_PREFIXES
 from homcc.common.errors import (
     FailedHostNameResolutionError,
     HostRefusedConnectionError,
@@ -45,8 +45,6 @@ from homcc.common.statefile import StateFile
 logger = logging.getLogger(__name__)
 
 RECURSIVE_ERROR_MESSAGE: str = "_HOMCC_CALLED_RECURSIVELY"
-
-EXCLUDED_DEPENDENCY_PREFIXES: Tuple = ("/usr/include", "/usr/lib")
 
 
 def check_recursive_call(compiler: Compiler, error: subprocess.CalledProcessError):

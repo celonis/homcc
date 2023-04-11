@@ -45,6 +45,8 @@ class TestServerEnvironment:
             "main.cpp",
             "relative/relative.cpp",
             "/opt/src/absolute.cpp",
+            "-isystem/usr/include/c++/11",
+            "-I/usr/lib/libxml",
         ]
         environment = create_mock_environment("/client1", "/client1/test/xyz")
         mapped_args: List[str] = list(environment.map_args(Arguments.from_vargs(*args)))
@@ -59,6 +61,8 @@ class TestServerEnvironment:
         assert mapped_args.pop(0) == f"{environment.mapped_cwd}/main.cpp"
         assert mapped_args.pop(0) == f"{environment.mapped_cwd}/relative/relative.cpp"
         assert mapped_args.pop(0) == f"{environment.instance_folder}/opt/src/absolute.cpp"
+        assert mapped_args.pop(0) == "-isystem/usr/include/c++/11"
+        assert mapped_args.pop(0) == "-I/usr/lib/libxml"
 
     def test_map_arguments_relative_paths(self):
         args = [
@@ -76,6 +80,7 @@ class TestServerEnvironment:
             "./relative.cpp",
             "-c",
             "some_file.cpp",
+            "-I/usr/../usr/lib/../lib/libxml",
         ]
 
         environment = create_mock_environment("/client1", "/client1/test/xyz")
@@ -93,6 +98,7 @@ class TestServerEnvironment:
         assert mapped_args.pop(0) == f"{environment.mapped_cwd}/relative.cpp"
         assert mapped_args.pop(0) == "-c"
         assert mapped_args.pop(0) == f"{environment.mapped_cwd}/some_file.cpp"
+        assert mapped_args.pop(0) == "-I/usr/../usr/lib/../lib/libxml"
 
     def test_map_cwd(self):
         instance_path = "/client1/"
