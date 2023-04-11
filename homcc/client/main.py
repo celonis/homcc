@@ -26,12 +26,14 @@ homcc client
 import asyncio
 import logging
 import os
+import subprocess
 import sys
 
 sys.path.append(os.path.join(os.path.dirname(__file__), "../.."))
 
 from homcc.client.compilation import (  # pylint: disable=wrong-import-position
     RECURSIVE_ERROR_MESSAGE,
+    check_recursive_call,
     compile_locally,
     compile_remotely,
     execute_linking,
@@ -62,16 +64,22 @@ def main():
     # client setup retrieves hosts and parses cli args to create central config and setup logging
     homcc_config, compiler_arguments, localhost, remote_hosts = setup_client(sys.argv)
 
-    # force local execution
-    if compiler_arguments.is_linking_only():
-        sys.exit(execute_linking(compiler_arguments, localhost))
-
-    if not compiler_arguments.is_sendable():
-        sys.exit(compile_locally(compiler_arguments, localhost))
-
-    # try to compile remotely
     try:
-        sys.exit(asyncio.run(compile_remotely(compiler_arguments, remote_hosts, homcc_config)))
+        # force local execution
+        if compiler_arguments.is_linking_only():
+            sys.exit(execute_linking(compiler_arguments, localhost))
+
+        if not compiler_arguments.is_sendable():
+            sys.exit(compile_locally(compiler_arguments, localhost))
+
+        # try to compile remotely
+        sys.exit(asyncio.run(compile_remotely(compiler_arguments, remote_hosts, localhost, homcc_config)))
+
+    # arguments execution error during local pre-steps, unrecoverable failure
+    except subprocess.CalledProcessError as error:
+        check_recursive_call(compiler_arguments.compiler, error)
+        logger.error(error.stderr)
+        raise SystemExit(error.returncode) from error
 
     # valid sys exit calls
     except SystemExit as sys_exit:

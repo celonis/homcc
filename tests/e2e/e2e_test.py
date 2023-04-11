@@ -357,14 +357,13 @@ class TestEndToEnd:
 
         assert "has been invoked recursively!" in scan_includes_err.value.stdout
 
-        # fail during local compilation fallback since server was not started
+        # check that we fail when we only can compile locally
         with pytest.raises(subprocess.CalledProcessError) as local_err:
             self.run_client(list(basic_arguments) + args)
 
-        assert "Compiling locally instead" in local_err.value.stdout
         assert "has been invoked recursively!" in local_err.value.stdout
 
-        # fail remote compilation during dependency finding after having connected to the server
+        # check that we fail when also when there is a server running
         with self.ServerProcess(basic_arguments.tcp_port), pytest.raises(
             subprocess.CalledProcessError
         ) as try_remote_err:

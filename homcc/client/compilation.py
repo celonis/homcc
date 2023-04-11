@@ -14,9 +14,9 @@ from typing import Dict, List, Optional, Set, Tuple
 
 from homcc.client.client import (
     LocalHostCompilationSemaphore,
+    LocalHostPreprocessingSemaphore,
     RemoteHostSelector,
     RemoteHostSemaphore,
-    LocalHostPreprocessingSemaphore,
     TCPClient,
 )
 from homcc.client.config import ClientConfig
@@ -57,20 +57,16 @@ def check_recursive_call(compiler: Compiler, error: subprocess.CalledProcessErro
         raise SystemExit(os.EX_USAGE) from error
 
 
-async def _preprocess(arguments: Arguments) -> Dict[str, str]:
-    default_proprocessing_host = Host.default_localhost()
-
-    with LocalHostPreprocessingSemaphore(default_proprocessing_host), StateFile(
-        arguments, default_proprocessing_host
-    ) as state:
+def _preprocess(arguments: Arguments, localhost: Host) -> Dict[str, str]:
+    with LocalHostPreprocessingSemaphore(localhost), StateFile(arguments, localhost) as state:
         state.set_preprocessing()
         return calculate_dependency_dict(find_dependencies(arguments))
 
 
-async def compile_remotely(arguments: Arguments, hosts: List[Host], config: ClientConfig) -> int:
+async def compile_remotely(arguments: Arguments, hosts: List[Host], localhost: Host, config: ClientConfig) -> int:
     """main function to control remote compilation"""
 
-    dependency_dict = await _preprocess(arguments)
+    dependency_dict = _preprocess(arguments, localhost)
 
     # try to connect to remote hosts before falling back to local compilation and track which hosts we failed at
     failed_hosts: List[Host] = []
@@ -93,12 +89,6 @@ async def compile_remotely(arguments: Arguments, hosts: List[Host], config: Clie
                     ),
                     timeout=config.compilation_request_timeout,
                 )
-
-        # arguments execution error during local pre-steps, unrecoverable failure
-        except subprocess.CalledProcessError as error:
-            check_recursive_call(arguments.compiler, error)
-            logger.error(error.stderr)
-            raise SystemExit(error.returncode) from error
 
         # compilation request timed out, local compilation fallback
         except asyncio.TimeoutError as error:
@@ -218,13 +208,7 @@ def execute_linking(arguments: Arguments, localhost: Host) -> int:
     """execute linking command, no StateFile necessary"""
 
     with LocalHostCompilationSemaphore(localhost):
-        try:
-            # execute compile command, e.g.: "g++ main.cpp foo.cpp"
-            result: ArgumentsExecutionResult = arguments.execute(check=True, output=True)
-        except subprocess.CalledProcessError as error:
-            check_recursive_call(arguments.compiler, error)
-            logger.error(error.stderr)
-            raise SystemExit(error.returncode) from error
+        result: ArgumentsExecutionResult = arguments.execute(check=True, output=True)
 
         return result.return_code
 
@@ -235,13 +219,8 @@ def compile_locally(arguments: Arguments, localhost: Host) -> int:
     with LocalHostCompilationSemaphore(localhost), StateFile(arguments, localhost) as state:
         state.set_compile()
 
-        try:
-            # execute compile command, e.g.: "g++ -c foo.cpp -o foo"
-            result: ArgumentsExecutionResult = arguments.execute(check=True, output=True)
-        except subprocess.CalledProcessError as error:
-            check_recursive_call(arguments.compiler, error)
-            logger.error(error.stderr)
-            raise SystemExit(error.returncode) from error
+        # execute compile command, e.g.: "g++ -c foo.cpp -o foo"
+        result: ArgumentsExecutionResult = arguments.execute(check=True, output=True)
 
         return result.return_code
 
