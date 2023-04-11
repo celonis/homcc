@@ -74,20 +74,14 @@ class Host:
         raise NotImplementedError(f"Erroneous connection type '{self.type}'")
 
     @staticmethod
-    def _get_localhost_concurrency() -> int:
-        return (
+    def default_localhost() -> Host:
+        default_concurrency: int = (
             len(os.sched_getaffinity(0))  # number of available CPUs for this process
             or os.cpu_count()  # total number of physical CPUs on the machine
             or DEFAULT_LOCALHOST_LIMIT  # fallback value to enable minor level of concurrency
         )
 
-    @staticmethod
-    def default_compilation_localhost() -> Host:
-        return Host.localhost_with_limit(Host._get_localhost_concurrency())
-
-    @staticmethod
-    def default_preprocessing_localhost() -> Host:
-        return Host.preprocessing_localhost_with_limit(Host._get_localhost_concurrency())
+        return Host.localhost_with_limit(default_concurrency)
 
     def __int__(self) -> int:
         return self.id()
@@ -107,10 +101,6 @@ class Host:
     @classmethod
     def localhost_with_limit(cls, limit: int) -> Host:
         return Host(type=ConnectionType.LOCAL, name="localhost", limit=limit)
-
-    @classmethod
-    def preprocessing_localhost_with_limit(cls, limit: int) -> Host:
-        return Host(type=ConnectionType.LOCAL, name="preprocessing", limit=limit)
 
     def is_local(self) -> bool:
         return self.type == ConnectionType.LOCAL

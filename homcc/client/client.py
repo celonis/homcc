@@ -194,7 +194,7 @@ class RemoteHostSemaphore(HostSemaphore):
         return self
 
 
-class LocalhostSemaphore(HostSemaphore):
+class LocalHostSemaphore(HostSemaphore):
     """
     Class to track local jobs via an IPC semaphore.
 
@@ -210,11 +210,14 @@ class LocalhostSemaphore(HostSemaphore):
     """Timeout [s] after failing semaphore acquisition."""
 
     def __init__(self, host: Host, expected_average_job_time: float):
+        if not host.is_local():
+            raise ValueError(f"Invalid localhost: '{host}'")
+
         self._expected_average_job_time = expected_average_job_time
         self._timeout = expected_average_job_time - 1
         super().__init__(host)
 
-    def __enter__(self) -> LocalhostSemaphore:
+    def __enter__(self) -> LocalHostSemaphore:
         logger.debug("Entering local semaphore '%s' with value '%i'", self._semaphore.id, self._semaphore.value)
 
         while True:
@@ -227,7 +230,7 @@ class LocalhostSemaphore(HostSemaphore):
                 self._timeout = self._timeout / 3 * 2
 
 
-class LocalCompilationHostSemaphore(LocalhostSemaphore):
+class LocalHostCompilationSemaphore(LocalHostSemaphore):
     """
     Tracks that we issue a certain maximum amount of compilation jobs on the local machine.
     Due to the behaviour of this class, multiple semaphores may be created in a time period with multiple homcc calls if
@@ -240,21 +243,18 @@ class LocalCompilationHostSemaphore(LocalhostSemaphore):
     """Default average expected compilation time. [s]"""
 
     def __init__(self, host: Host, expected_compilation_time: float = DEFAULT_EXPECTED_COMPILATION_TIME):
-        if not host.is_local():
-            raise ValueError(f"Invalid localhost: '{host}'")
-
         if expected_compilation_time <= 1.0:
             raise ValueError(f"Invalid expected compilation time: {expected_compilation_time}")
 
         super().__init__(host, expected_compilation_time)
 
 
-class LocalPreprocessingHostSemaphore(LocalhostSemaphore):
+class LocalHostPreprocessingSemaphore(LocalHostSemaphore):
     """
-    Tracks that we issue a certain maximum amount of preprocessing jobs on the local machine.
+    Tracks that we issue a certain maximum amount of concurrent preprocessing jobs on the local machine.
     """
 
-    DEFAULT_EXPECTED_PREPROCESSING_TIME: float = 3.0
+    DEFAULT_EXPECTED_PREPROCESSING_TIME: float = 2.0
     """Default average expected preprocessing time. [s]"""
 
     def __init__(self, host: Host, expected_preprocessing_time: float = DEFAULT_EXPECTED_PREPROCESSING_TIME):

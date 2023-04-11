@@ -13,10 +13,10 @@ from pathlib import Path
 from typing import Dict, List, Optional, Set, Tuple
 
 from homcc.client.client import (
-    LocalCompilationHostSemaphore,
+    LocalHostCompilationSemaphore,
     RemoteHostSelector,
     RemoteHostSemaphore,
-    LocalPreprocessingHostSemaphore,
+    LocalHostPreprocessingSemaphore,
     TCPClient,
 )
 from homcc.client.config import ClientConfig
@@ -58,14 +58,13 @@ def check_recursive_call(compiler: Compiler, error: subprocess.CalledProcessErro
 
 
 async def _preprocess(arguments: Arguments) -> Dict[str, str]:
-    dependency_dict: Dict[str, str]
-    with LocalPreprocessingHostSemaphore(Host.default_preprocessing_localhost()), StateFile(
-        arguments, Host.default_compilation_localhost()
+    default_proprocessing_host = Host.default_localhost()
+
+    with LocalHostPreprocessingSemaphore(default_proprocessing_host), StateFile(
+        arguments, default_proprocessing_host
     ) as state:
         state.set_preprocessing()
-        dependency_dict = calculate_dependency_dict(find_dependencies(arguments))
-
-    return dependency_dict
+        return calculate_dependency_dict(find_dependencies(arguments))
 
 
 async def compile_remotely(arguments: Arguments, hosts: List[Host], config: ClientConfig) -> int:
@@ -77,11 +76,6 @@ async def compile_remotely(arguments: Arguments, hosts: List[Host], config: Clie
     failed_hosts: List[Host] = []
 
     for host in RemoteHostSelector(hosts, config.remote_compilation_tries):
-        compilation_request_timeout: float = config.compilation_request_timeout
-        establish_connection_timeout: float = config.establish_connection_timeout
-        schroot_profile: Optional[str] = config.schroot_profile
-        docker_container: Optional[str] = config.docker_container
-
         # overwrite host compression if none was explicitly specified but provided via config
         host.compression = host.compression or config.compression
 
@@ -92,12 +86,12 @@ async def compile_remotely(arguments: Arguments, hosts: List[Host], config: Clie
                         arguments=arguments,
                         dependency_dict=dependency_dict,
                         host=host,
-                        timeout=establish_connection_timeout,
-                        schroot_profile=schroot_profile,
-                        docker_container=docker_container,
+                        timeout=config.establish_connection_timeout,
+                        schroot_profile=config.schroot_profile,
+                        docker_container=config.docker_container,
                         state=state,
                     ),
-                    timeout=compilation_request_timeout,
+                    timeout=config.compilation_request_timeout,
                 )
 
         # arguments execution error during local pre-steps, unrecoverable failure
@@ -223,7 +217,7 @@ async def compile_remotely_at(
 def execute_linking(arguments: Arguments, localhost: Host) -> int:
     """execute linking command, no StateFile necessary"""
 
-    with LocalCompilationHostSemaphore(localhost):
+    with LocalHostCompilationSemaphore(localhost):
         try:
             # execute compile command, e.g.: "g++ main.cpp foo.cpp"
             result: ArgumentsExecutionResult = arguments.execute(check=True, output=True)
@@ -238,7 +232,7 @@ def execute_linking(arguments: Arguments, localhost: Host) -> int:
 def compile_locally(arguments: Arguments, localhost: Host) -> int:
     """execute local compilation"""
 
-    with LocalCompilationHostSemaphore(localhost), StateFile(arguments, localhost) as state:
+    with LocalHostCompilationSemaphore(localhost), StateFile(arguments, localhost) as state:
         state.set_compile()
 
         try:

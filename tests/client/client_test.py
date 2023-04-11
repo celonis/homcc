@@ -14,7 +14,7 @@ import pytest
 import sysv_ipc
 
 from homcc.client.client import (
-    LocalCompilationHostSemaphore,
+    LocalHostCompilationSemaphore,
     RemoteHostSelector,
     RemoteHostSemaphore,
 )
@@ -148,7 +148,7 @@ class TestLocalHostSemaphore:
         remotehost: Host = Host(type=ConnectionType.TCP, name="remotehost")
 
         with pytest.raises(ValueError):
-            with LocalCompilationHostSemaphore(remotehost):
+            with LocalHostCompilationSemaphore(remotehost):
                 pass
 
     # ignore signal handling in non-main threads warning
@@ -160,7 +160,7 @@ class TestLocalHostSemaphore:
         host_id: int = localhost.id()
 
         def hold_semaphore(host: Host):
-            with LocalCompilationHostSemaphore(host, 2):  # successful acquire
+            with LocalHostCompilationSemaphore(host, 2):  # successful acquire
                 assert sysv_ipc.Semaphore(host_id).value == 0
                 time.sleep(1)
 
@@ -191,7 +191,7 @@ class TestLocalHostSemaphore:
         host_id: int = localhost.id()
 
         with pytest.raises(SystemExit):
-            with LocalCompilationHostSemaphore(localhost, 2):
+            with LocalHostCompilationSemaphore(localhost, 2):
                 assert Path(f"/dev/shm/sem.{host_id}")
                 assert sysv_ipc.Semaphore(host_id).value == 0
                 raise SystemExit(os.EX_TEMPFAIL)
