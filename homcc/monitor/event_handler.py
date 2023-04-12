@@ -3,7 +3,6 @@
 #   https://github.com/celonis/homcc/blob/main/LICENSE
 
 """observer class to track state files"""
-
 import logging
 from dataclasses import dataclass
 from datetime import datetime

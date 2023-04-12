@@ -15,7 +15,6 @@ logger = logging.getLogger(__name__)
 class HostStats:
     """summarized statistics of hosts"""
 
-    name: str
     current_compilations: int = 0
     total_compilations: int = 0
     # failed: int  # ignore this field for now
@@ -67,7 +66,7 @@ class SummaryStats:
     def register_compilation(self, filename: str, hostname: str, timestamp: float):
         # if new host, add to dict and default its stats
         if hostname not in self.host_stats:
-            self.host_stats[hostname] = HostStats(hostname)
+            self.host_stats[hostname] = HostStats()
         self.host_stats[hostname].register_compilation()
 
         # track current file stats

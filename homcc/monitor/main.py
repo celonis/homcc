@@ -87,6 +87,7 @@ class MainWindow(QMainWindow):
                 self.state_file_event_handler.summary,
                 is_compilation_summary=True,
             )
+            self._update_summary_hosts_table()
 
         self.compilation_elapsed_times: Dict[Path, int] = {}  # to store time data
         self.update_timer = QtCore.QTimer(self)
@@ -204,6 +205,20 @@ class MainWindow(QMainWindow):
                 f"{self.compilation_elapsed_times[path]}s",
             ]
             self._add_row(self.table_curr_jobs, row)
+
+    def _update_summary_hosts_table(self):
+        """updates row data on hosts table every second"""
+
+        self.table_hosts.setRowCount(0)
+        for hostname, host_stat in self.state_file_event_handler.summary.host_stats.items():
+            # failed column set to 0 for now
+            row = [
+                hostname,
+                f"{host_stat.total_compilations}",
+                f"{host_stat.current_compilations}",
+                "0",
+            ]
+            self._add_row(self.table_hosts, row)
 
     @staticmethod
     def _sort_table_widget_descending(table_widget: QtWidgets.QTableWidget):
