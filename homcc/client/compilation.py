@@ -13,7 +13,8 @@ from pathlib import Path
 from typing import Dict, List, Optional, Set, Tuple
 
 from homcc.client.client import (
-    LocalHostSemaphore,
+    LocalHostCompilationSemaphore,
+    LocalHostPreprocessingSemaphore,
     RemoteHostSelector,
     RemoteHostSemaphore,
     TCPClient,
@@ -56,18 +57,21 @@ def check_recursive_call(compiler: Compiler, error: subprocess.CalledProcessErro
         raise SystemExit(os.EX_USAGE) from error
 
 
-async def compile_remotely(arguments: Arguments, hosts: List[Host], config: ClientConfig) -> int:
+def _preprocess(arguments: Arguments, localhost: Host) -> Dict[str, str]:
+    with LocalHostPreprocessingSemaphore(localhost), StateFile(arguments, localhost) as state:
+        state.set_preprocessing()
+        return calculate_dependency_dict(find_dependencies(arguments))
+
+
+async def compile_remotely(arguments: Arguments, hosts: List[Host], localhost: Host, config: ClientConfig) -> int:
     """main function to control remote compilation"""
+
+    dependency_dict = _preprocess(arguments, localhost)
 
     # try to connect to remote hosts before falling back to local compilation and track which hosts we failed at
     failed_hosts: List[Host] = []
 
     for host in RemoteHostSelector(hosts, config.remote_compilation_tries):
-        compilation_request_timeout: float = config.compilation_request_timeout
-        establish_connection_timeout: float = config.establish_connection_timeout
-        schroot_profile: Optional[str] = config.schroot_profile
-        docker_container: Optional[str] = config.docker_container
-
         # overwrite host compression if none was explicitly specified but provided via config
         host.compression = host.compression or config.compression
 
@@ -76,20 +80,15 @@ async def compile_remotely(arguments: Arguments, hosts: List[Host], config: Clie
                 return await asyncio.wait_for(
                     compile_remotely_at(
                         arguments=arguments,
+                        dependency_dict=dependency_dict,
                         host=host,
-                        timeout=establish_connection_timeout,
-                        schroot_profile=schroot_profile,
-                        docker_container=docker_container,
+                        timeout=config.establish_connection_timeout,
+                        schroot_profile=config.schroot_profile,
+                        docker_container=config.docker_container,
                         state=state,
                     ),
-                    timeout=compilation_request_timeout,
+                    timeout=config.compilation_request_timeout,
                 )
-
-        # arguments execution error during local pre-steps, unrecoverable failure
-        except subprocess.CalledProcessError as error:
-            check_recursive_call(arguments.compiler, error)
-            logger.error(error.stderr)
-            raise SystemExit(error.returncode) from error
 
         # compilation request timed out, local compilation fallback
         except asyncio.TimeoutError as error:
@@ -122,6 +121,7 @@ async def compile_remotely(arguments: Arguments, hosts: List[Host], config: Clie
 
 async def compile_remotely_at(
     arguments: Arguments,
+    dependency_dict: Dict[str, str],
     host: Host,
     timeout: float,
     schroot_profile: Optional[str],
@@ -131,8 +131,6 @@ async def compile_remotely_at(
     """main function for the communication between client and a remote compilation host"""
 
     async with TCPClient(host, timeout=timeout, state=state) as client:
-        state.set_preprocessing()
-        dependency_dict: Dict[str, str] = calculate_dependency_dict(find_dependencies(arguments))
         remote_arguments: Arguments = arguments.copy().remove_local_args()
 
         target: Optional[str] = None
@@ -209,14 +207,8 @@ async def compile_remotely_at(
 def execute_linking(arguments: Arguments, localhost: Host) -> int:
     """execute linking command, no StateFile necessary"""
 
-    with LocalHostSemaphore(localhost):
-        try:
-            # execute compile command, e.g.: "g++ main.cpp foo.cpp"
-            result: ArgumentsExecutionResult = arguments.execute(check=True, output=True)
-        except subprocess.CalledProcessError as error:
-            check_recursive_call(arguments.compiler, error)
-            logger.error(error.stderr)
-            raise SystemExit(error.returncode) from error
+    with LocalHostCompilationSemaphore(localhost):
+        result: ArgumentsExecutionResult = arguments.execute(check=True, output=True)
 
         return result.return_code
 
@@ -224,16 +216,11 @@ def execute_linking(arguments: Arguments, localhost: Host) -> int:
 def compile_locally(arguments: Arguments, localhost: Host) -> int:
     """execute local compilation"""
 
-    with LocalHostSemaphore(localhost), StateFile(arguments, localhost) as state:
+    with LocalHostCompilationSemaphore(localhost), StateFile(arguments, localhost) as state:
         state.set_compile()
 
-        try:
-            # execute compile command, e.g.: "g++ -c foo.cpp -o foo"
-            result: ArgumentsExecutionResult = arguments.execute(check=True, output=True)
-        except subprocess.CalledProcessError as error:
-            check_recursive_call(arguments.compiler, error)
-            logger.error(error.stderr)
-            raise SystemExit(error.returncode) from error
+        # execute compile command, e.g.: "g++ -c foo.cpp -o foo"
+        result: ArgumentsExecutionResult = arguments.execute(check=True, output=True)
 
         return result.return_code
 
