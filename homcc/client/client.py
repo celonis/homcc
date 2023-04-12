@@ -17,7 +17,7 @@ import time
 import types
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Dict, Iterator, List, Optional
+from typing import ClassVar, Dict, Iterator, List, Optional
 
 import sysv_ipc
 
@@ -239,7 +239,7 @@ class LocalHostCompilationSemaphore(LocalHostSemaphore):
     Tracks that we issue a certain maximum amount of concurrent compilation jobs on the local machine.
     """
 
-    DEFAULT_EXPECTED_COMPILATION_TIME: float = 10.0
+    DEFAULT_EXPECTED_COMPILATION_TIME: ClassVar[float] = 10.0
     """Default average expected compilation time. [s]"""
 
     def __init__(self, host: Host, expected_compilation_time: float = DEFAULT_EXPECTED_COMPILATION_TIME):
@@ -254,7 +254,7 @@ class LocalHostPreprocessingSemaphore(LocalHostSemaphore):
     Tracks that we issue a certain maximum amount of concurrent preprocessing jobs on the local machine.
     """
 
-    DEFAULT_EXPECTED_PREPROCESSING_TIME: float = 2.0
+    DEFAULT_EXPECTED_PREPROCESSING_TIME: ClassVar[float] = 2.0
     """Default average expected preprocessing time. [s]"""
 
     def __init__(self, host: Host, expected_preprocessing_time: float = DEFAULT_EXPECTED_PREPROCESSING_TIME):

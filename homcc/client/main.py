@@ -75,7 +75,7 @@ def main():
         # try to compile remotely
         sys.exit(asyncio.run(compile_remotely(compiler_arguments, remote_hosts, localhost, homcc_config)))
 
-    # arguments execution error during local pre-steps, unrecoverable failure
+    # unrecoverable error during local execution of compiler arguments
     except subprocess.CalledProcessError as error:
         check_recursive_call(compiler_arguments.compiler, error)
         logger.error(error.stderr)
