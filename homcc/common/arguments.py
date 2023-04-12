@@ -19,7 +19,7 @@ from functools import cached_property
 from pathlib import Path
 from typing import Any, Iterator, List, Optional, Tuple, Type
 
-from homcc.common.constants import ENCODING
+from homcc.common.constants import ENCODING, EXCLUDED_DEPENDENCY_PREFIXES
 from homcc.common.errors import (
     ClientDisconnectedError,
     TargetInferationError,
@@ -490,7 +490,10 @@ class Arguments:
                 for path_arg in path_option_prefix_args:
                     if arg.startswith(path_arg):
                         path: str = next(it) if arg == path_arg else arg[len(path_arg) :]
-                        arg = f"{path_arg}{self.map_path_arg(path, instance_path, mapped_cwd)}"
+
+                        real_path: str = os.path.realpath(path)
+                        if not real_path.startswith(EXCLUDED_DEPENDENCY_PREFIXES):
+                            arg = f"{path_arg}{self.map_path_arg(path, instance_path, mapped_cwd)}"
 
             else:
                 logger.debug("Unmapped a possibly erroneous arg [%s]", arg)
