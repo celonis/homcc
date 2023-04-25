@@ -626,7 +626,7 @@ class Arguments:
             now_time = time.time()
 
             if timeout is not None and now_time - start_time >= timeout:
-                raise AsyncCompilationTimeoutError(f"Timeout: {timeout}s")
+                raise AsyncCompilationTimeoutError(f"Compiler timed out. (Timeout: {timeout}s).")
 
             events = poller.poll(1)
             for fd, event in events:
