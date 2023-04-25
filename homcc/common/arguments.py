@@ -42,6 +42,10 @@ class ArgumentsExecutionResult:
         return cls(result.returncode, result.stdout, result.stderr)
 
 
+class AsyncCompilationTimeoutError(Exception):
+    """Error class to indicate that an async compilation timed out."""
+
+
 class Arguments:
     """
     Class to encapsulate and produce compiler arguments.
@@ -622,7 +626,7 @@ class Arguments:
             now_time = time.time()
 
             if timeout is not None and now_time - start_time >= timeout:
-                raise TimeoutError(f"Compiler timed out. (Timeout: {timeout}s).")
+                raise AsyncCompilationTimeoutError(f"Timeout: {timeout}s")
 
             events = poller.poll(1)
             for fd, event in events:
@@ -656,7 +660,7 @@ class Arguments:
     ) -> ArgumentsExecutionResult:
         with subprocess.Popen(args, cwd=cwd, stdout=subprocess.PIPE, stderr=subprocess.PIPE) as process:
             poller = select.poll()
-            # socket is readable when TCP FIN is sended, so also check if we can read (POLLIN).
+            # socket is readable when TCP FIN is sent, so also check if we can read (POLLIN).
             # As we do have the "contract" that the client should not send anything in the meantime,
             # we can actually omit reading the socket in this case.
             poller.register(event_socket_fd, select.POLLRDHUP | select.POLLIN)

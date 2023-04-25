@@ -28,6 +28,7 @@ from homcc.common.errors import (
     RemoteCompilationError,
     RemoteCompilationTimeoutError,
     RemoteHostsFailure,
+    RetryableRemoteCompilationError,
     SlotsExhaustedError,
     TargetInferationError,
     UnexpectedMessageTypeError,
@@ -180,6 +181,10 @@ async def compile_remotely_at(
         logger.debug("Host stdout:\n%s", host_result.stdout)
 
     if host_result.return_code != os.EX_OK:
+        # check whether the compilation should be retried locally
+        if host_result.return_code == os.EX_TEMPFAIL:
+            raise RetryableRemoteCompilationError(host_result.stderr)
+
         raise RemoteCompilationError(
             f"Host stderr of {remote_arguments}:\n{host_result.stderr}",
             host_result.return_code,

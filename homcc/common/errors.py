@@ -19,6 +19,10 @@ class RemoteCompilationTimeoutError(RecoverableClientError):
     """Exception for a timed out compilation request"""
 
 
+class RetryableRemoteCompilationError(RecoverableClientError):
+    """Error class to indicate that the compilation should be retried locally even though it failed remotely"""
+
+
 class ClientParsingError(RecoverableClientError):
     """Exception for failing to parse message from the server"""
 
