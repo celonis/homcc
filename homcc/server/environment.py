@@ -19,7 +19,7 @@ from homcc.server.cache import Cache
 
 logger = logging.getLogger(__name__)
 
-COMPILATION_TIMEOUT: float = 180
+COMPILATION_TIMEOUT: float = 240
 OBJECT_FILE_SUFFIX = ".o"
 
 

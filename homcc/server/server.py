@@ -15,7 +15,7 @@ from tempfile import TemporaryDirectory
 from threading import Lock
 from typing import Dict, List, Optional, Tuple
 
-from homcc.common.arguments import Arguments
+from homcc.common.arguments import Arguments, AsyncCompilationTimeoutError
 from homcc.common.constants import TCP_BUFFER_SIZE
 from homcc.common.errors import (
     ClientDisconnectedError,
@@ -281,25 +281,37 @@ class TCPRequestHandler(socketserver.BaseRequestHandler):
         """Checks if all dependencies exist. If yes, starts compiling. If no, requests missing dependencies."""
         if self._request_next_dependency():
             logger.debug("Waiting for a dependency to be sent by the client.")
-        else:
-            # no further dependencies needed, compile now
-            try:
-                result_message = self.environment.do_compilation(self.compiler_arguments)
-            except ClientDisconnectedError:
-                return
-            except IOError as error:
-                logger.error("Error during compilation: %s", error)
+            return
 
-                result_message = CompilationResultMessage(
-                    object_files=[],
-                    stdout="",
-                    stderr=f"Invocation of compiler failed:\n{error}",
-                    return_code=os.EX_IOERR,
-                    compression=self.environment.compression,
-                    dwarf_files=[],
-                )
+        # no further dependencies needed, compile now
+        try:
+            result_message = self.environment.do_compilation(self.compiler_arguments)
+        except ClientDisconnectedError:
+            return
+        except AsyncCompilationTimeoutError as error:
+            logger.error("Error during compilation: %s", error)
 
-            self.send_message(result_message)
+            result_message = CompilationResultMessage(
+                object_files=[],
+                stdout="",
+                stderr=f"Remote compilation is limited to {COMPILATION_TIMEOUT}s.",
+                return_code=os.EX_TEMPFAIL,
+                compression=self.environment.compression,
+                dwarf_files=[],
+            )
+        except IOError as error:
+            logger.error("Error during compilation: %s", error)
+
+            result_message = CompilationResultMessage(
+                object_files=[],
+                stdout="",
+                stderr=f"Invocation of compiler failed:\n{error}",
+                return_code=os.EX_IOERR,
+                compression=self.environment.compression,
+                dwarf_files=[],
+            )
+
+        self.send_message(result_message)
 
     def _try_parse_message(self, message_bytes: bytearray) -> int:
         bytes_needed, parsed_message = Message.from_bytes(message_bytes)
