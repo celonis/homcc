@@ -813,7 +813,8 @@ class Clang(Compiler):
                 )
                 return arguments
 
-        return arguments.copy().add_arg(f"--target={target}")
+        cross_compilation_arguments = Arguments(Compiler.from_str(f"{target}-{self._compiler_str}"), arguments.args)
+        return cross_compilation_arguments.add_arg(f"--target={target}")
 
 
 class Gcc(Compiler):
