@@ -2,9 +2,6 @@ name: Build PR Branch
 
 on:
   push:
-    paths-ignore:
-      - README.md
-      - .gitignore
     branches-ignore:
       - main
 
