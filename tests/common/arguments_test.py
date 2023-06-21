@@ -303,7 +303,7 @@ class TestClang:
         assert "--target=x86_64" in new_arguments.args
         assert "x86_64-clang++" == str(new_arguments.compiler)
 
-        arguments = Arguments.from_vargs("clang++-14", "-Iexample/include", "example/src/*", "--target=aarch64")
+        arguments = Arguments.from_vargs("clang++", "-Iexample/include", "example/src/*", "--target=aarch64")
         new_arguments = clang.add_target_to_arguments(arguments, "x86_64")
         assert "--target=aarch64" in new_arguments.args
         assert "--target=x86_64" not in new_arguments.args

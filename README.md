@@ -130,6 +130,10 @@ Additionally, `HOMCC` provides sandboxed compiler execution for remote compilati
       $ sudo docker run --name example_container -v /tmp:/tmp -dit ubuntu:22.04
       ```
     - Make sure the docker containers you want to compile in are running and have the appropriate compilers installed
+
+- Cross compilation:
+  - For both `gcc` and `clang`, `homcc` will remap the compiler name to the client's target triple, i.e. `g++` on the client becomes `x86_64-linux-gnu-g++` when there is a difference in the target triple between client and server
+  - For `clang`, `homcc` additionally adds the `--target={target_triple}` option to the server compile command. Using [clang configuration files](https://clang.llvm.org/docs/UsersManual.html#configuration-files), you can specify different arguments per cross compilation target, e.g. different `sysroots`.
     
 
 
