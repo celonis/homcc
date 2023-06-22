@@ -190,8 +190,8 @@ class TCPRequestHandler(socketserver.BaseRequestHandler):
             sock_fd=self.request.fileno(),
         )
 
-        if target is not None:
-            self.compiler_arguments.add_target(target)
+        if target is not None and self.compiler_arguments.get_compiler_target_triple() != target:
+            self.compiler_arguments = self.compiler_arguments.add_target(target)
             logger.info("Using explicit target '%s' for compilation.", target)
 
         self.compiler_arguments = self.environment.map_args(self.compiler_arguments)
