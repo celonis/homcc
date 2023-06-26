@@ -4,4 +4,4 @@
 
 """HOMCC client: homcc"""
 
-__version__: str = "0.0.4"
+__version__: str = "1.0.0"
