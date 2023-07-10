@@ -5,13 +5,12 @@ Current supported languages are `C` and `C++` with their respective `gcc` and `c
 
 While distributing compilations generally improves build times of large code bases, narrow network bandwidths pose a crucial limiting factor.
 This project's primary goal is to find approaches to mitigate this bottleneck.
-Although `HOMCC` is still in an early stage of development, we can already see improvements of around 2x compared to alternatives like `distcc`.
+Compared to `distcc`, `HOMCC` provides compilation times smaller by some orders of magnitudes for connections with a small uplink:
 <p align="center">
   <img src="assets/compilation_times.png" align="center" width="61.8%"/>
   <br/>
   <sub>
-  Difference in total remote compilation times for a <a href="https://github.com/celonis/">Celonis</a> internal C++ code base built with <code>g++-8</code>, a total server job limit of 112, an upload rate of 4.0 MiB/s and varying amount of dedicated local threads.
-  Note, this plot wrongly still includes negligible local linking times of above 90 seconds.
+  Difference in total remote compilation times for a <a href="https://github.com/celonis/">Celonis</a> internal C++ code base built with <code>clang++-14</code>, a total server job limit of 112 and 60 compilation threads.
   </sub>
 </p>
 
