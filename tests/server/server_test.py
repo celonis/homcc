@@ -31,41 +31,31 @@ class TestServer:
         self.request_handler = TCPRequestHandler.__new__(TCPRequestHandler)
         self.request_handler.server = MagicMock()
         self.request_handler.request = MagicMock()
+        self.request_handler.environment = MagicMock()
 
-    def test_check_compiler_arguments(self, mocker: MockerFixture):
-        mocker.patch(
-            "homcc.server.environment.Environment.compiler_exists",
-            return_value=False,
-        )
+    def test_check_compiler_arguments(self):
+        self.request_handler.environment.compiler_exists.return_value = False  # type: ignore
 
         arguments = MagicMock()
         with patch.object(self.request_handler, "close_connection") as mocked_close_connection:
             assert not self.request_handler.check_compiler_arguments(arguments)
             mocked_close_connection.assert_called_once()
 
-        mocker.patch(
-            "homcc.server.environment.Environment.compiler_exists",
-            return_value=True,
-        )
+        self.request_handler.environment.compiler_exists.return_value = True  # type: ignore
         with patch.object(self.request_handler, "close_connection") as mocked_close_connection:
             assert self.request_handler.check_compiler_arguments(arguments)
             mocked_close_connection.assert_not_called()
 
-    def test_check_target_argument(self, mocker: MockerFixture):
-        mocker.patch(
-            "homcc.server.environment.Environment.compiler_supports_target",
-            return_value=False,
-        )
+    def test_check_target_argument(self):
+        self.request_handler.environment.compiler_supports_target.return_value = False  # type: ignore
 
         arguments = MagicMock()
         with patch.object(self.request_handler, "close_connection") as mocked_close_connection:
             assert not self.request_handler.check_target_argument(arguments, "some_target")
             mocked_close_connection.assert_called_once()
 
-        mocker.patch(
-            "homcc.server.environment.Environment.compiler_supports_target",
-            return_value=True,
-        )
+        self.request_handler.environment.compiler_supports_target.return_value = True  # type: ignore
+
         with patch.object(self.request_handler, "close_connection") as mocked_close_connection:
             assert self.request_handler.check_target_argument(arguments, "some_target")
             mocked_close_connection.assert_not_called()
@@ -159,7 +149,7 @@ class TestServerReceive:
         # justification: needed for monkey patching
         # monkey patch the server's handler, so that we can compare
         # messages sent by the client with messages that the server deserialized
-        TCPRequestHandler._handle_message = self.patched_handle_message
+        TCPRequestHandler._handle_message = self.patched_handle_message  # type: ignore
 
         config: ServerConfig = ServerConfig(files=[], address="0.0.0.0", port=unused_tcp_port, limit=1)
 

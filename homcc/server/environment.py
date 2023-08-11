@@ -5,7 +5,6 @@
 """Module containing methods to manage the server environment, mostly file and path manipulation."""
 import logging
 import os
-import shutil
 import uuid
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -16,6 +15,9 @@ from homcc.common.compression import Compression
 from homcc.common.constants import DWARF_FILE_SUFFIX
 from homcc.common.messages import CompilationResultMessage, File
 from homcc.server.cache import Cache
+from homcc.server.docker import DockerShellEnvironment
+from homcc.server.schroot import SchrootShellEnvironment
+from homcc.server.shell_environment import HostShellEnvironment, ShellEnvironment
 
 logger = logging.getLogger(__name__)
 
@@ -30,10 +32,8 @@ class Environment:
     """Path to the current compilation inside /tmp/."""
     mapped_cwd: str
     """Mapped cwd, valid on server side."""
-    schroot_profile: Optional[str]
-    """schroot profile for the compilation."""
-    docker_container: Optional[str]
-    """docker container for the compilation."""
+    shell_env: ShellEnvironment
+    """Shell environment to use"""
     compression: Compression
     """Compression used for data transfer."""
     sock_fd: int
@@ -48,10 +48,18 @@ class Environment:
         compression: Compression,
         sock_fd: int,
     ):
+        def get_shell_env():
+            # TODO(o.layer): upgrade to match once we have use Python 3.10
+            if docker_container is not None:
+                return DockerShellEnvironment(docker_container)
+            elif schroot_profile is not None:
+                return SchrootShellEnvironment(schroot_profile)
+            else:
+                return HostShellEnvironment()
+
         self.instance_folder: str = self.create_instance_folder(root_folder)
         self.mapped_cwd: str = self.map_cwd(cwd, self.instance_folder)
-        self.schroot_profile: Optional[str] = schroot_profile
-        self.docker_container: Optional[str] = docker_container
+        self.shell_env: ShellEnvironment = get_shell_env()
         self.compression: Compression = compression
         self.sock_fd: int = sock_fd
 
@@ -143,15 +151,13 @@ class Environment:
     def map_source_file_to_dwarf_file(self, source_file: str, arguments: Arguments) -> Path:
         return self.map_source_file_to_object_file(source_file, arguments).with_suffix(DWARF_FILE_SUFFIX)
 
-    @staticmethod
-    def compiler_exists(arguments: Arguments) -> bool:
+    def compiler_exists(self, arguments: Arguments) -> bool:
         """Returns true if the compiler specified in the arguments exists on the system, else false."""
-        return shutil.which(str(arguments.compiler)) is not None
+        return Arguments.is_executable_arg(str(arguments.compiler), shell_env=self.shell_env)
 
-    @staticmethod
-    def compiler_supports_target(arguments: Arguments, target: str) -> bool:
+    def compiler_supports_target(self, arguments: Arguments, target: str) -> bool:
         """Returns true if the compiler supports cross-compiling for the given target."""
-        return arguments.compiler.supports_target(target)
+        return arguments.compiler.supports_target(target, self.shell_env)
 
     def do_compilation(self, arguments: Arguments) -> CompilationResultMessage:
         """Does the compilation and returns the filled result message."""
@@ -209,22 +215,9 @@ class Environment:
         """Actually invokes the compiler process."""
         result: ArgumentsExecutionResult
 
-        if self.schroot_profile is not None:
-            result = arguments.schroot_execute(
-                profile=self.schroot_profile,
-                cwd=self.mapped_cwd,
-                timeout=COMPILATION_TIMEOUT,
-                event_socket_fd=self.sock_fd,
-            )
-        elif self.docker_container is not None:
-            result = arguments.docker_execute(
-                container=self.docker_container,
-                cwd=self.mapped_cwd,
-                timeout=COMPILATION_TIMEOUT,
-                event_socket_fd=self.sock_fd,
-            )
-        else:
-            result = arguments.execute(cwd=self.mapped_cwd, timeout=COMPILATION_TIMEOUT, event_socket_fd=self.sock_fd)
+        result = arguments.execute(
+            shell_env=self.shell_env, cwd=self.mapped_cwd, timeout=COMPILATION_TIMEOUT, event_socket_fd=self.sock_fd
+        )
 
         if result.stdout:
             result.stdout = result.stdout.replace(self.instance_folder, "")
