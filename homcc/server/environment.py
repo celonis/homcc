@@ -49,7 +49,7 @@ class Environment:
         sock_fd: int,
     ):
         def get_shell_env():
-            # TODO(o.layer): upgrade to match once we have use Python 3.10
+            # TODO(o.layer): upgrade to match once we use Python 3.10
             if docker_container is not None:
                 return DockerShellEnvironment(docker_container)
             elif schroot_profile is not None:
