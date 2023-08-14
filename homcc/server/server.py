@@ -173,10 +173,6 @@ class TCPRequestHandler(socketserver.BaseRequestHandler):
         target = message.target
         schroot_profile = message.schroot_profile
         docker_container = message.docker_container
-        if not self.check_client_request_satisfiability(
-            self.compiler_arguments, target, schroot_profile, docker_container
-        ):
-            return
 
         if compression := message.get_compression():
             logger.info("Using %s compression.", compression.name())
@@ -190,7 +186,15 @@ class TCPRequestHandler(socketserver.BaseRequestHandler):
             sock_fd=self.request.fileno(),
         )
 
-        if target is not None and self.compiler_arguments.get_compiler_target_triple() != target:
+        if not self.check_client_request_satisfiability(
+            self.compiler_arguments, target, schroot_profile, docker_container
+        ):
+            return
+
+        if (
+            target is not None
+            and self.compiler_arguments.get_compiler_target_triple(self.environment.shell_env) != target
+        ):
             self.compiler_arguments = self.compiler_arguments.add_target(target)
             logger.info("Using explicit target '%s' for compilation.", target)
 
@@ -341,13 +345,6 @@ class TCPRequestHandler(socketserver.BaseRequestHandler):
         if not self.check_docker_container_argument(docker_container):
             return False
 
-        if schroot_profile is not None or docker_container is not None:
-            # TODO(o.layer): currently, the checks below check the local environment,
-            # not the environment inside the sandbox. To avoid falsely declining a request
-            # while it is actually possible, we skip the checks for sandboxes until we implement
-            # these checks to work inside the sandbox
-            return True
-
         if not self.check_compiler_arguments(arguments):
             return False
 
@@ -362,7 +359,7 @@ class TCPRequestHandler(socketserver.BaseRequestHandler):
             return True
 
         try:
-            supports_target = Environment.compiler_supports_target(arguments, target)
+            supports_target = self.environment.compiler_supports_target(arguments, target)
             if not supports_target:
                 logger.warning(
                     "Compiler '%s' does not support requested target '%s', declining compilation.",
@@ -382,10 +379,12 @@ class TCPRequestHandler(socketserver.BaseRequestHandler):
 
     def check_compiler_arguments(self, arguments: Arguments) -> bool:
         """Checks whether the specified compiler is available on the system."""
-        if not Environment.compiler_exists(arguments):
+        if not self.environment.compiler_exists(arguments):
             logger.warning(
-                "Compilation with compiler '%s' requested, but this compiler is not installed on the system.",
+                "Compilation with compiler '%s' requested, but this compiler is not installed"
+                " on the system using shell environment '%s'.",
                 arguments.compiler,
+                type(self.environment.shell_env).__name__,
             )
             self.close_connection(
                 f"Compiler '{arguments.compiler}' is not available on the server, can not compile remotely"

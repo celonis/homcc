@@ -10,6 +10,7 @@ import pytest
 
 from homcc.common.arguments import Arguments, Clang, Compiler, Gcc
 from homcc.common.errors import UnsupportedCompilerError
+from homcc.server.shell_environment import HostShellEnvironment
 
 
 class TestArguments:
@@ -267,13 +268,15 @@ class TestGcc:
     @pytest.mark.gplusplus
     def test_supports_target(self):
         gcc = Gcc("g++")
-        assert gcc.supports_target("x86_64-linux-gnu")
-        assert not gcc.supports_target("other_arch-linux-gnu")
+        assert gcc.supports_target("x86_64-linux-gnu", shell_env=HostShellEnvironment())
+        assert not gcc.supports_target("other_arch-linux-gnu", shell_env=HostShellEnvironment())
 
     @pytest.mark.gplusplus
     def test_get_target_triple(self):
         gcc = Gcc("g++")
-        assert gcc.get_target_triple()  # check no exception is thrown and we got a non-empty string
+
+        # check no exception is thrown and we got a non-empty string
+        assert gcc.get_target_triple(shell_env=HostShellEnvironment())
 
     def test_add_target_to_arguments(self):
         gcc = Gcc("g++")
@@ -293,7 +296,8 @@ class TestClang:
     @pytest.mark.clangplusplus
     def test_get_target_triple(self):
         clang = Clang("clang++")
-        assert clang.get_target_triple()  # check no exception is thrown and we got a non-empty string
+        # check no exception is thrown and we got a non-empty string
+        assert clang.get_target_triple(shell_env=HostShellEnvironment())
 
     def test_add_target_to_arguments(self):
         clang = Clang("clang++")

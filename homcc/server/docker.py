@@ -6,8 +6,10 @@
 import logging
 import shutil
 import subprocess
+from typing import List, Optional
 
 from homcc.common.constants import ENCODING
+from homcc.server.shell_environment import ShellEnvironment
 
 logger = logging.getLogger(__name__)
 
@@ -41,3 +43,22 @@ def is_valid_docker_container(docker_container: str) -> bool:
         return False
 
     return "true" in result.stdout
+
+
+class DockerShellEnvironment(ShellEnvironment):
+    """Docker shell environment. Commands are transformed to be executed inside a docker container."""
+
+    container: str
+
+    def __init__(self, container: str) -> None:
+        super().__init__()
+        self.container = container
+
+    def transform_command(self, args: List[str], cwd: Optional[str] = None) -> List[str]:
+        transformed_args: List[str] = ["docker", "exec"]
+
+        if cwd is not None:
+            transformed_args.extend(["--workdir", cwd])
+
+        transformed_args.append(self.container)
+        return transformed_args + args

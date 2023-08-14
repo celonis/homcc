@@ -9,7 +9,6 @@ import logging
 import os
 import re
 import select
-import shutil
 import subprocess
 import sys
 import time
@@ -25,6 +24,7 @@ from homcc.common.errors import (
     TargetInferationError,
     UnsupportedCompilerError,
 )
+from homcc.server.shell_environment import HostShellEnvironment, ShellEnvironment
 
 logger = logging.getLogger(__name__)
 
@@ -176,9 +176,12 @@ class Arguments:
         return re.match(object_file_pattern, arg, re.IGNORECASE) is not None
 
     @staticmethod
-    def is_executable_arg(arg: str) -> bool:
+    def is_executable_arg(arg: str, shell_env: ShellEnvironment = HostShellEnvironment()) -> bool:
         """check whether an argument is executable"""
-        return shutil.which(arg) is not None
+        executable_check_args = shell_env.transform_command(["which", arg])
+        result = Arguments._execute_args(executable_check_args)
+
+        return result.return_code == 0
 
     @staticmethod
     def is_compiler_arg(arg: str) -> bool:
@@ -562,9 +565,9 @@ class Arguments:
         self._args = [arg for arg in self.args if not self.is_source_file_arg(arg)]
         return self
 
-    def get_compiler_target_triple(self) -> str:
+    def get_compiler_target_triple(self, shell_env: ShellEnvironment) -> str:
         """returns the target triple for the given compiler"""
-        return self.compiler.get_target_triple()
+        return self.compiler.get_target_triple(shell_env=shell_env)
 
     @staticmethod
     def _execute_args(
@@ -673,29 +676,15 @@ class Arguments:
             finally:
                 os.close(process_fd)
 
-    def execute(self, **kwargs) -> ArgumentsExecutionResult:
+    def execute(self, shell_env: ShellEnvironment, **kwargs) -> ArgumentsExecutionResult:
         """
         Execute arguments by forwarding it as a list of args to subprocess and return the result as an
         ArgumentsExecutionResult. If possible, all parameters to this method will also be forwarded directly to the
         subprocess function call.
         """
-        return self._execute_args(list(self), **kwargs)
+        transformed_args = shell_env.transform_command(list(self), cwd=kwargs.get("cwd", None))
 
-    def schroot_execute(self, profile: str, **kwargs) -> ArgumentsExecutionResult:
-        """
-        Execute arguments in a secure changed root environment. If possible, all parameters to this method will also be
-        forwarded directly to the subprocess function call.
-        """
-        schroot_args: List[str] = ["schroot", "-c", profile, "--"]
-        return self._execute_args(schroot_args + list(self), **kwargs)
-
-    def docker_execute(self, container: str, cwd: str, **kwargs) -> ArgumentsExecutionResult:
-        """
-        Execute arguments in a docker container. If possible, all parameters to this method will also be forwarded
-        directly to the subprocess function call.
-        """
-        docker_args: List[str] = ["docker", "exec", "--workdir", cwd, container]
-        return self._execute_args(docker_args + list(self), **kwargs)
+        return self._execute_args(transformed_args, **kwargs)
 
 
 class Compiler(ABC):
@@ -751,12 +740,12 @@ class Compiler(ABC):
         pass
 
     @abstractmethod
-    def supports_target(self, target: str) -> bool:
+    def supports_target(self, target: str, shell_env: ShellEnvironment) -> bool:
         """Returns True if the compiler supports the given target for cross compilation."""
         pass
 
     @abstractmethod
-    def get_target_triple(self) -> str:
+    def get_target_triple(self, shell_env: ShellEnvironment) -> str:
         """Gets the target triple that the compiler produces on the machine. (e.g. x86_64-pc-linux-gnu)"""
         pass
 
@@ -777,18 +766,18 @@ class Clang(Compiler):
     def is_matching_str(compiler_str: str) -> bool:
         return "clang" in compiler_str
 
-    def supports_target(self, _: str) -> bool:
+    def supports_target(self, target: str, shell_env: ShellEnvironment) -> bool:
         """For clang, we can not really check if it supports the target prior to compiling:
         '$ clang --print-targets' does not output the same triple format as we get from
         '$ clang --version' (x86_64 vs. x86-64), so we can not properly check if a target is supported.
         Therefore, we can just assume clang can handle the target."""
         return True
 
-    def get_target_triple(self) -> str:
+    def get_target_triple(self, shell_env: ShellEnvironment) -> str:
         clang_arguments: Arguments = Arguments(self, ["--version"])
 
         try:
-            result = clang_arguments.execute(check=True)
+            result = clang_arguments.execute(shell_env=shell_env, check=True)
         except subprocess.CalledProcessError as err:
             logger.error(
                 "Could not get target triple for compiler '%s', executed '%s'. %s",
@@ -824,14 +813,14 @@ class Gcc(Compiler):
     def is_matching_str(compiler_str: str) -> bool:
         return "gcc" in compiler_str or ("g++" in compiler_str and "clang" not in compiler_str)
 
-    def supports_target(self, target: str) -> bool:
-        return shutil.which(f"{target}-{self._compiler_str}") is not None
+    def supports_target(self, target: str, shell_env: ShellEnvironment) -> bool:
+        return Arguments.is_executable_arg(f"{target}-{self._compiler_str}", shell_env=shell_env)
 
-    def get_target_triple(self) -> str:
+    def get_target_triple(self, shell_env: ShellEnvironment) -> str:
         gcc_arguments: Arguments = Arguments(self, ["-dumpmachine"])
 
         try:
-            result = gcc_arguments.execute(check=True)
+            result = gcc_arguments.execute(shell_env=shell_env, check=True)
         except subprocess.CalledProcessError as err:
             logger.error(
                 "Could not get target triple for compiler '%s', executed '%s'. %s",

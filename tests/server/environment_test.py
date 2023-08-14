@@ -14,6 +14,7 @@ from homcc.common.arguments import Arguments
 from homcc.common.compression import NoCompression
 from homcc.server.cache import Cache
 from homcc.server.environment import ArgumentsExecutionResult, Environment
+from homcc.server.shell_environment import HostShellEnvironment
 
 
 def create_mock_environment(instance_folder: str, mapped_cwd: str) -> Environment:
@@ -23,7 +24,7 @@ def create_mock_environment(instance_folder: str, mapped_cwd: str) -> Environmen
 
     environment.instance_folder = instance_folder
     environment.mapped_cwd = mapped_cwd
-    environment.schroot_profile = None
+    environment.shell_env = HostShellEnvironment()
     environment.compression = NoCompression()
 
     return environment
@@ -210,8 +211,10 @@ class TestServerCompilation:
 
     @pytest.mark.gplusplus
     def test_compiler_exists(self):
-        assert Environment.compiler_exists(Arguments.from_vargs("g++", "foo"))
-        assert not Environment.compiler_exists(Arguments.from_vargs("clang-HOMCC_TEST_COMPILER_EXISTS", "foo"))
+        environment = create_mock_environment("instance-folder", "instance-folder/some-folder")
+
+        assert environment.compiler_exists(Arguments.from_vargs("g++", "foo"))
+        assert not environment.compiler_exists(Arguments.from_vargs("clang-HOMCC_TEST_COMPILER_EXISTS", "foo"))
 
     def test_map_source_file_to_object_file(self):
         instance_path: str = "/tmp/instance/"

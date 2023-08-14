@@ -43,6 +43,7 @@ from homcc.common.messages import (
     Message,
 )
 from homcc.common.statefile import StateFile
+from homcc.server.shell_environment import HostShellEnvironment
 
 logger = logging.getLogger(__name__)
 
@@ -134,7 +135,7 @@ async def compile_remotely_at(
 
         target: Optional[str] = None
         try:
-            target = arguments.get_compiler_target_triple()
+            target = arguments.get_compiler_target_triple(shell_env=HostShellEnvironment())
         except TargetInferationError as err:
             logger.warning(
                 "Could not get target architecture. Omitting passing explicit target to remote compilation host. "
@@ -211,7 +212,7 @@ def execute_linking(arguments: Arguments, localhost: Host) -> int:
     """execute linking command, no StateFile necessary"""
 
     with LocalHostCompilationSemaphore(localhost):
-        result: ArgumentsExecutionResult = arguments.execute(output=True)
+        result: ArgumentsExecutionResult = arguments.execute(output=True, shell_env=HostShellEnvironment())
 
         return result.return_code
 
@@ -223,7 +224,7 @@ def compile_locally(arguments: Arguments, localhost: Host) -> int:
         state.set_compile()
 
         # execute compile command, e.g.: "g++ -c foo.cpp -o foo"
-        result: ArgumentsExecutionResult = arguments.execute(output=True)
+        result: ArgumentsExecutionResult = arguments.execute(output=True, shell_env=HostShellEnvironment())
 
         return result.return_code
 
@@ -246,7 +247,7 @@ def find_dependencies(arguments: Arguments) -> Set[str]:
 
     # execute preprocessor command, e.g.: "g++ foo.cpp -M"
     arguments, filename = arguments.dependency_finding()
-    result: ArgumentsExecutionResult = arguments.execute(check=True)
+    result: ArgumentsExecutionResult = arguments.execute(check=True, shell_env=HostShellEnvironment())
 
     # read from the dependency file if it was created as a side effect
     dependency_result: str = (
@@ -292,6 +293,6 @@ def link_object_files(arguments: Arguments, object_files: List[File]) -> int:
         arguments.add_arg(object_file.file_name)
 
     # execute linking command, e.g.: "g++ foo.o bar.o -ofoobar"
-    result: ArgumentsExecutionResult = arguments.execute(check=True, output=True)
+    result: ArgumentsExecutionResult = arguments.execute(check=True, output=True, shell_env=HostShellEnvironment())
 
     return result.return_code
