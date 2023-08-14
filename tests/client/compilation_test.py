@@ -118,8 +118,4 @@ class TestCompilation:
 
         Path(output).unlink(missing_ok=True)
 
-        # intentionally execute an erroneous call
-        with pytest.raises(subprocess.CalledProcessError) as raised_exception:
-            compile_locally(Arguments.from_vargs(*args, "-OError"), Host.localhost_with_limit(1))
-
-        assert raised_exception != os.EX_OK
+        assert compile_locally(Arguments.from_vargs(*args, "-OError"), Host.localhost_with_limit(1)) != os.EX_OK
