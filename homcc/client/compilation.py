@@ -212,7 +212,7 @@ def execute_linking(arguments: Arguments, localhost: Host) -> int:
     """execute linking command, no StateFile necessary"""
 
     with LocalHostCompilationSemaphore(localhost):
-        result: ArgumentsExecutionResult = arguments.execute(check=True, output=True, shell_env=HostShellEnvironment())
+        result: ArgumentsExecutionResult = arguments.execute(output=True, shell_env=HostShellEnvironment())
 
         return result.return_code
 
@@ -224,7 +224,7 @@ def compile_locally(arguments: Arguments, localhost: Host) -> int:
         state.set_compile()
 
         # execute compile command, e.g.: "g++ -c foo.cpp -o foo"
-        result: ArgumentsExecutionResult = arguments.execute(check=True, output=True, shell_env=HostShellEnvironment())
+        result: ArgumentsExecutionResult = arguments.execute(output=True, shell_env=HostShellEnvironment())
 
         return result.return_code
 
