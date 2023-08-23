@@ -9,7 +9,7 @@ import subprocess
 from typing import List, Optional
 
 from homcc.common.constants import ENCODING
-from homcc.server.shell_environment import ShellEnvironment
+from homcc.common.shell_environment import ShellEnvironment
 
 logger = logging.getLogger(__name__)
 

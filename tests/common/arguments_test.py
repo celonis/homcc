@@ -10,7 +10,7 @@ import pytest
 
 from homcc.common.arguments import Arguments, Clang, Compiler, Gcc
 from homcc.common.errors import UnsupportedCompilerError
-from homcc.server.shell_environment import HostShellEnvironment
+from homcc.common.shell_environment import HostShellEnvironment
 
 
 class TestArguments:
