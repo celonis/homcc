@@ -12,9 +12,9 @@ from pytest_mock.plugin import MockerFixture
 
 from homcc.common.arguments import Arguments
 from homcc.common.compression import NoCompression
+from homcc.common.shell_environment import HostShellEnvironment
 from homcc.server.cache import Cache
 from homcc.server.environment import ArgumentsExecutionResult, Environment
-from homcc.common.shell_environment import HostShellEnvironment
 
 
 def create_mock_environment(instance_folder: str, mapped_cwd: str) -> Environment:
