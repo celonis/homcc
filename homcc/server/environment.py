@@ -14,10 +14,10 @@ from homcc.common.arguments import Arguments, ArgumentsExecutionResult
 from homcc.common.compression import Compression
 from homcc.common.constants import DWARF_FILE_SUFFIX
 from homcc.common.messages import CompilationResultMessage, File
+from homcc.common.shell_environment import HostShellEnvironment, ShellEnvironment
 from homcc.server.cache import Cache
 from homcc.server.docker import DockerShellEnvironment
 from homcc.server.schroot import SchrootShellEnvironment
-from homcc.server.shell_environment import HostShellEnvironment, ShellEnvironment
 
 logger = logging.getLogger(__name__)
 

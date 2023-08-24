@@ -42,8 +42,8 @@ from homcc.common.messages import (
     File,
     Message,
 )
+from homcc.common.shell_environment import HostShellEnvironment
 from homcc.common.statefile import StateFile
-from homcc.server.shell_environment import HostShellEnvironment
 
 logger = logging.getLogger(__name__)
 

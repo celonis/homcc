@@ -24,7 +24,7 @@ from homcc.common.errors import (
     TargetInferationError,
     UnsupportedCompilerError,
 )
-from homcc.server.shell_environment import HostShellEnvironment, ShellEnvironment
+from homcc.common.shell_environment import HostShellEnvironment, ShellEnvironment
 
 logger = logging.getLogger(__name__)
 
