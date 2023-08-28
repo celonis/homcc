@@ -186,17 +186,17 @@ class TCPRequestHandler(socketserver.BaseRequestHandler):
             sock_fd=self.request.fileno(),
         )
 
-        if not self.check_client_request_satisfiability(
-            self.compiler_arguments, target, schroot_profile, docker_container
-        ):
-            return
-
         if (
             target is not None
             and self.compiler_arguments.get_compiler_target_triple(self.environment.shell_env) != target
         ):
             self.compiler_arguments = self.compiler_arguments.add_target(target)
             logger.info("Using explicit target '%s' for compilation.", target)
+
+        if not self.check_client_request_satisfiability(
+            self.compiler_arguments, target, schroot_profile, docker_container
+        ):
+            return
 
         self.compiler_arguments = self.environment.map_args(self.compiler_arguments)
         logger.debug("Mapped compiler args: %s", str(self.compiler_arguments))
