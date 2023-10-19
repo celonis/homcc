@@ -1,10 +1,11 @@
-name: Build PR Branch
+name: Build Branch/PR
 
 on:
   push:
     branches-ignore:
       - main
-
+  pull_request:
+      types: [opened, synchronize, reopened]
 jobs:
   linter:
     runs-on: ubuntu-22.04
