@@ -27,7 +27,7 @@ if __name__ == "__main__":
     setup(
         name="homccd",
         version=server.__version__,
-        description=("Home-Office friendly distcc replacement - Server"),
+        description=("Work From Home friendly distcc replacement - Server"),
         license="MIT License",
         url="https://github.com/celonis/homcc",
         packages=["homcc.server", "homcc.common"],

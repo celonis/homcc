@@ -117,7 +117,7 @@ class ShowEnvironmentVariables(ShowAndExitAction):
 
 def parse_cli_args(cli_args: List[str]) -> Tuple[Dict[str, Any], Arguments]:
     parser: ArgumentParser = ArgumentParser(
-        description="homcc - Home-Office friendly distcc replacement",
+        description="homcc - Work From Home friendly distcc replacement",
         allow_abbrev=False,
         add_help=False,  # no default help argument in order to disable "-h" abbreviation
         formatter_class=RawTextHelpFormatter,
