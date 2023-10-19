@@ -1,6 +1,6 @@
-# :house_with_garden: HOMCC - Home-Office friendly distcc replacement
+# :house_with_garden: HOMCC - Work From Home friendly distcc replacement
 
-`HOMCC`, pronounced `həʊm siː siː`, is a home-office oriented, compilation distribution project which keeps the premise of always generating the same results as a local build.
+`HOMCC`, pronounced `həʊm siː siː`, is a work from home oriented, compilation distribution project which keeps the premise of always generating the same results as a local build.
 Current supported languages are `C` and `C++` with their respective `gcc` and `clang` compilers.
 
 While distributing compilations generally improves build times of large code bases, narrow network bandwidths pose a crucial limiting factor.
