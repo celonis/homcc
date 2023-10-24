@@ -77,7 +77,7 @@ class TCPServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
         self.current_amount_connections: int = 0  # indicates the amount of clients that are currently connected
         self.current_amount_connections_mutex: Lock = Lock()
 
-        self.cache = Cache(Path(self.root_temp_folder.name))
+        self.cache = Cache(root_folder=Path(self.root_temp_folder.name), max_entries=1000)  # TODO
 
     @staticmethod
     def send_message(request, message: Message):
