@@ -22,6 +22,11 @@ from homcc.server.schroot import get_schroot_profiles
 
 logger = logging.getLogger(__name__)
 
+
+def mib_to_bytes(mb: int) -> int:
+    return mb * 1024**2
+
+
 HOMCC_SERVER_CONFIG_SECTION: str = "homccd"
 
 DEFAULT_ADDRESS: str = "0.0.0.0"
@@ -31,6 +36,7 @@ DEFAULT_LIMIT: int = (
     or os.cpu_count()  # total number of physical CPUs on the machine
     or -1  # fallback error value
 )
+DEFAULT_MAX_CACHE_SIZE_BYTES: int = mib_to_bytes(10000)
 
 
 class ShowVersion(Action):
@@ -74,6 +80,7 @@ class ServerConfig:
         HOMCCD_ADDRESS_ENV_VAR: ClassVar[str] = "HOMCCD_ADDRESS"
         HOMCCD_LOG_LEVEL_ENV_VAR: ClassVar[str] = "HOMCCD_LOG_LEVEL"
         HOMCCD_VERBOSE_ENV_VAR: ClassVar[str] = "HOMCCD_VERBOSE"
+        HOMCCD_MAX_DEPENDENCY_CACHE_SIZE_BYTES: ClassVar[str] = "HOMCCD_MAX_DEPENDENCY_CACHE_SIZE_BYTES"
 
         @classmethod
         def __iter__(cls) -> Iterator[str]:
@@ -83,6 +90,7 @@ class ServerConfig:
                 cls.HOMCCD_ADDRESS_ENV_VAR,
                 cls.HOMCCD_LOG_LEVEL_ENV_VAR,
                 cls.HOMCCD_VERBOSE_ENV_VAR,
+                cls.HOMCCD_MAX_DEPENDENCY_CACHE_SIZE_BYTES,
             )
 
         @classmethod
@@ -112,12 +120,20 @@ class ServerConfig:
                 return re.match(r"^(1)|(yes)|(true)|(on)$", verbose, re.IGNORECASE) is not None
             return None
 
+        @classmethod
+        def get_max_dependency_cache_size_bytes(cls) -> Optional[int]:
+            if max_dependency_cache_size_bytes := os.getenv(cls.HOMCCD_MAX_DEPENDENCY_CACHE_SIZE_BYTES):
+                return int(max_dependency_cache_size_bytes)
+
+            return None
+
     files: List[str]
     address: Optional[str]
     port: Optional[int]
     limit: Optional[int]
     log_level: Optional[LogLevel]
     verbose: bool
+    max_dependency_cache_size_bytes: Optional[int]
 
     def __init__(
         self,
@@ -128,6 +144,7 @@ class ServerConfig:
         address: Optional[str] = None,
         log_level: Optional[str] = None,
         verbose: Optional[bool] = None,
+        max_dependency_cache_size_bytes: Optional[int] = None,
     ):
         self.files = files
 
@@ -140,6 +157,8 @@ class ServerConfig:
         verbose = self.EnvironmentVariables.get_verbose() or verbose
         self.verbose = verbose is not None and verbose
 
+        self.max_dependency_cache_size_bytes = max_dependency_cache_size_bytes
+
     @classmethod
     def empty(cls):
         return cls(files=[])
@@ -151,8 +170,17 @@ class ServerConfig:
         address: Optional[str] = homccd_config.get("address")
         log_level: Optional[str] = homccd_config.get("log_level")
         verbose: Optional[bool] = homccd_config.getboolean("verbose")
+        max_dependency_cache_size_bytes: Optional[int] = homccd_config.getint("max_dependency_cache_size_bytes")
 
-        return ServerConfig(files=files, limit=limit, port=port, address=address, log_level=log_level, verbose=verbose)
+        return ServerConfig(
+            files=files,
+            limit=limit,
+            port=port,
+            address=address,
+            log_level=log_level,
+            verbose=verbose,
+            max_dependency_cache_size_bytes=max_dependency_cache_size_bytes,
+        )
 
     def __str__(self):
         return (
@@ -162,6 +190,7 @@ class ServerConfig:
             f"\taddress:\t{self.address}\n"
             f"\tlog_level:\t{self.log_level}\n"
             f"\tverbose:\t{self.verbose}\n"
+            f"\tmax_dependency_cache_size_bytes:\t{self.max_dependency_cache_size_bytes}\n"
         )
 
 
@@ -180,6 +209,14 @@ def parse_cli_args(args: List[str]) -> Dict[str, Any]:
             return value
 
         raise ArgumentTypeError(f"LIMIT must be more than {minimum}")
+
+    def max_dependency_cache_size_bytes(value: Union[int, str]) -> int:
+        value = int(value)
+
+        if value <= 0:
+            raise ArgumentTypeError("Maximum dependency cache size must be larger than 0.")
+
+        return value
 
     general_options_group = parser.add_argument_group("Options")
     networking_group = parser.add_argument_group(" Networking")
@@ -205,6 +242,13 @@ def parse_cli_args(args: List[str]) -> Dict[str, Any]:
         "--no-config",
         action="store_true",
         help="enforce that only configurations provided via the CLI are used",
+    )
+    general_options_group.add_argument(
+        "--max-dependency-cache-size-bytes",
+        required=False,
+        metavar="BYTES",
+        type=max_dependency_cache_size_bytes,
+        help=f"The maximum cache size for the dependency cache in bytes. Default: {DEFAULT_MAX_CACHE_SIZE_BYTES} bytes",
     )
 
     # networking

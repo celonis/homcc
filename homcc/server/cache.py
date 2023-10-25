@@ -11,10 +11,6 @@ from threading import Lock
 logger = logging.getLogger(__name__)
 
 
-def mib_to_bytes(mb: int) -> int:
-    return mb * 1024**2
-
-
 class Cache:
     """Represents the homcc server cache that is used to cache dependencies."""
 
@@ -25,9 +21,9 @@ class Cache:
     cache_folder: Path
     """Path to the cache on the file system."""
     max_size_bytes: int
-    """Maximum size in bytes of the cache."""
+    """Maximum size of the cache in bytes."""
     current_size: int
-    """Current size in bytes"""
+    """Current size of the cache in bytes."""
 
     def __init__(self, root_folder: Path, max_size_bytes: int):
         if max_size_bytes <= 0:
@@ -39,8 +35,8 @@ class Cache:
         self.max_size_bytes = max_size_bytes
         self.current_size = 0
 
-    def _get_cache_file_path(self, hash: str) -> Path:
-        return self.cache_folder / hash
+    def _get_cache_file_path(self, hash_value: str) -> Path:
+        return self.cache_folder / hash_value
 
     def __contains__(self, key: str):
         with self.cache_mutex:
@@ -84,13 +80,13 @@ class Cache:
         logger.info("Created cache folder in '%s'.", cache_folder.absolute())
         return cache_folder
 
-    def get(self, hash: str) -> str:
+    def get(self, hash_value: str) -> str:
         """Gets an entry (path) from the cache given a hash."""
         with self.cache_mutex:
-            self.cache.move_to_end(hash)
-            return self.cache[hash]
+            self.cache.move_to_end(hash_value)
+            return self.cache[hash_value]
 
-    def put(self, hash: str, content: bytearray):
+    def put(self, hash_value: str, content: bytearray):
         """Stores a dependency in the cache."""
         if len(content) > self.max_size_bytes:
             logger.error(
@@ -102,11 +98,11 @@ class Cache:
             )
             raise RuntimeError("Cache size insufficient")
 
-        cached_file_path = self._get_cache_file_path(hash)
+        cached_file_path = self._get_cache_file_path(hash_value)
         with self.cache_mutex:
             while self.current_size + len(content) > self.max_size_bytes:
                 self._evict_oldest()
 
             Path.write_bytes(cached_file_path, content)
             self.current_size += len(content)
-            self.cache[hash] = str(cached_file_path)
+            self.cache[hash_value] = str(cached_file_path)

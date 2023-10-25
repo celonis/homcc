@@ -67,6 +67,9 @@ def main():
         level=LogLevel.INFO,
     )
 
+    # TODO(o.layer): The argument parsing code should below be moved to/abstracted in parsing.py,
+    # similar to how it is done for the client
+
     # LOG_LEVEL and VERBOSITY
     log_level: Optional[str] = homccd_args_dict["log_level"]
 
@@ -99,6 +102,10 @@ def main():
     # ADDRESS
     if (address := homccd_args_dict["listen"]) is not None:
         homccd_config.address = address
+
+    # MAX_DEPENDENCY_CACHE_SIZE_BYTES
+    if (max_dependency_cache_size_bytes := homccd_args_dict["max_dependency_cache_size_bytes"]) is not None:
+        homccd_config.max_dependency_cache_size_bytes = max_dependency_cache_size_bytes
 
     # provide additional DEBUG information
     logger.debug(
