@@ -3,8 +3,8 @@
 #   https://github.com/celonis/homcc/blob/main/LICENSE
 
 """Caching module of the homcc server."""
-from collections import OrderedDict
 import logging
+from collections import OrderedDict
 from pathlib import Path
 from threading import Lock
 
