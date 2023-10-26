@@ -22,7 +22,7 @@ class Cache:
     """Path to the cache on the file system."""
     max_size_bytes: int
     """Maximum size of the cache in bytes."""
-    current_size: int
+    current_size_bytes: int
     """Current size of the cache in bytes."""
 
     def __init__(self, root_folder: Path, max_size_bytes: int):
@@ -33,7 +33,7 @@ class Cache:
         self.cache: OrderedDict[str, str] = OrderedDict()
         self.cache_mutex: Lock = Lock()
         self.max_size_bytes = max_size_bytes
-        self.current_size = 0
+        self.current_size_bytes = 0
 
     def _get_cache_file_path(self, hash_value: str) -> Path:
         return self.cache_folder / hash_value
@@ -55,7 +55,7 @@ class Cache:
         Evicts the oldest entry from the cache.
         Note: The caller of this method has to ensure that the cache is locked.
         """
-        oldest_hash = next(iter(self.cache))
+        oldest_hash, _ = self.cache.popitem(last=False)
         oldest_path = self._get_cache_file_path(oldest_hash)
         oldest_size = oldest_path.stat().st_size
 
@@ -68,8 +68,7 @@ class Cache:
                 oldest_path,
             )
 
-        self.current_size -= oldest_size
-        del self.cache[oldest_hash]
+        self.current_size_bytes -= oldest_size
 
     @staticmethod
     def _create_cache_folder(root_temp_folder: Path) -> Path:
@@ -92,7 +91,7 @@ class Cache:
             logger.error(
                 """File with hash '%s' can not be added to cache as it is larger than the maximum cache size.
                 (size in bytes: %i, max. cache size in bytes: %i)""",
-                hash,
+                hash_value,
                 len(content),
                 self.max_size_bytes,
             )
@@ -100,9 +99,9 @@ class Cache:
 
         cached_file_path = self._get_cache_file_path(hash_value)
         with self.cache_mutex:
-            while self.current_size + len(content) > self.max_size_bytes:
+            while self.current_size_bytes + len(content) > self.max_size_bytes:
                 self._evict_oldest()
 
             Path.write_bytes(cached_file_path, content)
-            self.current_size += len(content)
+            self.current_size_bytes += len(content)
             self.cache[hash_value] = str(cached_file_path)
