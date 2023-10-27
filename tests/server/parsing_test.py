@@ -4,6 +4,7 @@
 
 """ Tests for client/compilation.py"""
 import os
+from argparse import ArgumentTypeError
 from pathlib import Path
 from typing import List
 
@@ -12,7 +13,13 @@ from pytest import CaptureFixture
 
 from homcc import server
 from homcc.common.parsing import HOMCC_CONFIG_FILENAME
-from homcc.server.parsing import ServerConfig, parse_cli_args, parse_config
+from homcc.server.parsing import (
+    ServerConfig,
+    gib_to_bytes,
+    parse_cli_args,
+    parse_config,
+    size_string_to_bytes,
+)
 
 
 class TestParsingConfig:
@@ -28,17 +35,14 @@ class TestParsingConfig:
         "AdDrEsS=0.0.0.0",
         "LOG_LEVEL=DEBUG",
         "verbose=TRUE",
+        "max_dependency_cache_size=10G",
         # the following configs should be ignored
         "[homcc]",
         "LOG_LEVEL=INFO",
         "verbose=FALSE",
     ]
 
-    config_overwrite: List[str] = [
-        "[homccd]",
-        "LOG_LEVEL=INFO",
-        "verbose=FALSE",
-    ]
+    config_overwrite: List[str] = ["[homccd]", "LOG_LEVEL=INFO", "verbose=FALSE", "max_dependency_cache_size=1G"]
 
     def test_version(self, capfd: CaptureFixture):
         with pytest.raises(SystemExit) as sys_exit:
@@ -54,14 +58,18 @@ class TestParsingConfig:
         tmp_config_file: Path = tmp_path / HOMCC_CONFIG_FILENAME
         tmp_config_file.write_text("\n".join(self.config))
 
-        assert parse_config([tmp_config_file]) == ServerConfig(
+        parsed_config = parse_config([tmp_config_file])
+        expected_config = ServerConfig(
             files=[str(tmp_config_file.absolute())],
             limit=42,
             port=3126,
             address="0.0.0.0",
+            max_dependency_cache_size_bytes=gib_to_bytes(10),
             log_level="DEBUG",
             verbose=True,
         )
+
+        assert parsed_config == expected_config
 
     def test_parse_multiple_config_files(self, tmp_path: Path):
         tmp_config_file: Path = tmp_path / HOMCC_CONFIG_FILENAME
@@ -75,6 +83,19 @@ class TestParsingConfig:
             limit=42,
             port=3126,
             address="0.0.0.0",
+            max_dependency_cache_size_bytes=gib_to_bytes(1),
             log_level="INFO",
             verbose=False,
         )
+
+    def test_size_string_conversions(self):
+        assert size_string_to_bytes("1M") == 1048576
+        assert size_string_to_bytes("100M") == 104857600
+        assert size_string_to_bytes("555M") == 581959680
+
+        assert size_string_to_bytes("1G") == 1073741824
+        assert size_string_to_bytes("100G") == 107374182400
+        assert size_string_to_bytes("123G") == 132070244352
+
+        with pytest.raises(ArgumentTypeError):
+            size_string_to_bytes("123")

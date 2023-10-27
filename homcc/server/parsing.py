@@ -27,6 +27,23 @@ def mib_to_bytes(mb: int) -> int:
     return mb * 1024**2
 
 
+def gib_to_bytes(gb: int) -> int:
+    return gb * 1024**3
+
+
+def size_string_to_bytes(size_string: str) -> int:
+    """Converts e.g. 100M or 1G to bytes. Only supports M (Mebibyte) and G (Gibibyte)"""
+    unit = size_string[-1]
+    amount = size_string[:-1]
+
+    if unit == "M":
+        return mib_to_bytes(int(amount))
+    elif unit == "G":
+        return gib_to_bytes(int(amount))
+
+    raise ArgumentTypeError(f"Invalid size string: '{size_string}'. Specify either M (Mebibyte) or G (Gibibyte).")
+
+
 HOMCC_SERVER_CONFIG_SECTION: str = "homccd"
 
 DEFAULT_ADDRESS: str = "0.0.0.0"
@@ -36,7 +53,7 @@ DEFAULT_LIMIT: int = (
     or os.cpu_count()  # total number of physical CPUs on the machine
     or -1  # fallback error value
 )
-DEFAULT_MAX_CACHE_SIZE_BYTES: int = mib_to_bytes(10000)
+DEFAULT_MAX_CACHE_SIZE_BYTES: int = gib_to_bytes(10)
 
 
 class ShowVersion(Action):
@@ -80,7 +97,7 @@ class ServerConfig:
         HOMCCD_ADDRESS_ENV_VAR: ClassVar[str] = "HOMCCD_ADDRESS"
         HOMCCD_LOG_LEVEL_ENV_VAR: ClassVar[str] = "HOMCCD_LOG_LEVEL"
         HOMCCD_VERBOSE_ENV_VAR: ClassVar[str] = "HOMCCD_VERBOSE"
-        HOMCCD_MAX_DEPENDENCY_CACHE_SIZE_BYTES: ClassVar[str] = "HOMCCD_MAX_DEPENDENCY_CACHE_SIZE_BYTES"
+        HOMCCD_MAX_DEPENDENCY_CACHE_SIZE: ClassVar[str] = "HOMCCD_MAX_DEPENDENCY_CACHE_SIZE"
 
         @classmethod
         def __iter__(cls) -> Iterator[str]:
@@ -90,7 +107,7 @@ class ServerConfig:
                 cls.HOMCCD_ADDRESS_ENV_VAR,
                 cls.HOMCCD_LOG_LEVEL_ENV_VAR,
                 cls.HOMCCD_VERBOSE_ENV_VAR,
-                cls.HOMCCD_MAX_DEPENDENCY_CACHE_SIZE_BYTES,
+                cls.HOMCCD_MAX_DEPENDENCY_CACHE_SIZE,
             )
 
         @classmethod
@@ -121,9 +138,9 @@ class ServerConfig:
             return None
 
         @classmethod
-        def get_max_dependency_cache_size_bytes(cls) -> Optional[int]:
-            if max_dependency_cache_size_bytes := os.getenv(cls.HOMCCD_MAX_DEPENDENCY_CACHE_SIZE_BYTES):
-                return int(max_dependency_cache_size_bytes)
+        def get_max_dependency_cache_size(cls) -> Optional[int]:
+            if max_dependency_cache_size := os.getenv(cls.HOMCCD_MAX_DEPENDENCY_CACHE_SIZE):
+                return size_string_to_bytes(max_dependency_cache_size)
 
             return None
 
@@ -157,7 +174,9 @@ class ServerConfig:
         verbose = self.EnvironmentVariables.get_verbose() or verbose
         self.verbose = verbose is not None and verbose
 
-        self.max_dependency_cache_size_bytes = max_dependency_cache_size_bytes
+        self.max_dependency_cache_size_bytes = (
+            self.EnvironmentVariables.get_max_dependency_cache_size() or max_dependency_cache_size_bytes
+        )
 
     @classmethod
     def empty(cls):
@@ -170,7 +189,7 @@ class ServerConfig:
         address: Optional[str] = homccd_config.get("address")
         log_level: Optional[str] = homccd_config.get("log_level")
         verbose: Optional[bool] = homccd_config.getboolean("verbose")
-        max_dependency_cache_size_bytes: Optional[int] = homccd_config.getint("max_dependency_cache_size_bytes")
+        max_dependency_cache_size: Optional[str] = homccd_config.get("max_dependency_cache_size")
 
         return ServerConfig(
             files=files,
@@ -179,7 +198,9 @@ class ServerConfig:
             address=address,
             log_level=log_level,
             verbose=verbose,
-            max_dependency_cache_size_bytes=max_dependency_cache_size_bytes,
+            max_dependency_cache_size_bytes=None
+            if max_dependency_cache_size is None
+            else size_string_to_bytes(max_dependency_cache_size),
         )
 
     def __str__(self):
@@ -210,13 +231,8 @@ def parse_cli_args(args: List[str]) -> Dict[str, Any]:
 
         raise ArgumentTypeError(f"LIMIT must be more than {minimum}")
 
-    def max_dependency_cache_size_bytes(value: Union[int, str]) -> int:
-        value = int(value)
-
-        if value <= 0:
-            raise ArgumentTypeError("Maximum dependency cache size must be larger than 0.")
-
-        return value
+    def max_dependency_cache_size_bytes(value: str) -> int:
+        return size_string_to_bytes(value)
 
     general_options_group = parser.add_argument_group("Options")
     networking_group = parser.add_argument_group(" Networking")
@@ -244,11 +260,12 @@ def parse_cli_args(args: List[str]) -> Dict[str, Any]:
         help="enforce that only configurations provided via the CLI are used",
     )
     general_options_group.add_argument(
-        "--max-dependency-cache-size-bytes",
+        "--max-dependency-cache-size",
         required=False,
-        metavar="BYTES",
+        metavar="SIZE",
         type=max_dependency_cache_size_bytes,
-        help=f"The maximum cache size for the dependency cache in bytes. Default: {DEFAULT_MAX_CACHE_SIZE_BYTES} bytes",
+        help=f"""The maximum cache size for the dependency cache. Expects a size string, e.g. 100M or 10G.
+         Default: {DEFAULT_MAX_CACHE_SIZE_BYTES} bytes""",
     )
 
     # networking

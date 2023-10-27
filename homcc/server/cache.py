@@ -55,12 +55,12 @@ class Cache:
         Evicts the oldest entry from the cache.
         Note: The caller of this method has to ensure that the cache is locked.
         """
-        oldest_hash, _ = self.cache.popitem(last=False)
-        oldest_path = self._get_cache_file_path(oldest_hash)
+        oldest_hash, oldest_path_str = self.cache.popitem(last=False)
+        oldest_path = Path(oldest_path_str)
         oldest_size = oldest_path.stat().st_size
 
         try:
-            Path.unlink(oldest_path, missing_ok=False)
+            oldest_path.unlink(missing_ok=False)
         except FileNotFoundError:
             logger.error(
                 "Tried to evict cache entry with hash '%s', but corresponding cache file at '%s' did not exist.",
