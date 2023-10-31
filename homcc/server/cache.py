@@ -57,18 +57,17 @@ class Cache:
         """
         oldest_hash, oldest_path_str = self.cache.popitem(last=False)
         oldest_path = Path(oldest_path_str)
-        oldest_size = oldest_path.stat().st_size
 
         try:
+            self.current_size_bytes -= oldest_path.stat().st_size
             oldest_path.unlink(missing_ok=False)
         except FileNotFoundError:
             logger.error(
-                "Tried to evict cache entry with hash '%s', but corresponding cache file at '%s' did not exist.",
+                """Tried to evict cache entry with hash '%s', but corresponding cache file at '%s' did not exist. 
+                This may lead to an invalid cache size calculation.""",
                 oldest_hash,
                 oldest_path,
             )
-
-        self.current_size_bytes -= oldest_size
 
     @staticmethod
     def _create_cache_folder(root_temp_folder: Path) -> Path:
