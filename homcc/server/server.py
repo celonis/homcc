@@ -41,6 +41,7 @@ from homcc.server.environment import (
 from homcc.server.parsing import (
     DEFAULT_ADDRESS,
     DEFAULT_LIMIT,
+    DEFAULT_MAX_CACHE_SIZE_BYTES,
     DEFAULT_PORT,
     ServerConfig,
 )
@@ -56,7 +57,9 @@ logger = logging.getLogger(__name__)
 class TCPServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
     """TCP Server instance, holding data relevant across compilations."""
 
-    def __init__(self, address: Optional[str], port: Optional[int], limit: Optional[int]):
+    def __init__(
+        self, address: Optional[str], port: Optional[int], limit: Optional[int], max_cache_size_bytes: Optional[int]
+    ):
         address = address or DEFAULT_ADDRESS
         port = port or DEFAULT_PORT
 
@@ -77,7 +80,8 @@ class TCPServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
         self.current_amount_connections: int = 0  # indicates the amount of clients that are currently connected
         self.current_amount_connections_mutex: Lock = Lock()
 
-        self.cache = Cache(Path(self.root_temp_folder.name))
+        max_cache_size_bytes = max_cache_size_bytes or DEFAULT_MAX_CACHE_SIZE_BYTES
+        self.cache = Cache(root_folder=Path(self.root_temp_folder.name), max_size_bytes=max_cache_size_bytes)
 
     @staticmethod
     def send_message(request, message: Message):
@@ -518,7 +522,7 @@ class TCPRequestHandler(socketserver.BaseRequestHandler):
 
 def start_server(config: ServerConfig) -> Tuple[TCPServer, threading.Thread]:
     try:
-        server: TCPServer = TCPServer(config.address, config.port, config.limit)
+        server: TCPServer = TCPServer(config.address, config.port, config.limit, config.max_dependency_cache_size_bytes)
     except OSError as err:
         logger.error("Could not start TCP server: %s", err)
         raise ServerInitializationError from err

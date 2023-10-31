@@ -45,6 +45,7 @@ from homcc.server.parsing import (  # pylint: disable=wrong-import-position
     ServerConfig,
     parse_cli_args,
     parse_config,
+    size_string_to_bytes,
 )
 from homcc.server.server import (  # pylint: disable=wrong-import-position
     start_server,
@@ -66,6 +67,9 @@ def main():
         destination=FormatterDestination.STREAM,
         level=LogLevel.INFO,
     )
+
+    # TODO(o.layer): The argument parsing code should below be moved to/abstracted in parsing.py,
+    # similar to how it is done for the client
 
     # LOG_LEVEL and VERBOSITY
     log_level: Optional[str] = homccd_args_dict["log_level"]
@@ -99,6 +103,10 @@ def main():
     # ADDRESS
     if (address := homccd_args_dict["listen"]) is not None:
         homccd_config.address = address
+
+    # MAX_DEPENDENCY_CACHE_SIZE
+    if (max_dependency_cache_size := homccd_args_dict["max_dependency_cache_size"]) is not None:
+        homccd_config.max_dependency_cache_size_bytes = size_string_to_bytes(max_dependency_cache_size)
 
     # provide additional DEBUG information
     logger.debug(

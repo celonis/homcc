@@ -169,6 +169,8 @@ Additionally, `HOMCC` provides sandboxed compiler execution for remote compilati
     HOMCCD_ADDRESS
     HOMCCD_LOG_LEVEL
     HOMCCD_VERBOSE
+    HOMCC_MAX_DEPENDENCY_CACHE_SIZE
+
     </pre></sub></td>
     <td><sub><pre lang="ini">
     [homcc]
@@ -188,6 +190,7 @@ Additionally, `HOMCC` provides sandboxed compiler execution for remote compilati
     address=0.0.0.0
     log_level=DEBUG
     verbose=True
+    max_dependency_cache_size=10G
     </pre></sub></td>
     <td><sub><pre>
     # Client configuration
@@ -207,6 +210,7 @@ Additionally, `HOMCC` provides sandboxed compiler execution for remote compilati
     IP address to listen on
     Detail level for log messages: {DEBUG, INFO, WARNING, ERROR, CRITICAL}
     Enable verbosity mode which implies detailed and colored logging
+    Maximum size of the dependency cache. You must specify either 'M' (Mebibyte) or 'G' (Gibibyte) as suffix.
     </pre></sub></td>
     </tr>
   </table>
@@ -214,7 +218,6 @@ Additionally, `HOMCC` provides sandboxed compiler execution for remote compilati
 ## Deployment hints
 Things to keep in mind when deploying `homccd`:
 - `homcc` currently does not support any transport encryption such as TLS, so source files would get transmitted over the internet in plain text if not using a VPN.
-- `homccd` currently does not support cache eviction. The dependency cache is therefore growing until there is no space any more. We recommend to restart the `homccd` service every 24 hours (e.g. using a cronjob) so that the cache gets cleared regularly.
 - `homccd` does not limit simultaneous connections of a single client. A malicious client could therefore block the service by always opening up connections until no server slots are available any more.
 - `homccd` does not limit access to docker containers or chroot environments. A client can choose any docker container or chroot environment available on the server to execute the compilation in. 
 

@@ -135,9 +135,8 @@ class TestServerEnvironment:
         environment = create_mock_environment("", "")
         # pylint: disable=protected-access
         Cache._create_cache_folder = lambda *_: None  # type: ignore
-        cache = Cache(Path(""))
-        cache.cache = {"hash2": "some/path/to/be/linked"}
-
+        cache = Cache(Path(""), 1024)
+        cache.cache["hash2"] = "some/path/to/be/linked"
         needed_dependencies = environment.get_needed_dependencies(dependencies, cache)
 
         assert len(needed_dependencies) == 2
