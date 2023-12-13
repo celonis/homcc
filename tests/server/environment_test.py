@@ -61,7 +61,7 @@ class TestServerEnvironment:
         assert mapped_args.pop(0) == f"-isysroot{environment.instance_folder}/var/lib/sysroot.h"
         assert mapped_args.pop(0) == f"-o{environment.instance_folder}/home/user/output.o"
         assert mapped_args.pop(0) == f"-isystem{environment.instance_folder}/var/lib/system.h"
-        assert mapped_args.pop(0) == f"-isystem/usr/include/x86_64-linux-gnu/qt5"
+        assert mapped_args.pop(0) == "-isystem/usr/include/x86_64-linux-gnu/qt5"
         assert mapped_args.pop(0) == f"{environment.mapped_cwd}/main.cpp"
         assert mapped_args.pop(0) == f"{environment.mapped_cwd}/relative/relative.cpp"
         assert mapped_args.pop(0) == f"{environment.instance_folder}/opt/src/absolute.cpp"

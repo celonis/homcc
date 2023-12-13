@@ -50,7 +50,7 @@ jobs:
       - name: Execute isort
         uses: isort/isort-action@master
         with:
-          configuration: "--check --color --diff --gitignore --verbose"
+          configuration: "--check --diff --gitignore --verbose"
   tests:
     runs-on: ubuntu-22.04
     steps:
