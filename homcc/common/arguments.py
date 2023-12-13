@@ -499,7 +499,9 @@ class Arguments:
                         path: str = next(it) if arg == path_arg else arg[len(path_arg) :]
 
                         real_path: str = os.path.realpath(path)
-                        if not real_path.startswith(EXCLUDED_DEPENDENCY_PREFIXES):
+                        if real_path.startswith(EXCLUDED_DEPENDENCY_PREFIXES):
+                            arg = f"{path_arg}{real_path}"
+                        else:
                             arg = f"{path_arg}{self.map_path_arg(path, instance_path, mapped_cwd)}"
 
             else:
