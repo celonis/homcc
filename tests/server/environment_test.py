@@ -43,6 +43,8 @@ class TestServerEnvironment:
             "-isysroot/var/lib/sysroot.h",
             "-o/home/user/output.o",
             "-isystem/var/lib/system.h",
+            "-isystem",
+            "/usr/include/x86_64-linux-gnu/qt5",
             "main.cpp",
             "relative/relative.cpp",
             "/opt/src/absolute.cpp",
@@ -59,6 +61,7 @@ class TestServerEnvironment:
         assert mapped_args.pop(0) == f"-isysroot{environment.instance_folder}/var/lib/sysroot.h"
         assert mapped_args.pop(0) == f"-o{environment.instance_folder}/home/user/output.o"
         assert mapped_args.pop(0) == f"-isystem{environment.instance_folder}/var/lib/system.h"
+        assert mapped_args.pop(0) == f"-isystem/usr/include/x86_64-linux-gnu/qt5"
         assert mapped_args.pop(0) == f"{environment.mapped_cwd}/main.cpp"
         assert mapped_args.pop(0) == f"{environment.mapped_cwd}/relative/relative.cpp"
         assert mapped_args.pop(0) == f"{environment.instance_folder}/opt/src/absolute.cpp"
@@ -99,7 +102,7 @@ class TestServerEnvironment:
         assert mapped_args.pop(0) == f"{environment.mapped_cwd}/relative.cpp"
         assert mapped_args.pop(0) == "-c"
         assert mapped_args.pop(0) == f"{environment.mapped_cwd}/some_file.cpp"
-        assert mapped_args.pop(0) == "-I/usr/../usr/lib/../lib/libxml"
+        assert mapped_args.pop(0) == "-I/usr/lib/libxml"
 
     def test_map_cwd(self):
         instance_path = "/client1/"
