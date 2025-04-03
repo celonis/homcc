@@ -198,9 +198,9 @@ class ServerConfig:
             address=address,
             log_level=log_level,
             verbose=verbose,
-            max_dependency_cache_size_bytes=None
-            if max_dependency_cache_size is None
-            else size_string_to_bytes(max_dependency_cache_size),
+            max_dependency_cache_size_bytes=(
+                None if max_dependency_cache_size is None else size_string_to_bytes(max_dependency_cache_size)
+            ),
         )
 
     def __str__(self):

@@ -2,7 +2,7 @@
 # Covered under the included MIT License:
 #   https://github.com/celonis/homcc/blob/main/LICENSE
 
-""" Tests for client/client.py"""
+"""Tests for client/client.py"""
 
 import os
 import threading

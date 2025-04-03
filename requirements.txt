@@ -2,10 +2,10 @@ python-lzo==1.12 # see https://packages.ubuntu.com/jammy/python3-lzo
 sysv_ipc==1.0.0 # see https://packages.ubuntu.com/jammy/python3-sysv-ipc
 
 # test, CI, package, formatting, linting, ...
-black
+black==22.6.0
 isort[colors]
 mypy==0.990
-pylint
+pylint==2.14.4
 PySide2~=5.15
 pytest
 pytest-asyncio
