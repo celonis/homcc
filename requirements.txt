@@ -5,7 +5,7 @@ sysv_ipc==1.0.0 # see https://packages.ubuntu.com/jammy/python3-sysv-ipc
 black==22.6.0
 isort[colors]
 mypy==0.990
-pylint=2.14.4
+pylint==2.14.4
 PySide2~=5.15
 pytest
 pytest-asyncio
