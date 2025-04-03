@@ -2,7 +2,7 @@
 # Covered under the included MIT License:
 #   https://github.com/celonis/homcc/blob/main/LICENSE
 
-"""Tests for client/compilation.py"""
+"""Tests for server/parsing.py"""
 import os
 from argparse import ArgumentTypeError
 from pathlib import Path
