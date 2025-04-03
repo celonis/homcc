@@ -2,7 +2,7 @@
 # Covered under the included MIT License:
 #   https://github.com/celonis/homcc/blob/main/LICENSE
 
-""" Tests for client/parsing.py"""
+"""Tests for client/parsing.py"""
 import os
 import subprocess
 from pathlib import Path

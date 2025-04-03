@@ -2,7 +2,7 @@
 # Covered under the included MIT License:
 #   https://github.com/celonis/homcc/blob/main/LICENSE
 
-""" Tests for common/compression.py"""
+"""Tests for common/compression.py"""
 from homcc.common.compression import LZMA, LZO, CompressedBytes, NoCompression
 
 TEST_DATA: bytearray = bytearray([0x1, 0x2, 0x3, 0x4, 0x5, 0x6, 0x6, 0x6, 0x9])
