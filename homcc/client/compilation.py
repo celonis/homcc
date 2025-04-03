@@ -262,7 +262,7 @@ def find_dependencies(arguments: Arguments) -> Set[str]:
         return [
             str(Path(dependency).absolute())  # Always work with absolute paths
             for dependency in dependency_line.rstrip("\\").split()  # remove line break char "\"
-        ]  # remove line break char "\"
+        ]
 
     # extract dependencies from the preprocessor result and filter for sendability
     return {
