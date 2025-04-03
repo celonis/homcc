@@ -259,11 +259,11 @@ def find_dependencies(arguments: Arguments) -> Set[str]:
     def extract_dependencies(line: str) -> List[str]:
         split: List[str] = line.split(":")  # remove preprocessor output targets specified via -MT
         dependency_line: str = split[1] if len(split) == 2 else split[0]  # e.g. ignore "foo.o bar.o:"
-        return [dependency for dependency in dependency_line.rstrip("\\").split()]  # remove line break char "\"
+        return list(dependency_line.rstrip("\\").split())  # remove line break char "\"
 
     # extract dependencies from the preprocessor result and filter for sendability
     return {
-        dependency
+        str(Path(dependency).absolute())
         for line in dependency_result.splitlines()
         for dependency in extract_dependencies(line)
         if not dependency.startswith(EXCLUDED_DEPENDENCY_PREFIXES)  # check sendability

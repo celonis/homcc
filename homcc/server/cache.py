@@ -63,8 +63,8 @@ class Cache:
             oldest_path.unlink(missing_ok=False)
         except FileNotFoundError:
             logger.error(
-                """Tried to evict cache entry with hash '%s', but corresponding cache file at '%s' did not exist. 
-                This may lead to an invalid cache size calculation.""",
+                """Tried to evict cache entry with hash '%s', but corresponding cache file at '%s' did not exist.
+                 This may lead to an invalid cache size calculation.""",
                 oldest_hash,
                 oldest_path,
             )
