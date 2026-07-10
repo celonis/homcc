@@ -227,6 +227,25 @@ class TestParsingHosts:
         )
         assert Host.from_str("user@::1/64,lzo") == Host(type=ssh, name="::1", limit=64, compression="lzo", user="user")
 
+    def test_ssh_host_remote_port(self):
+        ssh: ConnectionType = ConnectionType.SSH
+
+        # the port designates the remote homccd port the SSH tunnel forwards to
+        assert Host.from_str("@buildhost:3126") == Host(type=ssh, name="buildhost", port=3126)
+        assert Host.from_str("user@buildhost:3127") == Host(type=ssh, name="buildhost", port=3127, user="user")
+        assert Host.from_str("@127.0.0.1:3126/64") == Host(type=ssh, name="127.0.0.1", port=3126, limit=64)
+        assert Host.from_str("user@127.0.0.1:3126/64,lzo") == Host(
+            type=ssh, name="127.0.0.1", port=3126, limit=64, compression="lzo", user="user"
+        )
+
+        # bracketed IPv6 with a port, and bracket stripping without a port
+        assert Host.from_str("@[::1]:3126") == Host(type=ssh, name="::1", port=3126)
+        assert Host.from_str("user@[::1]:3127/8") == Host(type=ssh, name="::1", port=3127, limit=8, user="user")
+        assert Host.from_str("@[::1]") == Host(type=ssh, name="::1")
+
+        # unbracketed IPv6 without a port keeps using the default port
+        assert Host.from_str("@::1").port == Host.from_str("@buildhost").port
+
     def test_load_hosts(self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
         hosts = ["localhost", "localhost:3126 ", "localhost:3126,lzo\t", " ", ""]
         hosts_no_whitespace = ["localhost", "localhost:3126", "localhost:3126,lzo"]
@@ -257,6 +276,9 @@ class TestParsingConfig:
         "docker_container=some_container",
         "log_level=INFO",
         "verbose=TRUE",
+        "ssh_executable=/usr/bin/ssh",
+        "ssh_control_persist=300",
+        "ssh_options=-o StrictHostKeyChecking=no",
         # the following configs should be ignored
         "[homccd]",
         "LOG_LEVEL=DEBUG",
@@ -280,6 +302,9 @@ class TestParsingConfig:
             verbose=True,
             schroot_profile="foobar",
             docker_container="some_container",
+            ssh_executable="/usr/bin/ssh",
+            ssh_control_persist=300,
+            ssh_options=["-o", "StrictHostKeyChecking=no"],
         )
 
     def test_parse_multiple_config_files(self, tmp_path: Path):
@@ -297,6 +322,9 @@ class TestParsingConfig:
             docker_container="some_container",
             log_level="INFO",
             verbose=False,
+            ssh_executable="/usr/bin/ssh",
+            ssh_control_persist=300,
+            ssh_options=["-o", "StrictHostKeyChecking=no"],
         )
 
 

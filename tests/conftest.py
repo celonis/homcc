@@ -35,6 +35,12 @@ def pytest_addoption(parser: pytest.Parser):
         metavar="DOCKER_CONTAINER",
         help="run e2e docker tests with specified DOCKER_CONTAINER",
     )
+    parser.addoption(
+        "--runssh",
+        action="store_true",
+        default=False,
+        help="run e2e SSH tunnel tests (requires passwordless 'ssh 127.0.0.1' access)",
+    )
 
 
 @pytest.fixture
@@ -52,6 +58,7 @@ def pytest_configure(config: pytest.Config):
     config.addinivalue_line("markers", "clangplusplus: mark tests that execute the clang++ compiler")
     config.addinivalue_line("markers", "schroot: mark tests that are only run with a set up chroot environment")
     config.addinivalue_line("markers", "docker: mark tests that are only run with a set up docker environment")
+    config.addinivalue_line("markers", "ssh: mark tests that require a reachable SSH server on the local host")
 
 
 def pytest_collection_modifyitems(config: pytest.Config, items: List[pytest.Item]):
@@ -81,3 +88,10 @@ def pytest_collection_modifyitems(config: pytest.Config, items: List[pytest.Item
     elif config.getoption("--rundocker") is None:
         rundocker_profile_marker = pytest.mark.skip(reason="specify --rundocker=CONTAINER_NAME to execute")
         add_marker("docker", rundocker_profile_marker)
+
+    if shutil.which("ssh") is None:
+        ssh_marker = pytest.mark.skip(reason="ssh is not installed")
+        add_marker("ssh", ssh_marker)
+    elif not config.getoption("--runssh"):
+        runssh_marker = pytest.mark.skip(reason="specify --runssh to execute (requires passwordless ssh to 127.0.0.1)")
+        add_marker("ssh", runssh_marker)

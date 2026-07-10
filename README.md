@@ -75,6 +75,11 @@ Additionally, `HOMCC` provides sandboxed compiler execution for remote compilati
     - `HOST` format:
       - `HOST`: TCP connection to specified `HOST` with default port `3126`
       - `HOST:PORT`: TCP connection to specified `HOST` with specified `PORT`
+    - `@HOST` / `USER@HOST` format:
+      - Connect to `HOST` through an SSH tunnel instead of a plain TCP connection, optionally authenticating as `USER`
+      - `homcc` establishes a multiplexed SSH master connection to `HOST` and local-forwards a port to the `homccd` running there; the daemon only needs to listen on the remote loopback interface (e.g. `--listen=127.0.0.1`). Subsequent compilations reuse the master connection (OpenSSH `ControlMaster`/`ControlPersist`), so the per-compilation cost stays close to a plain TCP connection
+      - The daemon's port on the remote defaults to `3126` and can be overridden with `@HOST:PORT` (use `@[IPv6]:PORT` for IPv6 addresses)
+      - Authentication relies on your existing SSH setup (keys/agent); `homcc` does not manage SSH credentials itself
     - `HOST/LIMIT` format:
       - Define any of the above `HOST` formats with an additional `LIMIT` parameter that specifies the maximum connection limit to the corresponding `HOST`
       - It is advised to always specify your `LIMIT`s as they will otherwise default to 2 and only enable minor levels of concurrency
@@ -93,6 +98,8 @@ Additionally, `HOMCC` provides sandboxed compiler execution for remote compilati
     remotehost/12
     192.168.0.1:3126/21
     [FC00::1]:3126/42,lzo
+    @buildhost/24,lzo
+    user@buildhost:3126/24
     </pre></sub></td>
     <td><sub><pre>
     # Comment
@@ -100,6 +107,8 @@ Additionally, `HOMCC` provides sandboxed compiler execution for remote compilati
     Named "remotehost" TCP host with limit of 12 at default port 3126
     IPv4 "192.168.0.1" TCP host at port 3126 with limit of 21
     IPv6 "FC00::1" TCP host at port 3126 with limit of 42 and lzo compression
+    "buildhost" via SSH tunnel with limit of 24 and lzo compression
+    "buildhost" via SSH tunnel as user "user", daemon port 3126, limit of 24
     </pre></sub></td>
     </tr>
   </table>
@@ -158,6 +167,9 @@ Additionally, `HOMCC` provides sandboxed compiler execution for remote compilati
     HOMCC_LOG_LEVEL
     HOMCC_VERBOSE
     HOMCC_NO_LOCAL_COMPILATION
+    HOMCC_SSH_EXECUTABLE
+    HOMCC_SSH_CONTROL_PERSIST
+    HOMCC_SSH_OPTIONS
      
     # homccd
     HOMCCD_LIMIT
@@ -179,6 +191,9 @@ Additionally, `HOMCC` provides sandboxed compiler execution for remote compilati
     log_level=DEBUG
     verbose=True
     no_local_compilation=True
+    ssh_executable=ssh
+    ssh_control_persist=600
+    ssh_options=-o BatchMode=yes
      
     [homccd]
     limit=64
@@ -199,6 +214,9 @@ Additionally, `HOMCC` provides sandboxed compiler execution for remote compilati
     Detail level for log messages: {DEBUG, INFO, WARNING, ERROR, CRITICAL}
     Enable verbosity mode which implies detailed and colored logging
     Enforce that even on recoverable failures no local compilation is executed
+    Executable used to establish SSH tunnels for '@HOST'/'USER@HOST' hosts
+    Seconds an idle multiplexed SSH master connection is kept alive for reuse
+    Additional options passed to the SSH executable, e.g. '-o' flags
      
     # Server configuration
     Maximum limit of concurrent compilations
@@ -213,7 +231,7 @@ Additionally, `HOMCC` provides sandboxed compiler execution for remote compilati
 
 ## Deployment hints
 Things to keep in mind when deploying `homccd`:
-- `homcc` currently does not support any transport encryption such as TLS, so source files would get transmitted over the internet in plain text if not using a VPN.
+- `homcc` does not support built-in transport encryption such as TLS: plain TCP hosts transmit source files unencrypted, so a VPN is required over untrusted networks. Alternatively, use an SSH host (`@HOST`/`USER@HOST`) to tunnel the connection through an encrypted, authenticated SSH channel to a `homccd` bound to the remote loopback interface.
 - `homccd` does not limit simultaneous connections of a single client. A malicious client could therefore block the service by always opening up connections until no server slots are available any more.
 - `homccd` does not limit access to docker containers or chroot environments. A client can choose any docker container or chroot environment available on the server to execute the compilation in. 
 
