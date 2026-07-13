@@ -12,6 +12,18 @@ build/
 develop-eggs/
 dist/
 deb_dist
+
+# debhelper / pybuild build artifacts (in-tree debian/ build)
+.pybuild/
+debian/.debhelper/
+debian/debhelper-build-stamp
+debian/files
+debian/*.substvars
+debian/*.debhelper
+debian/homcc/
+debian/homccd/
+debian/python3-homcc/
+debian/python3-homcc-common/
 downloads/
 eggs/
 .eggs/

@@ -1,0 +1,11 @@
+homcc (1.0.3) unstable; urgency=medium
+
+  * Replace the stdeb-generated packaging with a hand-written, Debian Policy
+    conformant debian/ directory (native source format, debhelper compat 13,
+    dh-python/pybuild build system).
+  * Split the shared homcc.common code into the new python3-homcc-common
+    binary package. The homcc and homccd packages now depend on it instead of
+    each shipping their own copy, which removes the file conflict that
+    previously required "dpkg -i --force-overwrite".
+
+ -- Willi Mann <w.mann@celonis.com>  Fri, 10 Jul 2026 11:11:14 +0200

@@ -1,0 +1,56 @@
+Source: homcc
+Section: devel
+Priority: optional
+Maintainer: Willi Mann <w.mann@celonis.com>
+Build-Depends: debhelper-compat (= 13),
+               dh-python,
+               python3-all,
+               python3-setuptools
+Standards-Version: 4.6.2
+Homepage: https://github.com/celonis/homcc
+Rules-Requires-Root: no
+X-Python3-Version: >= 3.9
+
+Package: python3-homcc-common
+Architecture: all
+Depends: ${python3:Depends},
+         ${misc:Depends},
+         python3-lzo (>= 1.12)
+Description: Work From Home friendly distcc replacement - shared code
+ homcc is a distcc replacement designed for developers working from home. It
+ distributes C/C++ compilation jobs across remote build servers while sending
+ only the preprocessed sources needed for a job, keeping the amount of
+ transferred data low over slow connections.
+ .
+ This package contains the Python modules shared by the homcc client and the
+ homccd server. It is not useful on its own and is pulled in automatically as
+ a dependency of those packages.
+
+Package: homcc
+Architecture: all
+Depends: ${python3:Depends},
+         ${misc:Depends},
+         python3-homcc-common (= ${binary:Version}),
+         python3-sysv-ipc
+Description: Work From Home friendly distcc replacement - client
+ homcc is a distcc replacement designed for developers working from home. It
+ distributes C/C++ compilation jobs across remote build servers while sending
+ only the preprocessed sources needed for a job, keeping the amount of
+ transferred data low over slow connections.
+ .
+ This package provides the homcc client, which hooks into the local build and
+ forwards compilation jobs to one or more homccd servers.
+
+Package: homccd
+Architecture: all
+Depends: ${python3:Depends},
+         ${misc:Depends},
+         python3-homcc-common (= ${binary:Version})
+Description: Work From Home friendly distcc replacement - server
+ homcc is a distcc replacement designed for developers working from home. It
+ distributes C/C++ compilation jobs across remote build servers while sending
+ only the preprocessed sources needed for a job, keeping the amount of
+ transferred data low over slow connections.
+ .
+ This package provides the homccd server daemon that receives compilation jobs
+ from homcc clients and executes them, together with its systemd service unit.
