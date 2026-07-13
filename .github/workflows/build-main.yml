@@ -90,7 +90,7 @@ jobs:
             liblzo2-dev
       - name: Build
         run: |
-          sudo make all
+          make all
       - name: Upload .deb packages
         uses: actions/upload-artifact@v4
         with: 
