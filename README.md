@@ -50,7 +50,6 @@ Additionally, `HOMCC` provides sandboxed compiler execution for remote compilati
   ```sh
   $ sudo apt install ./homccd_*.deb ./python3-homcc-common_*.deb
   ```
-- The client and the server can safely be installed side by side; they no longer share any files.
 
 
 ## Usage
