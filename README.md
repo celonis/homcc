@@ -41,18 +41,14 @@ Additionally, `HOMCC` provides sandboxed compiler execution for remote compilati
 
 ## Installation
 - [Download](https://github.com/celonis/homcc/releases) the latest release or [build](#build-debian-packages) the Debian packages yourself
+- The `homcc` client and the `homccd` server both depend on the shared `python3-homcc-common` package. Keep all `.deb` files in the same directory so `apt` can resolve that dependency automatically.
 - Install the `homcc` client via:
   ```sh
-  $ sudo apt install ./homcc.deb
+  $ sudo apt install ./homcc_*.deb ./python3-homcc-common_*.deb
   ```
 - Install the `homccd` server via:
   ```sh
-  $ sudo apt install ./homccd.deb
-  ```
-
-- **Note:** Currently, installing both packages leads to an issue with conflicting files. Install the second package via:
-  ```sh
-  $ sudo dpkg -i --force-overwrite ./{package.deb}
+  $ sudo apt install ./homccd_*.deb ./python3-homcc-common_*.deb
   ```
 
 
@@ -270,16 +266,22 @@ Things to keep in mind when deploying `homccd`:
   ```
 
 ### Build Debian packages
-- Install required tools:
+- The packages are built from the hand-written [`debian/`](debian/) directory using the standard `debhelper` / `dh-python` tooling. Install the required tools:
   ```sh
   $ sudo apt install -y \
-    python3 python3-dev python3-pip python3-venv python3-all \
-    dh-python debhelper devscripts dput software-properties-common \
-    python3-distutils python3-setuptools python3-wheel python3-stdeb \
+    debhelper dh-python devscripts fakeroot \
+    python3-all python3-setuptools \
     liblzo2-dev
   ```
-- Run `sudo make homcc`, `sudo make homccd` or `sudo make all` to build the corresponding `client` and `server` package
-- The generated `.deb` files are then contained in the `./target/` directory
+- Run `make` (or `make all`) to build all packages, or directly:
+  ```sh
+  $ dpkg-buildpackage -rfakeroot -uc -us -b
+  ```
+- This produces three `.deb` files from the single source package:
+  - `homcc` — the client
+  - `homccd` — the server, including its `systemd` service
+  - `python3-homcc-common` — the shared code both packages depend on
+- `dpkg-buildpackage` writes its artifacts to the parent directory; `make` additionally copies the resulting `.deb` files into the `./target/` directory.
 
 
 ### `schroot` testing setup for Debian systems

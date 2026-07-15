@@ -1,57 +1,23 @@
 .ONESHELL:
 
-all: server client
+# Build all Debian binary packages (homcc, homccd, python3-homcc-common) from
+# the hand-written debian/ directory and collect the resulting .deb files in
+# ./target. dpkg-buildpackage writes its artifacts to the parent directory, so
+# we copy them into ./target afterwards.
 
-DEBIAN_SRC := ../../debian
+all: deb
 
-server: 
-	echo "Building the homcc server .deb"
-
-	cp setup_server.py setup.py
-	python3 setup.py --command-packages=stdeb.command sdist_dsc --with-dh-systemd
-
-	echo "-- Copying service file"
-	# we need to copy the systemd service file to the generated package
-	cd deb_dist/homccd-*
-	cp $(DEBIAN_SRC)/homccd.service debian/service
-	cp $(DEBIAN_SRC)/compat debian/compat
-
-	echo "-- Building server .deb package"
-	dpkg-buildpackage -rfakeroot -uc -us
-	cd ../..
-
-	echo "-- Copying server .deb into target"
+deb:
+	dpkg-buildpackage -rfakeroot -uc -us -b
 	mkdir -p target
-	cp deb_dist/*.deb target/homccd.deb
+	cp ../homcc_*.deb ../homccd_*.deb ../python3-homcc-common_*.deb target/
 
-	rm setup.py
-	rm -rf deb_dist
+# Convenience aliases. As all packages are produced by a single source
+# package, these build everything.
+homcc client: deb
 
-client:
-	echo "Building the homcc client .deb"
-
-	cp setup_client.py setup.py
-	python3 setup.py --command-packages=stdeb.command sdist_dsc
-
-	cd deb_dist/homcc-*
-	cp $(DEBIAN_SRC)/compat debian/compat
-
-	echo "-- Building client .deb package"
-	dpkg-buildpackage -rfakeroot -uc -us
-	cd ../..
-
-	echo "-- Copying client .deb into target"
-	mkdir -p target
-	cp deb_dist/*.deb target/homcc.deb
-
-	rm setup.py
-	rm -rf deb_dist
-
-
-homcc: client
-
-homccd: server
+homccd server: deb
 
 clean:
-	rm -rf target/*.deb
-	rm -f homcc*.tar.gz
+	dpkg-buildpackage -rfakeroot -T clean || true
+	rm -rf target
