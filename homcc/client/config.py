@@ -10,6 +10,7 @@ from __future__ import annotations
 import configparser
 import os
 import re
+import shlex
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -124,7 +125,7 @@ class ClientEnvironmentVariables:
     @classmethod
     def get_ssh_options(cls) -> Optional[List[str]]:
         if (ssh_options := os.getenv(cls.HOMCC_SSH_OPTIONS_ENV_VAR)) is not None:
-            return ssh_options.split()
+            return shlex.split(ssh_options)
         return None
 
 
@@ -219,7 +220,7 @@ class ClientConfig:
         ssh_executable: Optional[str] = homcc_config.get("ssh_executable")
         ssh_control_persist: Optional[int] = homcc_config.getint("ssh_control_persist")
         ssh_options_str: Optional[str] = homcc_config.get("ssh_options")
-        ssh_options: Optional[List[str]] = ssh_options_str.split() if ssh_options_str is not None else None
+        ssh_options: Optional[List[str]] = shlex.split(ssh_options_str) if ssh_options_str is not None else None
 
         return ClientConfig(
             files=files,

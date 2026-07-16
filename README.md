@@ -235,7 +235,7 @@ Things to keep in mind when deploying `homccd`:
 - `homccd` does not limit simultaneous connections of a single client. A malicious client could therefore block the service by always opening up connections until no server slots are available any more.
 - `homccd` does not limit access to docker containers or chroot environments. A client can choose any docker container or chroot environment available on the server to execute the compilation in. 
 
-:exclamation: The key takeaway of the previous points is to **not expose** `homccd` publicly. You should make sure only internal users (e.g. developers) have access to the service, for example through using a VPN.
+:exclamation: The key takeaway of the previous points is to **not expose** `homccd` publicly. Make sure only internal users (e.g. developers) have access to the service, for example through a VPN or by only accepting SSH-tunneled connections.
 
 ## Development
 

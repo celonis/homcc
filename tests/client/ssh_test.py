@@ -48,7 +48,7 @@ class TestSSHTunnel:
         tunnel = SSHTunnel(
             Host.from_str("user@buildhost"), ssh_executable="/usr/bin/ssh", ssh_options=["-o", "BatchMode=yes"]
         )
-        args = tunnel._control_args()
+        args = tunnel.control_args
 
         assert args[0] == "/usr/bin/ssh"
         assert "ControlMaster=auto" in args
@@ -91,10 +91,21 @@ class TestSSHTunnel:
         mocker.patch("homcc.client.ssh._find_free_local_port", return_value=45678)
         mocker.patch(
             "homcc.client.ssh.subprocess.run",
-            return_value=subprocess.CompletedProcess([], 255, stderr=b"Permission denied"),
+            side_effect=subprocess.CalledProcessError(255, cmd=[], stderr=b"Permission denied"),
         )
 
         with pytest.raises(SSHError, match="Permission denied"):
+            tunnel.ensure(timeout=10)
+
+    def test_ensure_raises_ssh_error_when_executable_missing(self, tmp_path: Path, mocker: MockerFixture):
+        mocker.patch("homcc.client.ssh._ssh_base_dir", return_value=tmp_path)
+        tunnel = SSHTunnel(Host.from_str("user@buildhost"))
+
+        mocker.patch.object(tunnel, "_is_master_alive", return_value=False)
+        mocker.patch("homcc.client.ssh._find_free_local_port", return_value=45678)
+        mocker.patch("homcc.client.ssh.subprocess.run", side_effect=FileNotFoundError("ssh: No such file"))
+
+        with pytest.raises(SSHError, match="Could not execute"):
             tunnel.ensure(timeout=10)
 
     def test_ensure_raises_ssh_error_on_timeout(self, tmp_path: Path, mocker: MockerFixture):

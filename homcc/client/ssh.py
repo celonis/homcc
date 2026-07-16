@@ -28,7 +28,11 @@ from homcc.client.client import RemoteCompilationClient
 from homcc.common.constants import ENCODING, TCP_BUFFER_SIZE
 from homcc.common.errors import SSHError
 from homcc.common.host import Host
-from homcc.common.parsing import HOMCC_DIR_ENV_VAR
+from homcc.common.parsing import (
+    HOMCC_CONFIG_FILENAME,
+    HOMCC_DIR_ENV_VAR,
+    default_locations,
+)
 from homcc.common.statefile import StateFile
 
 logger = logging.getLogger(__name__)
@@ -41,8 +45,13 @@ DEFAULT_SSH_CONTROL_PERSIST: int = 600
 def _ssh_base_dir() -> Path:
     """Directory holding the SSH control sockets and forwarded-port state files."""
     homcc_dir_env_var: Optional[str] = os.getenv(HOMCC_DIR_ENV_VAR)
-    base: Path = Path(homcc_dir_env_var) if homcc_dir_env_var else Path.home() / ".homcc"
-    return base / "ssh"
+    if homcc_dir_env_var:
+        return Path(homcc_dir_env_var) / "ssh"
+
+    for config_location in default_locations(HOMCC_CONFIG_FILENAME):
+        return config_location.parent / "ssh"
+
+    return Path.home() / ".homcc" / "ssh"
 
 
 def _find_free_local_port() -> int:
@@ -56,10 +65,9 @@ class SSHTunnel:
     """
     Manages a multiplexed OpenSSH master connection with a local port-forward to a remote `homccd`.
 
-    A single master connection is shared across all concurrent homcc processes that target the same remote host via a
-    control socket in `$HOMCC_DIR/ssh/` (falling back to `~/.homcc/ssh/`). Setting up the master is guarded by a
-    per-host file lock so that the many homcc invocations a build system spawns converge on one tunnel instead of
-    racing to create their own.
+    A single master connection is shared across all concurrent homcc processes that target the same remote host via
+    the ssh control socket. Setting up the master is guarded by a per-host file lock so that the many homcc
+    invocations a build system spawns converge on one tunnel instead of racing to create their own.
     """
 
     def __init__(
@@ -91,7 +99,8 @@ class SSHTunnel:
         """SSH target argument, i.e. 'user@host' or 'host'."""
         return f"{self.host.user}@{self.host.name}" if self.host.user else self.host.name
 
-    def _control_args(self) -> List[str]:
+    @property
+    def control_args(self) -> List[str]:
         """Common OpenSSH arguments enabling connection multiplexing via the shared control socket."""
         return [
             self.ssh_executable,
@@ -105,7 +114,7 @@ class SSHTunnel:
     def _is_master_alive(self) -> bool:
         """Return whether a reusable multiplexed master connection already exists for this host."""
         check = subprocess.run(  # noqa: PLW1510
-            [*self._control_args(), "-O", "check", self.target],
+            [*self.control_args, "-O", "check", self.target],
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
             check=False,
@@ -121,7 +130,7 @@ class SSHTunnel:
         # -L: forward local_port to the daemon on the remote loopback interface
         # ExitOnForwardFailure: fail fast if the forward can not be set up rather than silently continuing
         command: List[str] = [
-            *self._control_args(),
+            *self.control_args,
             "-M",
             "-S",
             str(self.control_path),
@@ -138,19 +147,20 @@ class SSHTunnel:
 
         logger.debug("Establishing SSH master connection to '%s' (local port %i).", self.target, local_port)
         try:
-            result = subprocess.run(
+            subprocess.run(
                 command,
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.PIPE,
                 timeout=timeout,
-                check=False,
+                check=True,
             )
         except subprocess.TimeoutExpired as error:
             raise SSHError(f"Establishing the SSH tunnel to '{self.target}' timed out.") from error
-
-        if result.returncode != 0:
-            stderr: str = result.stderr.decode(ENCODING, errors="replace").strip()
-            raise SSHError(f"Could not establish the SSH tunnel to '{self.target}': {stderr}")
+        except subprocess.CalledProcessError as error:
+            stderr: str = error.stderr.decode(ENCODING, errors="replace").strip()
+            raise SSHError(f"Could not establish the SSH tunnel to '{self.target}': {stderr}") from error
+        except OSError as error:
+            raise SSHError(f"Could not execute '{self.ssh_executable}': {error}") from error
 
         self._port_file.write_text(str(local_port), encoding=ENCODING)
         return local_port
@@ -177,16 +187,6 @@ class SSHTunnel:
             finally:
                 fcntl.flock(lock, fcntl.LOCK_UN)
 
-    def close(self):
-        """Tear down the multiplexed master connection. Idle masters are otherwise reaped via ControlPersist."""
-        subprocess.run(  # noqa: PLW1510
-            [*self._control_args(), "-O", "exit", self.target],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            check=False,
-        )
-        self._port_file.unlink(missing_ok=True)
-
 
 class SSHClient(RemoteCompilationClient):
     """Client to exchange homcc protocol messages with a remote server through an SSH tunnel to a running `homccd`."""
@@ -200,6 +200,5 @@ class SSHClient(RemoteCompilationClient):
     async def _open_connection(self) -> Tuple[asyncio.StreamReader, asyncio.StreamWriter]:
         # establishing/reusing the SSH master may block on subprocess calls, so run it off the event loop; the overall
         # setup and connect is still bounded by the connection timeout applied by the base class
-        loop = asyncio.get_event_loop()
-        local_port: int = await loop.run_in_executor(None, self._tunnel.ensure, self.timeout)
+        local_port: int = await asyncio.to_thread(self._tunnel.ensure, self.timeout)
         return await asyncio.open_connection(host="127.0.0.1", port=local_port, limit=TCP_BUFFER_SIZE)
