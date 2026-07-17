@@ -58,6 +58,14 @@ class HostRefusedConnectionError(Exception):
     """Error class to indicate that the host refused establishing the connection"""
 
 
+class SSHError(ConnectionError):
+    """
+    Error class to indicate that establishing or reusing the SSH tunnel to a remote host failed. Subclasses
+    ConnectionError so that the remote compilation loop treats it like any other lost connection and falls back to
+    the next host or to local compilation.
+    """
+
+
 @dataclass
 class RemoteCompilationError(Exception):
     """

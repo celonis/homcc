@@ -17,11 +17,12 @@ import time
 import types
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import ClassVar, Dict, Iterator, List, Optional
+from typing import ClassVar, Dict, Iterator, List, Optional, Tuple
 
 import sysv_ipc
 
 from homcc.common.arguments import Arguments
+from homcc.common.compression import Compression
 from homcc.common.constants import TCP_BUFFER_SIZE
 from homcc.common.errors import (
     ClientParsingError,
@@ -264,17 +265,25 @@ class LocalHostPreprocessingSemaphore(LocalHostSemaphore):
         super().__init__(host, expected_preprocessing_time)
 
 
-class TCPClient:
-    """Wrapper class to exchange homcc protocol messages via TCP"""
+class RemoteCompilationClient(ABC):
+    """
+    Transport-agnostic base class to exchange homcc protocol messages with a remote server.
+
+    All protocol logic (message framing, sending arguments and dependencies, receiving replies) lives here and operates
+    on an asyncio stream reader/writer pair. Concrete subclasses only have to establish the transport-specific
+    connection by implementing `_open_connection`, e.g. a plain TCP connection (`TCPClient`) or a connection tunneled
+    through SSH (`SSHClient`).
+    """
+
+    host: str
+    """Name of the remote host, used for logging and host name resolution errors."""
+    connection_target: str
+    """Human-readable connection target for logging and error messages, e.g. 'host:port' or 'user@host'."""
+    compression: Compression
+    """Compression used for data transfer."""
 
     def __init__(self, host: Host, timeout: float, state: StateFile):
-        connection_type: ConnectionType = host.type
-
-        if connection_type != ConnectionType.TCP:
-            raise ValueError(f"TCPClient cannot be initialized with {connection_type}!")
-
-        self.host: str = host.name
-        self.port: int = host.port
+        self.host = host.name
         self.compression = host.compression
 
         self.timeout: float = timeout
@@ -285,16 +294,17 @@ class TCPClient:
 
         state.set_connect()
 
-    async def __aenter__(self) -> TCPClient:
-        """connect to specified server at host:port"""
-        logger.debug("Connecting to '%s:%i'.", self.host, self.port)
+    @abstractmethod
+    async def _open_connection(self) -> Tuple[asyncio.StreamReader, asyncio.StreamWriter]:
+        """Establish the transport-specific asyncio connection to the remote server."""
+
+    async def __aenter__(self) -> RemoteCompilationClient:
+        """connect to the specified server"""
+        logger.debug("Connecting to '%s'.", self.connection_target)
         try:
-            self._reader, self._writer = await asyncio.wait_for(
-                asyncio.open_connection(host=self.host, port=self.port, limit=TCP_BUFFER_SIZE),
-                timeout=self.timeout,
-            )
+            self._reader, self._writer = await asyncio.wait_for(self._open_connection(), timeout=self.timeout)
         except asyncio.TimeoutError as error:
-            logger.warning("Connection establishment to '%s:%s' timed out.", self.host, self.port)
+            logger.warning("Connection establishment to '%s' timed out.", self.connection_target)
             raise error from None
         except socket.gaierror as error:
             raise FailedHostNameResolutionError(f"Host {self.host} could not be resolved.") from error
@@ -302,7 +312,7 @@ class TCPClient:
 
     async def __aexit__(self, *_):
         """disconnect from server and close client socket"""
-        logger.debug("Disconnecting from '%s:%i'.", self.host, self.port)
+        logger.debug("Disconnecting from '%s'.", self.connection_target)
         self._writer.close()
 
         try:
@@ -313,7 +323,7 @@ class TCPClient:
 
     async def _send(self, message: Message):
         """send a message to homcc server"""
-        logger.debug("Sending %s to '%s:%i':\n%s", message.message_type, self.host, self.port, message.get_json_str())
+        logger.debug("Sending %s to '%s':\n%s", message.message_type, self.connection_target, message.get_json_str())
         self._writer.write(message.to_bytes())
         await self._writer.drain()
 
@@ -350,7 +360,7 @@ class TCPClient:
                 error,
             )
             raise HostRefusedConnectionError(
-                f"Host {self.host}:{self.port} closed the connection, probably due to "
+                f"Host {self.connection_target} closed the connection, probably due to "
                 "reaching the compilation limit."
             ) from error
 
@@ -390,10 +400,25 @@ class TCPClient:
             raise ClientParsingError("Received data could not be parsed to a message!")
 
         logger.debug(
-            "Received %s message from '%s:%i':\n%s",
+            "Received %s message from '%s':\n%s",
             parsed_message.message_type,
-            self.host,
-            self.port,
+            self.connection_target,
             parsed_message.get_json_str(),
         )
         return parsed_message
+
+
+class TCPClient(RemoteCompilationClient):
+    """Client to exchange homcc protocol messages with a remote server via a direct TCP connection."""
+
+    def __init__(self, host: Host, timeout: float, state: StateFile):
+        if host.type != ConnectionType.TCP:
+            raise ValueError(f"TCPClient cannot be initialized with {host.type}!")
+
+        super().__init__(host, timeout, state)
+
+        self.port: int = host.port
+        self.connection_target = f"{host.name}:{host.port}"
+
+    async def _open_connection(self) -> Tuple[asyncio.StreamReader, asyncio.StreamWriter]:
+        return await asyncio.open_connection(host=self.host, port=self.port, limit=TCP_BUFFER_SIZE)

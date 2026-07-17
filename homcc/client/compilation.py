@@ -15,11 +15,13 @@ from typing import Dict, List, Optional, Set
 from homcc.client.client import (
     LocalHostCompilationSemaphore,
     LocalHostPreprocessingSemaphore,
+    RemoteCompilationClient,
     RemoteHostSelector,
     RemoteHostSemaphore,
     TCPClient,
 )
 from homcc.client.config import ClientConfig
+from homcc.client.ssh import SSHClient, SSHTunnel
 from homcc.common.arguments import Arguments, ArgumentsExecutionResult, Compiler
 from homcc.common.constants import ENCODING, EXCLUDED_DEPENDENCY_PREFIXES
 from homcc.common.errors import (
@@ -34,7 +36,7 @@ from homcc.common.errors import (
     UnexpectedMessageTypeError,
 )
 from homcc.common.hashing import hash_file_with_path
-from homcc.common.host import Host
+from homcc.common.host import ConnectionType, Host
 from homcc.common.messages import (
     CompilationResultMessage,
     ConnectionRefusedMessage,
@@ -82,9 +84,7 @@ async def compile_remotely(arguments: Arguments, hosts: List[Host], localhost: H
                         arguments=arguments,
                         dependency_dict=dependency_dict,
                         host=host,
-                        timeout=config.establish_connection_timeout,
-                        schroot_profile=config.schroot_profile,
-                        docker_container=config.docker_container,
+                        config=config,
                         state=state,
                     ),
                     timeout=config.compilation_request_timeout,
@@ -119,18 +119,33 @@ async def compile_remotely(arguments: Arguments, hosts: List[Host], localhost: H
     )
 
 
+def create_remote_client(host: Host, timeout: float, state: StateFile, config: ClientConfig) -> RemoteCompilationClient:
+    """Create the transport-specific client for the given host: a direct TCP client or an SSH-tunneled client."""
+    if host.type == ConnectionType.SSH:
+        tunnel = SSHTunnel(
+            host,
+            ssh_executable=config.ssh_executable,
+            control_persist=config.ssh_control_persist,
+            ssh_options=config.ssh_options,
+        )
+        return SSHClient(host, timeout=timeout, state=state, tunnel=tunnel)
+
+    return TCPClient(host, timeout=timeout, state=state)
+
+
 async def compile_remotely_at(
     arguments: Arguments,
     dependency_dict: Dict[str, str],
     host: Host,
-    timeout: float,
-    schroot_profile: Optional[str],
-    docker_container: Optional[str],
+    config: ClientConfig,
     state: StateFile,
 ) -> int:
     """main function for the communication between client and a remote compilation host"""
 
-    async with TCPClient(host, timeout=timeout, state=state) as client:
+    schroot_profile: Optional[str] = config.schroot_profile
+    docker_container: Optional[str] = config.docker_container
+
+    async with create_remote_client(host, config.establish_connection_timeout, state, config) as client:
         remote_arguments: Arguments = arguments.copy().remove_local_args()
 
         target: Optional[str] = None
@@ -159,7 +174,7 @@ async def compile_remotely_at(
         host_response: Message = await client.receive()
         if isinstance(host_response, ConnectionRefusedMessage):
             raise HostRefusedConnectionError(
-                f"Host {client.host}:{client.port} refused the connection:\n{host_response.info}!"
+                f"Host {client.connection_target} refused the connection:\n{host_response.info}!"
             )
 
         # invert dependency dictionary to access dependencies via hash

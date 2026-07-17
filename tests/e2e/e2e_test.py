@@ -46,6 +46,7 @@ class TestEndToEnd:
         compression: Compression = NoCompression()
         schroot_profile: Optional[str] = None
         docker_container: Optional[str] = None
+        ssh: bool = False  # tunnel the connection through SSH instead of connecting via plain TCP
 
         def __post_init__(self):
             if self.schroot_profile is not None and self.docker_container is not None:
@@ -55,7 +56,9 @@ class TestEndToEnd:
             compression = (
                 f",{self.compression}" if self.compression is not isinstance(self.compression, NoCompression) else ""
             )
-            host_arg = f"--host={TestEndToEnd.ADDRESS}:{self.tcp_port}/1{compression}"  # explicit host limit: 1
+            # explicit host limit: 1; the '@' prefix selects the SSH transport, forwarding a tunnel to the daemon port
+            ssh_prefix: str = "@" if self.ssh else ""
+            host_arg = f"--host={ssh_prefix}{TestEndToEnd.ADDRESS}:{self.tcp_port}/1{compression}"
 
             sandbox_arg: str = "--no-sandbox"
 
@@ -420,6 +423,14 @@ class TestEndToEnd:
     @pytest.mark.timeout(TIMEOUT)
     def test_end_to_end_gplusplus_linking_only(self, unused_tcp_port: int):
         self.cpp_end_to_end_linking_only(self.BasicClientArguments("g++", unused_tcp_port))
+
+    @pytest.mark.gplusplus
+    @pytest.mark.ssh
+    @pytest.mark.timeout(TIMEOUT)
+    def test_end_to_end_ssh_gplusplus(self, unused_tcp_port: int, monkeypatch: pytest.MonkeyPatch):
+        # keep the SSH tunnel non-interactive so the test never blocks on a host-key or password prompt
+        monkeypatch.setenv("HOMCC_SSH_OPTIONS", "-o BatchMode=yes -o StrictHostKeyChecking=accept-new")
+        self.cpp_end_to_end(self.BasicClientArguments("g++", unused_tcp_port, ssh=True))
 
     @pytest.mark.gplusplus
     @pytest.mark.schroot

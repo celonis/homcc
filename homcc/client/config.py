@@ -10,11 +10,13 @@ from __future__ import annotations
 import configparser
 import os
 import re
+import shlex
 import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import ClassVar, Iterator, List, Optional
 
+from homcc.client.ssh import DEFAULT_SSH_CONTROL_PERSIST, DEFAULT_SSH_EXECUTABLE
 from homcc.common.compression import Compression
 from homcc.common.logging import LogLevel
 from homcc.common.parsing import HOMCC_CONFIG_FILENAME, default_locations, parse_configs
@@ -38,6 +40,9 @@ class ClientEnvironmentVariables:
     HOMCC_LOG_LEVEL_ENV_VAR: ClassVar[str] = "HOMCC_LOG_LEVEL"
     HOMCC_VERBOSE_ENV_VAR: ClassVar[str] = "HOMCC_VERBOSE"
     HOMCC_NO_LOCAL_COMPILATION_ENV_VAR: ClassVar[str] = "HOMCC_NO_LOCAL_COMPILATION"
+    HOMCC_SSH_EXECUTABLE_ENV_VAR: ClassVar[str] = "HOMCC_SSH_EXECUTABLE"
+    HOMCC_SSH_CONTROL_PERSIST_ENV_VAR: ClassVar[str] = "HOMCC_SSH_CONTROL_PERSIST"
+    HOMCC_SSH_OPTIONS_ENV_VAR: ClassVar[str] = "HOMCC_SSH_OPTIONS"
 
     @classmethod
     def __iter__(cls) -> Iterator[str]:
@@ -51,6 +56,9 @@ class ClientEnvironmentVariables:
             cls.HOMCC_LOG_LEVEL_ENV_VAR,
             cls.HOMCC_VERBOSE_ENV_VAR,
             cls.HOMCC_NO_LOCAL_COMPILATION_ENV_VAR,
+            cls.HOMCC_SSH_EXECUTABLE_ENV_VAR,
+            cls.HOMCC_SSH_CONTROL_PERSIST_ENV_VAR,
+            cls.HOMCC_SSH_OPTIONS_ENV_VAR,
         )
 
     @staticmethod
@@ -104,6 +112,22 @@ class ClientEnvironmentVariables:
             return cls.parse_bool_str(no_local_compilation)
         return None
 
+    @classmethod
+    def get_ssh_executable(cls) -> Optional[str]:
+        return os.getenv(cls.HOMCC_SSH_EXECUTABLE_ENV_VAR)
+
+    @classmethod
+    def get_ssh_control_persist(cls) -> Optional[int]:
+        if ssh_control_persist := os.getenv(cls.HOMCC_SSH_CONTROL_PERSIST_ENV_VAR):
+            return int(ssh_control_persist)
+        return None
+
+    @classmethod
+    def get_ssh_options(cls) -> Optional[List[str]]:
+        if (ssh_options := os.getenv(cls.HOMCC_SSH_OPTIONS_ENV_VAR)) is not None:
+            return shlex.split(ssh_options)
+        return None
+
 
 @dataclass
 class ClientConfig:
@@ -119,6 +143,9 @@ class ClientConfig:
     log_level: Optional[LogLevel]
     verbose: bool
     local_compilation_enabled: bool
+    ssh_executable: str
+    ssh_control_persist: int
+    ssh_options: List[str]
 
     def __init__(
         self,
@@ -133,6 +160,9 @@ class ClientConfig:
         log_level: Optional[str] = None,
         verbose: Optional[bool] = None,
         no_local_compilation: Optional[bool] = None,
+        ssh_executable: Optional[str] = None,
+        ssh_control_persist: Optional[int] = None,
+        ssh_options: Optional[List[str]] = None,
     ):
         self.files = files
 
@@ -164,6 +194,14 @@ class ClientConfig:
             ClientEnvironmentVariables.get_no_local_compilation() or no_local_compilation
         )
 
+        self.ssh_executable = (
+            ClientEnvironmentVariables.get_ssh_executable() or ssh_executable or DEFAULT_SSH_EXECUTABLE
+        )
+        self.ssh_control_persist = (
+            ClientEnvironmentVariables.get_ssh_control_persist() or ssh_control_persist or DEFAULT_SSH_CONTROL_PERSIST
+        )
+        self.ssh_options = ClientEnvironmentVariables.get_ssh_options() or ssh_options or []
+
     @classmethod
     def empty(cls):
         return cls(files=[])
@@ -179,6 +217,10 @@ class ClientConfig:
         log_level: Optional[str] = homcc_config.get("log_level")
         verbose: Optional[bool] = homcc_config.getboolean("verbose")
         no_local_compilation: Optional[bool] = homcc_config.getboolean("no_local_compilation")
+        ssh_executable: Optional[str] = homcc_config.get("ssh_executable")
+        ssh_control_persist: Optional[int] = homcc_config.getint("ssh_control_persist")
+        ssh_options_str: Optional[str] = homcc_config.get("ssh_options")
+        ssh_options: Optional[List[str]] = shlex.split(ssh_options_str) if ssh_options_str is not None else None
 
         return ClientConfig(
             files=files,
@@ -191,6 +233,9 @@ class ClientConfig:
             log_level=log_level,
             verbose=verbose,
             no_local_compilation=no_local_compilation,
+            ssh_executable=ssh_executable,
+            ssh_control_persist=ssh_control_persist,
+            ssh_options=ssh_options,
         )
 
     def __str__(self):
@@ -205,6 +250,9 @@ class ClientConfig:
             f"\tlog_level:\t\t\t{self.log_level}\n"
             f"\tverbose:\t\t\t{self.verbose}\n"
             f"\tlocal_compilation_enabled:\t{self.local_compilation_enabled}\n"
+            f"\tssh_executable:\t\t\t{self.ssh_executable}\n"
+            f"\tssh_control_persist:\t\t{self.ssh_control_persist}\n"
+            f"\tssh_options:\t\t\t{' '.join(self.ssh_options)}\n"
         )
 
     def set_verbose(self):

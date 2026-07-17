@@ -146,13 +146,13 @@ def _parse_host(host: str) -> Host:
         return Host(type=connection_type, name=host, **host_dict)
 
     # USER@HOST_FORMAT
-    elif (user_at_host_match := re.match(r"^(\w+)@([\w.:/]+)$", host)) is not None:
+    elif (user_at_host_match := re.match(r"^(\w+)@([\w.:/\[\]]+)$", host)) is not None:
         user, host = user_at_host_match.groups()
         connection_type = ConnectionType.SSH
         host_dict["user"] = user
 
     # @HOST_FORMAT
-    elif (at_host_match := re.match(r"^@([\w.:/]+)$", host)) is not None:
+    elif (at_host_match := re.match(r"^@([\w.:/\[\]]+)$", host)) is not None:
         host = at_host_match.group(1)
         connection_type = ConnectionType.SSH
 
@@ -167,5 +167,15 @@ def _parse_host(host: str) -> Host:
     if (host_limit_match := re.match(r"^(\S+)/(\d+)$", host)) is not None:
         host, limit = host_limit_match.groups()
         host_dict["limit"] = limit
+
+    # for SSH hosts, extract the optional remote daemon port to forward the tunnel to: NAME:PORT or [IPv6]:PORT;
+    # unbracketed IPv6 addresses (e.g. '::1') are left untouched and use the default port
+    if connection_type == ConnectionType.SSH:
+        if (ssh_ipv6_port_match := re.match(r"^\[(\S+)]:(\d+)$", host)) is not None:
+            host, host_dict["port"] = ssh_ipv6_port_match.groups()
+        elif (ssh_name_port_match := re.match(r"^([\w.]+):(\d+)$", host)) is not None:
+            host, host_dict["port"] = ssh_name_port_match.groups()
+        elif (ssh_ipv6_match := re.match(r"^\[(\S+)]$", host)) is not None:
+            host = ssh_ipv6_match.group(1)
 
     return Host(type=connection_type, name=host, **host_dict)
