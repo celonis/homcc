@@ -4,6 +4,8 @@
 
 """Tests for the client-side preprocessing cache."""
 
+import json
+import sqlite3
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
@@ -82,14 +84,133 @@ class TestPreprocessingCache:
         assert stats["directives_hits"] == 2
         assert stats["sha1_hits"] == 2
 
-    def test_computed_include_requires_compiler_fallback(self, tmp_path: Path):
+    def test_defers_missing_quoted_includes_in_conditional_branches(self, tmp_path: Path):
         source = tmp_path / "main.cpp"
-        source.write_text("#define HEADER <vector>\n#include HEADER\n", encoding="utf-8")
+        source.write_text(
+            """
+#if FIRST
+#include "first.h"
+#elif SECOND
+#include "second.h"
+#else
+#ifndef THIRD
+#include "third.h"
+#endif
+#endif
+""",
+            encoding="utf-8",
+        )
+        arguments = Arguments.from_vargs("g++", str(source))
+
+        with PreprocessingCache(tmp_path / "cache.sqlite3") as cache:
+            dependencies = IncludeAnalyzer(cache).analyze(arguments, cwd=tmp_path)
+
+        assert set(dependencies) == {str(source)}
+
+    def test_defers_starrocks_stl_msvc_include(self, tmp_path: Path):
+        source = tmp_path / "main.cpp"
+        port = tmp_path / "port.h"
+        source.write_text('#include "port.h"\n', encoding="utf-8")
+        port.write_text('#ifdef STL_MSVC\n#include "base/port_hash.h"\n#endif\n', encoding="utf-8")
+        arguments = Arguments.from_vargs("g++", str(source))
+
+        with PreprocessingCache(tmp_path / "cache.sqlite3") as cache:
+            dependencies = IncludeAnalyzer(cache).analyze(arguments, cwd=tmp_path)
+
+        assert set(dependencies) == {str(source), str(port)}
+
+    def test_propagates_conditional_context_to_transitive_includes(self, tmp_path: Path):
+        source = tmp_path / "main.cpp"
+        optional = tmp_path / "optional.h"
+        source.write_text('#ifdef OPTIONAL\n#include "optional.h"\n#endif\n', encoding="utf-8")
+        optional.write_text('#include "missing.h"\n', encoding="utf-8")
+        arguments = Arguments.from_vargs("g++", str(source))
+
+        with PreprocessingCache(tmp_path / "cache.sqlite3") as cache:
+            dependencies = IncludeAnalyzer(cache).analyze(arguments, cwd=tmp_path)
+
+        assert set(dependencies) == {str(source), str(optional)}
+
+    def test_reanalyzes_conditionally_visited_header_when_reached_unconditionally(self, tmp_path: Path):
+        source = tmp_path / "main.cpp"
+        shared = tmp_path / "shared.h"
+        source.write_text('#include "shared.h"\n#ifdef OPTIONAL\n#include "shared.h"\n#endif\n', encoding="utf-8")
+        shared.write_text('#include "missing.h"\n', encoding="utf-8")
         arguments = Arguments.from_vargs("g++", str(source))
 
         with PreprocessingCache(tmp_path / "cache.sqlite3") as cache:
             with pytest.raises(UnsupportedIncludeSyntax):
                 IncludeAnalyzer(cache).analyze(arguments, cwd=tmp_path)
+
+    def test_missing_unconditional_quoted_include_requires_compiler_fallback(self, tmp_path: Path):
+        source = tmp_path / "main.cpp"
+        source.write_text('#include "missing.h"\n', encoding="utf-8")
+        arguments = Arguments.from_vargs("g++", str(source))
+
+        with PreprocessingCache(tmp_path / "cache.sqlite3") as cache:
+            with pytest.raises(UnsupportedIncludeSyntax):
+                IncludeAnalyzer(cache).analyze(arguments, cwd=tmp_path)
+
+    def test_computed_include_requires_compiler_fallback(self, tmp_path: Path):
+        source = tmp_path / "main.cpp"
+        source.write_text("#ifdef USE_HEADER\n#define HEADER <vector>\n#include HEADER\n#endif\n", encoding="utf-8")
+        arguments = Arguments.from_vargs("g++", str(source))
+
+        with PreprocessingCache(tmp_path / "cache.sqlite3") as cache:
+            with pytest.raises(UnsupportedIncludeSyntax):
+                IncludeAnalyzer(cache).analyze(arguments, cwd=tmp_path)
+
+    @pytest.mark.parametrize(
+        "source_text",
+        (
+            "#else\n",
+            "#endif\n",
+            "#if VALUE\n#else\n#else\n#endif\n",
+            "#if VALUE\n#else\n#elif OTHER\n#endif\n",
+            "#if VALUE\n",
+        ),
+    )
+    def test_malformed_conditionals_require_compiler_fallback(self, tmp_path: Path, source_text: str):
+        source = tmp_path / "main.cpp"
+        source.write_text(source_text, encoding="utf-8")
+        arguments = Arguments.from_vargs("g++", str(source))
+
+        with PreprocessingCache(tmp_path / "cache.sqlite3") as cache:
+            with pytest.raises(UnsupportedIncludeSyntax):
+                IncludeAnalyzer(cache).analyze(arguments, cwd=tmp_path)
+
+    def test_reparses_legacy_directive_records_without_invalidating_sha1(self, tmp_path: Path):
+        source = tmp_path / "main.cpp"
+        source.write_text('#ifdef OPTIONAL\n#include "missing.h"\n#endif\n', encoding="utf-8")
+        arguments = Arguments.from_vargs("g++", str(source))
+        cache_path = tmp_path / "cache.sqlite3"
+        with PreprocessingCache(cache_path) as cache:
+            dependencies = IncludeAnalyzer(cache).analyze(arguments, cwd=tmp_path)
+        original_sha1 = dependencies[str(source)]
+
+        connection = sqlite3.connect(str(cache_path))
+        try:
+            connection.execute(
+                "UPDATE files SET directives = ? WHERE path = ?",
+                (json.dumps([["include", "missing.h", True]]), str(source)),
+            )
+            connection.commit()
+        finally:
+            connection.close()
+
+        with PreprocessingCache(cache_path) as cache:
+            migrated = IncludeAnalyzer(cache).analyze(arguments, cwd=tmp_path)
+
+        connection = sqlite3.connect(str(cache_path))
+        try:
+            encoded, cached_sha1 = connection.execute(
+                "SELECT directives, sha1 FROM files WHERE path = ?", (str(source),)
+            ).fetchone()
+        finally:
+            connection.close()
+        assert json.loads(encoded)["version"] == 1
+        assert cached_sha1 == original_sha1
+        assert migrated[str(source)] == original_sha1
 
     def test_clear(self, tmp_path: Path):
         source = tmp_path / "main.c"

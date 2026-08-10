@@ -26,6 +26,7 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_PREPROCESSING_CACHE_SIZE_BYTES = 100 * 1024 * 1024
 PREPROCESSING_CACHE_FILENAME = "preprocessing-cache.sqlite3"
+DIRECTIVES_FORMAT_VERSION = 1
 LEASE_SECONDS = 5.0
 LEASE_POLL_SECONDS = 0.01
 STAT_NAMES = (
@@ -53,6 +54,7 @@ class Directive:
     kind: str
     operand: str
     quoted: bool
+    conditional: bool = False
 
 
 @dataclass(frozen=True)
@@ -326,8 +328,22 @@ class PreprocessingCache:
             self._release(path, column)
 
     def directives(self, path: Path) -> List[Directive]:
-        encoded = self._get_or_create(path, "directives", lambda p: json.dumps(_parse_directives(p)))
-        return [Directive(*values) for values in json.loads(encoded)]
+        def encode(file_path: Path) -> str:
+            return json.dumps({"version": DIRECTIVES_FORMAT_VERSION, "directives": _parse_directives(file_path)})
+
+        encoded = self._get_or_create(path, "directives", encode)
+        payload = json.loads(encoded)
+        if not isinstance(payload, dict) or payload.get("version") != DIRECTIVES_FORMAT_VERSION:
+            stamp = FileStamp.from_path(path)
+            encoded = encode(path)
+            if FileStamp.from_path(path) != stamp:
+                raise OSError(f"File changed while updating cached directives: {path}")
+            self._store(path, stamp, "directives", encoded)
+            payload = json.loads(encoded)
+        values = payload.get("directives")
+        if not isinstance(values, list):
+            raise ValueError(f"Invalid cached directives for {path}")
+        return [Directive(*directive) for directive in values]
 
     def sha1(self, path: Path) -> str:
         def calculate(file_path: Path) -> str:
@@ -336,25 +352,45 @@ class PreprocessingCache:
         return self._get_or_create(path, "sha1", calculate)
 
 
-def _parse_directives(path: Path) -> List[Tuple[str, str, bool]]:
-    """Parse include-like directives and reject computed include operands."""
+def _parse_directives(path: Path) -> List[Tuple[str, str, bool, bool]]:
+    """Parse include-like directives and record conditional nesting."""
     source = path.read_text(encoding=ENCODING, errors="replace")
     source = re.sub(r"\\\r?\n", "", source)
     source = re.sub(r"/\*.*?\*/", " ", source, flags=re.DOTALL)
     source = re.sub(r"//[^\n]*", "", source)
-    directives: List[Tuple[str, str, bool]] = []
-    directive_re = re.compile(r"^\s*#\s*(include_next|include|import)\s+(.+?)\s*$", re.MULTILINE)
+    directives: List[Tuple[str, str, bool, bool]] = []
+    conditional_stack: List[bool] = []
+    directive_re = re.compile(r"^\s*#\s*([A-Za-z_]\w*)\b(.*?)$", re.MULTILINE)
     for match in directive_re.finditer(source):
         kind, operand = match.groups()
+        operand = operand.strip()
+        if kind in ("if", "ifdef", "ifndef"):
+            conditional_stack.append(False)
+            continue
+        if kind in ("elif", "else"):
+            if not conditional_stack or conditional_stack[-1]:
+                raise UnsupportedIncludeSyntax(f"Malformed #{kind} in {path}")
+            if kind == "else":
+                conditional_stack[-1] = True
+            continue
+        if kind == "endif":
+            if not conditional_stack:
+                raise UnsupportedIncludeSyntax(f"Malformed #endif in {path}")
+            conditional_stack.pop()
+            continue
+        if kind not in ("include_next", "include", "import"):
+            continue
         literal = re.fullmatch(r'"([^"\n]+)"', operand)
         quoted = True
         if literal is None:
             literal = re.fullmatch(r"<([^>\n]+)>", operand)
             quoted = False
         if literal is None:
-            directives.append(("computed", operand, False))
+            directives.append(("computed", operand, False, bool(conditional_stack)))
         else:
-            directives.append((kind, literal.group(1), quoted))
+            directives.append((kind, literal.group(1), quoted, bool(conditional_stack)))
+    if conditional_stack:
+        raise UnsupportedIncludeSyntax(f"Unclosed conditional directive in {path}")
     return directives
 
 
@@ -424,7 +460,12 @@ class IncludeAnalyzer:
         self.cache = cache
 
     @staticmethod
-    def _resolve(directive: Directive, including_file: Path, paths: SearchPaths) -> Optional[Path]:
+    def _resolve(
+        directive: Directive,
+        including_file: Path,
+        paths: SearchPaths,
+        defer_missing_quoted: bool = False,
+    ) -> Optional[Path]:
         search: List[Path] = []
         if directive.quoted:
             search.append(including_file.parent)
@@ -449,6 +490,8 @@ class IncludeAnalyzer:
         # An unresolved angle include is assumed to be provided by the server's compatible system toolchain.
         if not directive.quoted:
             return None
+        if defer_missing_quoted:
+            return None
         raise UnsupportedIncludeSyntax(f"Cannot resolve quoted include {directive.operand} from {including_file}")
 
     def analyze(self, arguments: Arguments, cwd: Optional[Path] = None) -> Dict[str, str]:
@@ -466,20 +509,36 @@ class IncludeAnalyzer:
             roots.append(forced_path)
 
         dependencies: Set[Path] = set()
-        pending = list(roots)
+        conditionally_analyzed: Set[Path] = set()
+        unconditionally_analyzed: Set[Path] = set()
+        pending = [(root, False) for root in roots]
         while pending:
-            path = pending.pop()
-            if path in dependencies or _is_excluded(path):
+            path, conditional_context = pending.pop()
+            if _is_excluded(path):
+                continue
+            if path in unconditionally_analyzed:
+                continue
+            if conditional_context and path in conditionally_analyzed:
                 continue
             if not path.is_file():
                 raise UnsupportedIncludeSyntax(f"Dependency disappeared during analysis: {path}")
             dependencies.add(path)
+            if conditional_context:
+                conditionally_analyzed.add(path)
+            else:
+                unconditionally_analyzed.add(path)
             for directive in self.cache.directives(path):
                 if directive.kind == "computed":
                     raise UnsupportedIncludeSyntax(f"Computed include in {path}: {directive.operand}")
-                resolved = self._resolve(directive, path, paths)
+                child_is_conditional = conditional_context or directive.conditional
+                resolved = self._resolve(
+                    directive,
+                    path,
+                    paths,
+                    defer_missing_quoted=child_is_conditional,
+                )
                 if resolved is not None and not _is_excluded(resolved):
-                    pending.append(resolved)
+                    pending.append((resolved, child_is_conditional))
 
         return {str(path): self.cache.sha1(path) for path in dependencies}
 
