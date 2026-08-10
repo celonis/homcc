@@ -495,7 +495,7 @@ class Arguments:
         output_path = Path(output)
         relative_output_path = str(output_path.relative_to(relative))
 
-        return self.add_output(relative_output_path)
+        return self.copy().remove_output_args().add_output(relative_output_path)
 
     def add_output(self, output: str) -> Arguments:
         """returns a copy of arguments where the output is added"""

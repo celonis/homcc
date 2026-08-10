@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import shutil
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
@@ -71,10 +72,26 @@ class PreprocessingResult:
     analyzed: bool
 
 
+def _compiler_is_homcc(compiler: Compiler) -> bool:
+    """Return whether the selected compiler resolves to this homcc client executable."""
+    compiler_path = shutil.which(str(compiler))
+    if compiler_path is None:
+        return False
+
+    try:
+        return Path(compiler_path).samefile(Path(__file__).with_name("main.py"))
+    except OSError:
+        return False
+
+
 def _preprocess(arguments: Arguments, localhost: Host, config: ClientConfig) -> PreprocessingResult:
     with LocalHostPreprocessingSemaphore(localhost), StateFile(arguments, localhost) as state:
         state.set_preprocessing()
-        if config.preprocessing_cache_enabled and "-MG" not in arguments.args:
+        if (
+            config.preprocessing_cache_enabled
+            and "-MG" not in arguments.args
+            and not _compiler_is_homcc(arguments.compiler)
+        ):
             dependencies = analyze_dependencies(arguments, config.max_preprocessing_cache_size_bytes)
             if dependencies is not None:
                 logger.debug("Preprocessing cache analyzed #%i dependencies.", len(dependencies))

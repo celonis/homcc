@@ -213,6 +213,10 @@ class TestServerCompilation:
         assert f"-ffile-prefix-map={instance_path}=" in passed_debug_arguments.args
 
     def test_remote_dependency_file(self, mocker: MockerFixture):
+        invoke_compiler_mock = mocker.patch(
+            "homcc.server.environment.Environment.invoke_compiler",
+            return_value=ArgumentsExecutionResult(0, "", ""),
+        )
         mocker.patch("pathlib.Path.is_file", return_value=True)
         mocker.patch(
             "pathlib.Path.read_bytes",
@@ -231,6 +235,8 @@ class TestServerCompilation:
 
         result = environment.do_compilation(arguments)
 
+        compiler_arguments = invoke_compiler_mock.call_args.args[0]
+        assert [arg for arg in compiler_arguments.args if arg.startswith("-o")] == ["-omain.o"]
         assert len(result.get_dependency_files()) == 1
         assert result.get_dependency_files()[0].file_name == "/home/user/cwd/main.d"
         assert instance_path.encode() not in result.get_dependency_files()[0].get_data()

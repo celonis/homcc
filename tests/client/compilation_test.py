@@ -10,7 +10,12 @@ from typing import List, Set
 
 import pytest
 
-from homcc.client.compilation import compile_locally, find_dependencies, scan_includes
+from homcc.client.compilation import (
+    _compiler_is_homcc,
+    compile_locally,
+    find_dependencies,
+    scan_includes,
+)
 from homcc.client.parsing import Host
 from homcc.common.arguments import Arguments
 from homcc.common.constants import ENCODING
@@ -28,6 +33,12 @@ class TestCompilation:
 
         assert len(includes) == 1
         assert str(Path("example/include/foo.h").absolute()) in includes
+
+    def test_detects_homcc_compiler_symlink(self, tmp_path: Path):
+        compiler = tmp_path / "clang-homcc"
+        compiler.symlink_to(Path("homcc/client/main.py").absolute())
+
+        assert _compiler_is_homcc(Arguments.from_vargs(str(compiler), "main.cpp").compiler)
 
     @staticmethod
     def find_dependencies(compiler: str):

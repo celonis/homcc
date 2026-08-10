@@ -234,10 +234,11 @@ class TestArguments:
         assert Arguments.from_vargs("~/bin/g++", "foo").normalize_compiler().compiler == "g++"
 
     def test_relativize_output(self):
-        assert (
-            Arguments.from_vargs("gcc", "-o", "/home/user/abc.o").relativize_output(Path("/home/user")).output
-            == "abc.o"
-        )
+        arguments = Arguments.from_vargs("gcc", "-o", "/home/user/abc.o")
+        relative_arguments = arguments.relativize_output(Path("/home/user"))
+        assert relative_arguments.output == "abc.o"
+        assert relative_arguments.args == ["-oabc.o"]
+        assert arguments.output == "/home/user/abc.o"
         assert (
             Arguments.from_vargs("gcc", "-o", "/home/user/./../user/abc.o").relativize_output(Path("/home/user")).output
             == "../user/abc.o"

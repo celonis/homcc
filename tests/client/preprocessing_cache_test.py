@@ -18,6 +18,8 @@ from homcc.common.arguments import Arguments
 
 
 class TestPreprocessingCache:
+    """Tests for persistent include analysis and hashing."""
+
     def test_analyzes_and_reuses_literal_include_graph(self, tmp_path: Path):
         include_dir = tmp_path / "include"
         include_dir.mkdir()
