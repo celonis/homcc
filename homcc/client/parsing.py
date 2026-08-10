@@ -3,6 +3,7 @@
 #   https://github.com/celonis/homcc/blob/main/LICENSE
 
 """Parsing related functionality regarding the homcc client"""
+
 from __future__ import annotations
 
 import logging
@@ -16,6 +17,11 @@ from typing import Any, Dict, List, Optional, Tuple
 from homcc import client
 from homcc.client.compilation import scan_includes
 from homcc.client.config import ClientConfig, ClientEnvironmentVariables, parse_config
+from homcc.client.preprocessing_cache import (
+    PreprocessingCache,
+    parse_size_string,
+    preprocessing_cache_path,
+)
 from homcc.common.arguments import Arguments, Compiler
 from homcc.common.compression import Compression
 from homcc.common.constants import ENCODING
@@ -115,6 +121,23 @@ class ShowEnvironmentVariables(ShowAndExitAction):
         sys.exit(os.EX_OK)
 
 
+class ShowPreprocessingCacheStats(ShowAndExitAction):
+    """show preprocessing cache statistics and exit"""
+
+    def __call__(self, *_):
+        for name, value in sorted(PreprocessingCache.stats(preprocessing_cache_path()).items()):
+            sys.stdout.write(f"{name}: {value}\n")
+        sys.exit(os.EX_OK)
+
+
+class ClearPreprocessingCache(ShowAndExitAction):
+    """clear the preprocessing cache and exit"""
+
+    def __call__(self, *_):
+        PreprocessingCache.clear(preprocessing_cache_path())
+        sys.exit(os.EX_OK)
+
+
 def parse_cli_args(cli_args: List[str]) -> Tuple[Dict[str, Any], Arguments]:
     parser: ArgumentParser = ArgumentParser(
         description="homcc - Work From Home friendly distcc replacement",
@@ -129,6 +152,8 @@ def parse_cli_args(cli_args: List[str]) -> Tuple[Dict[str, Any], Arguments]:
     show_and_exit.add_argument("--show-hosts", action=ShowHosts)
     show_and_exit.add_argument("-j", "--show-concurrency", action=ShowConcurrencyLevel)
     show_and_exit.add_argument("--show-variables", action=ShowEnvironmentVariables)
+    show_and_exit.add_argument("--show-preprocessing-cache-stats", action=ShowPreprocessingCacheStats)
+    show_and_exit.add_argument("--clear-preprocessing-cache", action=ClearPreprocessingCache)
 
     parser.add_argument(
         "--scan-includes",
@@ -161,6 +186,19 @@ def parse_cli_args(cli_args: List[str]) -> Tuple[Dict[str, Any], Arguments]:
         "--no-local-compilation",
         action="store_true",
         help="enforce that even on recoverable failures no local compilation is executed",
+    )
+
+    parser.add_argument(
+        "--no-preprocessing-cache",
+        action="store_true",
+        help="disable the shared client-side include-analysis cache",
+    )
+
+    parser.add_argument(
+        "--max-preprocessing-cache-size",
+        type=parse_size_string,
+        metavar="SIZE",
+        help="maximum preprocessing cache size, specified with an M or G suffix",
     )
 
     indented_newline: str = "\n\t"
@@ -241,7 +279,15 @@ def parse_cli_args(cli_args: List[str]) -> Tuple[Dict[str, Any], Arguments]:
         sys.exit(os.EX_OK)
 
     # remove all args that are already implicitly handled via their actions or are compiler related
-    for key in ("COMPILER_ARGUMENTS", "show_hosts", "show_concurrency", "show_variables", "version"):
+    for key in (
+        "COMPILER_ARGUMENTS",
+        "show_hosts",
+        "show_concurrency",
+        "show_variables",
+        "show_preprocessing_cache_stats",
+        "clear_preprocessing_cache",
+        "version",
+    ):
         homcc_args_dict.pop(key)
 
     return homcc_args_dict, compiler_arguments
@@ -355,6 +401,12 @@ def setup_client(cli_args: List[str]) -> Tuple[ClientConfig, Arguments, Host, Li
     # NO-LOCAL-COMPILATION
     if local_compilation_enabled := not homcc_args_dict.pop("no_local_compilation", False):
         homcc_config.local_compilation_enabled = local_compilation_enabled
+
+    if homcc_args_dict.pop("no_preprocessing_cache", False):
+        homcc_config.preprocessing_cache_enabled = False
+
+    if (max_preprocessing_cache_size := homcc_args_dict.pop("max_preprocessing_cache_size", None)) is not None:
+        homcc_config.max_preprocessing_cache_size_bytes = max_preprocessing_cache_size
 
     # SCHROOT_PROFILE; DOCKER_CONTAINER; if --no-sandbox is specified do not use any specified sandbox configurations
     if homcc_args_dict.pop("no_sandbox", False):

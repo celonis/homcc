@@ -3,6 +3,7 @@
 #   https://github.com/celonis/homcc/blob/main/LICENSE
 
 """Tests regarding the arguments module of homcc."""
+
 from pathlib import Path
 from typing import List, Optional
 
@@ -129,6 +130,13 @@ class TestArguments:
             ).dependency_finding()[1]
             == "main.cpp.o.d"
         )
+
+    def test_dependency_output_args(self):
+        assert Arguments.from_vargs("g++", "main.cpp").dependency_output_args() is None
+        assert Arguments.from_vargs("g++", "main.cpp", "-MD", "-MG").dependency_output_args() is None
+        assert Arguments.from_vargs(
+            "g++", "main.cpp", "-MD", "-MP", "-MF", "main.d", "-MTmain.o"
+        ).dependency_output_args() == ["-MD", "-MP", "-MF", "main.d", "-MTmain.o"]
 
     def test_output_target(self):
         args: List[str] = ["g++", "foo.cpp", "-O0", "-Iexample/include/"]

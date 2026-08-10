@@ -5,6 +5,7 @@
 """
 TCPClient class and related Exception classes for the homcc client
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -26,11 +27,13 @@ from homcc.common.compression import Compression
 from homcc.common.constants import TCP_BUFFER_SIZE
 from homcc.common.errors import (
     ClientParsingError,
+    DependencyChangedError,
     FailedHostNameResolutionError,
     HostRefusedConnectionError,
     RemoteHostsFailure,
     SlotsExhaustedError,
 )
+from homcc.common.hashing import hash_file_with_bytes
 from homcc.common.host import ConnectionType, Host
 from homcc.common.messages import ArgumentMessage, DependencyReplyMessage, Message
 from homcc.common.statefile import StateFile
@@ -335,6 +338,7 @@ class RemoteCompilationClient(ABC):
         target: Optional[str],
         schroot_profile: Optional[str],
         docker_container: Optional[str],
+        dependency_args: Optional[List[str]] = None,
     ):
         """send an argument message to homcc server"""
         try:
@@ -347,6 +351,7 @@ class RemoteCompilationClient(ABC):
                     schroot_profile=schroot_profile,
                     docker_container=docker_container,
                     compression=self.compression,
+                    dependency_args=dependency_args,
                 )
             )
         except ConnectionError as error:
@@ -364,9 +369,11 @@ class RemoteCompilationClient(ABC):
                 "reaching the compilation limit."
             ) from error
 
-    async def send_dependency_reply_message(self, dependency: str):
+    async def send_dependency_reply_message(self, dependency: str, expected_hash: Optional[str] = None):
         """send dependency reply message to homcc server"""
         content: bytearray = bytearray(Path(dependency).read_bytes())
+        if expected_hash is not None and hash_file_with_bytes(content) != expected_hash:
+            raise DependencyChangedError(f"Dependency changed while compiling: {dependency}")
         await self._send(DependencyReplyMessage(content, self.compression))
 
     @types.coroutine

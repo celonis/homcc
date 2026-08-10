@@ -3,6 +3,7 @@
 #   https://github.com/celonis/homcc/blob/main/LICENSE
 
 """Tests for client/parsing.py"""
+
 import os
 import subprocess
 from pathlib import Path
@@ -279,6 +280,8 @@ class TestParsingConfig:
         "ssh_executable=/usr/bin/ssh",
         "ssh_control_persist=300",
         "ssh_options=-o StrictHostKeyChecking=no",
+        "preprocessing_cache=FALSE",
+        "max_preprocessing_cache_size=64M",
         # the following configs should be ignored
         "[homccd]",
         "LOG_LEVEL=DEBUG",
@@ -305,6 +308,8 @@ class TestParsingConfig:
             ssh_executable="/usr/bin/ssh",
             ssh_control_persist=300,
             ssh_options=["-o", "StrictHostKeyChecking=no"],
+            preprocessing_cache=False,
+            max_preprocessing_cache_size="64M",
         )
 
     def test_parse_multiple_config_files(self, tmp_path: Path):
@@ -325,6 +330,8 @@ class TestParsingConfig:
             ssh_executable="/usr/bin/ssh",
             ssh_control_persist=300,
             ssh_options=["-o", "StrictHostKeyChecking=no"],
+            preprocessing_cache=False,
+            max_preprocessing_cache_size="64M",
         )
 
 

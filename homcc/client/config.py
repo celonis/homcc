@@ -5,6 +5,7 @@
 """
 Client Configuration class and related parsing utilities
 """
+
 from __future__ import annotations
 
 import configparser
@@ -16,6 +17,10 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import ClassVar, Iterator, List, Optional
 
+from homcc.client.preprocessing_cache import (
+    DEFAULT_PREPROCESSING_CACHE_SIZE_BYTES,
+    parse_size_string,
+)
 from homcc.client.ssh import DEFAULT_SSH_CONTROL_PERSIST, DEFAULT_SSH_EXECUTABLE
 from homcc.common.compression import Compression
 from homcc.common.logging import LogLevel
@@ -43,6 +48,8 @@ class ClientEnvironmentVariables:
     HOMCC_SSH_EXECUTABLE_ENV_VAR: ClassVar[str] = "HOMCC_SSH_EXECUTABLE"
     HOMCC_SSH_CONTROL_PERSIST_ENV_VAR: ClassVar[str] = "HOMCC_SSH_CONTROL_PERSIST"
     HOMCC_SSH_OPTIONS_ENV_VAR: ClassVar[str] = "HOMCC_SSH_OPTIONS"
+    HOMCC_PREPROCESSING_CACHE_ENV_VAR: ClassVar[str] = "HOMCC_PREPROCESSING_CACHE"
+    HOMCC_MAX_PREPROCESSING_CACHE_SIZE_ENV_VAR: ClassVar[str] = "HOMCC_MAX_PREPROCESSING_CACHE_SIZE"
 
     @classmethod
     def __iter__(cls) -> Iterator[str]:
@@ -59,6 +66,8 @@ class ClientEnvironmentVariables:
             cls.HOMCC_SSH_EXECUTABLE_ENV_VAR,
             cls.HOMCC_SSH_CONTROL_PERSIST_ENV_VAR,
             cls.HOMCC_SSH_OPTIONS_ENV_VAR,
+            cls.HOMCC_PREPROCESSING_CACHE_ENV_VAR,
+            cls.HOMCC_MAX_PREPROCESSING_CACHE_SIZE_ENV_VAR,
         )
 
     @staticmethod
@@ -128,6 +137,18 @@ class ClientEnvironmentVariables:
             return shlex.split(ssh_options)
         return None
 
+    @classmethod
+    def get_preprocessing_cache(cls) -> Optional[bool]:
+        if (value := os.getenv(cls.HOMCC_PREPROCESSING_CACHE_ENV_VAR)) is not None:
+            return cls.parse_bool_str(value)
+        return None
+
+    @classmethod
+    def get_max_preprocessing_cache_size(cls) -> Optional[int]:
+        if value := os.getenv(cls.HOMCC_MAX_PREPROCESSING_CACHE_SIZE_ENV_VAR):
+            return parse_size_string(value)
+        return None
+
 
 @dataclass
 class ClientConfig:
@@ -146,6 +167,8 @@ class ClientConfig:
     ssh_executable: str
     ssh_control_persist: int
     ssh_options: List[str]
+    preprocessing_cache_enabled: bool
+    max_preprocessing_cache_size_bytes: int
 
     def __init__(
         self,
@@ -163,6 +186,8 @@ class ClientConfig:
         ssh_executable: Optional[str] = None,
         ssh_control_persist: Optional[int] = None,
         ssh_options: Optional[List[str]] = None,
+        preprocessing_cache: Optional[bool] = None,
+        max_preprocessing_cache_size: Optional[str] = None,
     ):
         self.files = files
 
@@ -201,6 +226,19 @@ class ClientConfig:
             ClientEnvironmentVariables.get_ssh_control_persist() or ssh_control_persist or DEFAULT_SSH_CONTROL_PERSIST
         )
         self.ssh_options = ClientEnvironmentVariables.get_ssh_options() or ssh_options or []
+        environment_cache = ClientEnvironmentVariables.get_preprocessing_cache()
+        self.preprocessing_cache_enabled = (
+            environment_cache
+            if environment_cache is not None
+            else preprocessing_cache
+            if preprocessing_cache is not None
+            else True
+        )
+        self.max_preprocessing_cache_size_bytes = (
+            ClientEnvironmentVariables.get_max_preprocessing_cache_size()
+            or (parse_size_string(max_preprocessing_cache_size) if max_preprocessing_cache_size else None)
+            or DEFAULT_PREPROCESSING_CACHE_SIZE_BYTES
+        )
 
     @classmethod
     def empty(cls):
@@ -221,6 +259,8 @@ class ClientConfig:
         ssh_control_persist: Optional[int] = homcc_config.getint("ssh_control_persist")
         ssh_options_str: Optional[str] = homcc_config.get("ssh_options")
         ssh_options: Optional[List[str]] = shlex.split(ssh_options_str) if ssh_options_str is not None else None
+        preprocessing_cache: Optional[bool] = homcc_config.getboolean("preprocessing_cache")
+        max_preprocessing_cache_size: Optional[str] = homcc_config.get("max_preprocessing_cache_size")
 
         return ClientConfig(
             files=files,
@@ -236,6 +276,8 @@ class ClientConfig:
             ssh_executable=ssh_executable,
             ssh_control_persist=ssh_control_persist,
             ssh_options=ssh_options,
+            preprocessing_cache=preprocessing_cache,
+            max_preprocessing_cache_size=max_preprocessing_cache_size,
         )
 
     def __str__(self):
@@ -253,6 +295,8 @@ class ClientConfig:
             f"\tssh_executable:\t\t\t{self.ssh_executable}\n"
             f"\tssh_control_persist:\t\t{self.ssh_control_persist}\n"
             f"\tssh_options:\t\t\t{' '.join(self.ssh_options)}\n"
+            f"\tpreprocessing_cache:\t\t{self.preprocessing_cache_enabled}\n"
+            f"\tmax_preprocessing_cache_size:\t{self.max_preprocessing_cache_size_bytes}\n"
         )
 
     def set_verbose(self):

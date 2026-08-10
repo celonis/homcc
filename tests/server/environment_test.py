@@ -3,6 +3,7 @@
 #   https://github.com/celonis/homcc/blob/main/LICENSE
 
 """Tests for the server environment."""
+
 from pathlib import Path
 from typing import List
 from unittest.mock import MagicMock
@@ -210,6 +211,29 @@ class TestServerCompilation:
         # ensure that we call the compiler with an instruction to remap the debug symbols
         passed_debug_arguments: Arguments = invoke_compiler_mock.call_args_list[0].args[0]
         assert f"-ffile-prefix-map={instance_path}=" in passed_debug_arguments.args
+
+    def test_remote_dependency_file(self, mocker: MockerFixture):
+        mocker.patch("pathlib.Path.is_file", return_value=True)
+        mocker.patch(
+            "pathlib.Path.read_bytes",
+            return_value=b"main.o: /tmp/homcc/test-id/home/user/cwd/main.cpp\n",
+        )
+        instance_path = "/tmp/homcc/test-id"
+        mapped_cwd = f"{instance_path}/home/user/cwd"
+        environment = create_mock_environment(instance_path, mapped_cwd)
+        arguments = Arguments.from_vargs(
+            "gcc",
+            f"{mapped_cwd}/main.cpp",
+            f"-o{mapped_cwd}/main.o",
+            "-MD",
+            f"-MF{mapped_cwd}/main.d",
+        )
+
+        result = environment.do_compilation(arguments)
+
+        assert len(result.get_dependency_files()) == 1
+        assert result.get_dependency_files()[0].file_name == "/home/user/cwd/main.d"
+        assert instance_path.encode() not in result.get_dependency_files()[0].get_data()
 
     @pytest.mark.gplusplus
     def test_compiler_exists(self):

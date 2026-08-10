@@ -3,6 +3,7 @@
 #   https://github.com/celonis/homcc/blob/main/LICENSE
 
 """Main logic for the homcc server."""
+
 import logging
 import os
 import random
@@ -173,6 +174,8 @@ class TCPRequestHandler(socketserver.BaseRequestHandler):
 
         # construct Arguments from args
         self.compiler_arguments: Arguments = Arguments.from_vargs(*message.get_args())
+        for dependency_arg in message.get_dependency_args() or []:
+            self.compiler_arguments.add_arg(dependency_arg)
 
         target = message.target
         schroot_profile = message.schroot_profile

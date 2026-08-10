@@ -3,6 +3,7 @@
 #   https://github.com/celonis/homcc/blob/main/LICENSE
 
 """Creation and parsing for messages transferred between the client and the server."""
+
 from __future__ import annotations
 
 import json
@@ -178,6 +179,7 @@ class ArgumentMessage(Message):
         schroot_profile: Optional[str],
         docker_container: Optional[str],
         compression: Compression,
+        dependency_args: Optional[List[str]] = None,
     ):
         self.args: List[str] = args
         self.cwd: str = cwd
@@ -186,6 +188,7 @@ class ArgumentMessage(Message):
         self.schroot_profile: Optional[str] = schroot_profile
         self.docker_container: Optional[str] = docker_container
         self.compression: Compression = compression
+        self.dependency_args: Optional[List[str]] = dependency_args
 
         super().__init__(MessageType.ArgumentMessage)
 
@@ -208,6 +211,9 @@ class ArgumentMessage(Message):
 
         if self.compression:
             json_dict["compression"] = str(self.compression)
+
+        if self.dependency_args is not None:
+            json_dict["dependency_args"] = self.dependency_args
 
         return json_dict
 
@@ -239,6 +245,10 @@ class ArgumentMessage(Message):
         """Returns the to be used compression algorithm."""
         return self.compression
 
+    def get_dependency_args(self) -> Optional[List[str]]:
+        """Return dependency-output flags requested by a capable client."""
+        return self.dependency_args
+
     def __eq__(self, other):
         if isinstance(other, ArgumentMessage):
             return (
@@ -249,6 +259,7 @@ class ArgumentMessage(Message):
                 and self.get_schroot_profile() == other.get_schroot_profile()
                 and self.get_docker_container() == other.get_docker_container()
                 and self.get_compression() == other.get_compression()
+                and self.get_dependency_args() == other.get_dependency_args()
             )
         return False
 
@@ -262,6 +273,7 @@ class ArgumentMessage(Message):
             schroot_profile=json_dict.get("schroot_profile"),
             docker_container=json_dict.get("docker_container"),
             compression=Compression.from_name(json_dict.get("compression")),
+            dependency_args=json_dict.get("dependency_args"),
         )
 
 
@@ -428,6 +440,7 @@ class CompilationResultMessage(Message):
         return_code: int,
         compression: Compression,
         dwarf_files: List[File],
+        dependency_files: Optional[List[File]] = None,
     ):
         self.object_files = object_files
         self.stdout = stdout
@@ -435,6 +448,7 @@ class CompilationResultMessage(Message):
         self.return_code = return_code
         self.compression = compression
         self.dwarf_files = dwarf_files
+        self.dependency_files = dependency_files or []
 
         super().__init__(MessageType.CompilationResultMessage)
 
@@ -453,6 +467,10 @@ class CompilationResultMessage(Message):
 
         json_dict["dwarf_files"] = [
             {"filename": dwarf_file.file_name, "size": len(dwarf_file)} for dwarf_file in self.dwarf_files
+        ]
+        json_dict["dependency_files"] = [
+            {"filename": dependency_file.file_name, "size": len(dependency_file)}
+            for dependency_file in self.dependency_files
         ]
 
         return json_dict
@@ -475,11 +493,15 @@ class CompilationResultMessage(Message):
     def get_dwarf_files(self) -> List[File]:
         return self.dwarf_files
 
+    def get_dependency_files(self) -> List[File]:
+        return self.dependency_files
+
     def get_files(self) -> List[File]:
         files: List[File] = []
 
         files.extend(self.object_files)  # ordering is important for serialization here, i.e. add object files first
         files.extend(self.dwarf_files)
+        files.extend(self.dependency_files)
         return files
 
     def get_compilation_result(self) -> ArgumentsExecutionResult:
@@ -519,6 +541,7 @@ class CompilationResultMessage(Message):
                 and self.get_return_code() == other.get_return_code()
                 and self.get_compression() == other.get_compression()
                 and self.get_dwarf_files() == other.get_dwarf_files()
+                and self.get_dependency_files() == other.get_dependency_files()
             )
 
         return False
@@ -546,8 +569,11 @@ class CompilationResultMessage(Message):
         return_code = json_dict["return_code"]
 
         dwarf_files: List[File] = files_from_json_list(json_dict.get("dwarf_files"))
+        dependency_files: List[File] = files_from_json_list(json_dict.get("dependency_files"))
 
-        return CompilationResultMessage(object_files, stdout, stderr, return_code, compression, dwarf_files)
+        return CompilationResultMessage(
+            object_files, stdout, stderr, return_code, compression, dwarf_files, dependency_files
+        )
 
 
 class ConnectionRefusedMessage(Message):

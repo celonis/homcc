@@ -3,6 +3,7 @@
 #   https://github.com/celonis/homcc/blob/main/LICENSE
 
 """Module containing methods to manage the server environment, mostly file and path manipulation."""
+
 import logging
 import os
 import uuid
@@ -12,7 +13,7 @@ from typing import Dict, List, Optional
 
 from homcc.common.arguments import Arguments, ArgumentsExecutionResult
 from homcc.common.compression import Compression
-from homcc.common.constants import DWARF_FILE_SUFFIX
+from homcc.common.constants import DWARF_FILE_SUFFIX, ENCODING
 from homcc.common.messages import CompilationResultMessage, File
 from homcc.common.shell_environment import HostShellEnvironment, ShellEnvironment
 from homcc.server.cache import Cache
@@ -173,12 +174,26 @@ class Environment:
         if arguments.output is not None:
             Path(arguments.output).parent.mkdir(parents=True, exist_ok=True)
 
-        # relativize the output for the compiler, so that the references to the .o files (e.g. in .dwo files)
-        # are also relative instead of absolute
-        result = self.invoke_compiler(arguments.relativize_output(mapped_cwd_path))
+        # Relativize the output for the compiler, so references to .o files (e.g. in .dwo files) are relative.
+        compiler_arguments = arguments.relativize_output(mapped_cwd_path)
+
+        dependency_output_path: Optional[Path] = None
+        if compiler_arguments.dependency_output_args() is not None:
+            if compiler_arguments.dependency_output is not None:
+                dependency_output_path = Path(compiler_arguments.dependency_output)
+            elif compiler_arguments.output is not None:
+                dependency_output_path = Path(compiler_arguments.output).with_suffix(".d")
+            else:
+                dependency_output_path = Path(Path(compiler_arguments.source_files[0]).with_suffix(".d").name)
+            if not dependency_output_path.is_absolute():
+                dependency_output_path = mapped_cwd_path / dependency_output_path
+            dependency_output_path.parent.mkdir(parents=True, exist_ok=True)
+
+        result = self.invoke_compiler(compiler_arguments)
 
         object_files: List[File] = []
         dwarf_files: List[File] = []
+        dependency_files: List[File] = []
 
         def read_and_create_file(path: str) -> File:
             file_content = Path.read_bytes(Path(path))
@@ -200,6 +215,12 @@ class Environment:
 
                 logger.info("Compiled '%s'.", object_file.file_name)
 
+        if dependency_output_path is not None and dependency_output_path.is_file():
+            dependency_content = dependency_output_path.read_bytes().replace(self.instance_folder.encode(ENCODING), b"")
+            dependency_files.append(
+                File(self.unmap_path(str(dependency_output_path)), bytearray(dependency_content), self.compression)
+            )
+
         logger.info(
             "Compiler returned code '%i', sending back #%i object files and #%i dwarf files.",
             result.return_code,
@@ -208,7 +229,13 @@ class Environment:
         )
 
         return CompilationResultMessage(
-            object_files, result.stdout, result.stderr, result.return_code, self.compression, dwarf_files
+            object_files,
+            result.stdout,
+            result.stderr,
+            result.return_code,
+            self.compression,
+            dwarf_files,
+            dependency_files,
         )
 
     def invoke_compiler(self, arguments: Arguments) -> ArgumentsExecutionResult:

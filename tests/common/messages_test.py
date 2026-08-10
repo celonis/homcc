@@ -3,6 +3,7 @@
 #   https://github.com/celonis/homcc/blob/main/LICENSE
 
 """Tests the messages module of homcc."""
+
 import os
 from typing import Dict, List
 
@@ -42,6 +43,22 @@ class TestArgumentMessage:
         message_bytes: bytearray = message.to_bytes()
 
         _, serialized_message = Message.from_bytes(message_bytes)
+
+        assert message == serialized_message
+
+    def test_serialization_with_dependency_args(self):
+        message = ArgumentMessage(
+            ["g++", "-c", "main.cpp"],
+            "/home/user",
+            {"/home/user/main.cpp": "1234"},
+            target=None,
+            schroot_profile=None,
+            docker_container=None,
+            compression=NoCompression(),
+            dependency_args=["-MD", "-MF", "main.d"],
+        )
+
+        _, serialized_message = Message.from_bytes(message.to_bytes())
 
         assert message == serialized_message
 
@@ -88,6 +105,14 @@ class TestCompilationResultMessage:
         message_bytes = message.to_bytes()
 
         _, serialized_message = Message.from_bytes(message_bytes)
+
+        assert message == serialized_message
+
+    def test_serialization_with_dependency_file(self):
+        dependency_file = File("main.d", bytearray(b"main.o: main.cpp\n"), NoCompression())
+        message = CompilationResultMessage([], "", "", 0, NoCompression(), [], [dependency_file])
+
+        _, serialized_message = Message.from_bytes(message.to_bytes())
 
         assert message == serialized_message
 

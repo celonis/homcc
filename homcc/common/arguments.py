@@ -3,6 +3,7 @@
 #   https://github.com/celonis/homcc/blob/main/LICENSE
 
 """shared common functionality for server and client regarding compiler arguments"""
+
 from __future__ import annotations
 
 import logging
@@ -453,6 +454,27 @@ class Arguments:
 
         return self.copy().add_arg(self.Unsendable.PREPROCESSOR_DEPENDENCY_ARG), dependency_output_file
 
+    def dependency_output_args(self) -> Optional[List[str]]:
+        """Return dependency-file flags for remote generation, if this command requests one."""
+        if self.Local.DEPENDENCY_SIDE_EFFECT_ARG not in self.args or "-MG" in self.args:
+            return None
+
+        dependency_args: List[str] = []
+        index = 0
+        while index < len(self.args):
+            arg = self.args[index]
+            if arg in (self.Local.DEPENDENCY_SIDE_EFFECT_ARG, "-MP"):
+                dependency_args.append(arg)
+            elif arg in self.Local.PREPROCESSOR_OPTION_PREFIX_ARGS:
+                dependency_args.append(arg)
+                index += 1
+                if index < len(self.args):
+                    dependency_args.append(self.args[index])
+            elif arg.startswith(tuple(self.Local.PREPROCESSOR_OPTION_PREFIX_ARGS)):
+                dependency_args.append(arg)
+            index += 1
+        return dependency_args
+
     def no_linking(self) -> Arguments:
         """return a copy of arguments where the no linking arg is added"""
         without_linking = self.copy().add_arg(self.NO_LINKING_ARG)
@@ -486,7 +508,7 @@ class Arguments:
     def map(self, instance_path: str, mapped_cwd: str) -> Arguments:
         """modify and return arguments by mapping relevant paths"""
         args: List[str] = []
-        path_option_prefix_args: List[str] = [self.OUTPUT_ARG] + self.INCLUDE_ARGS
+        path_option_prefix_args: List[str] = [self.OUTPUT_ARG, "-MF"] + self.INCLUDE_ARGS
 
         it: Iterator[str] = iter(self.args)
         for arg in it:

@@ -31,6 +31,10 @@ class UnexpectedMessageTypeError(RecoverableClientError):
     """Exception for receiving a message with an unexpected type"""
 
 
+class DependencyChangedError(RecoverableClientError):
+    """A dependency changed after its hash was advertised to the server."""
+
+
 class RemoteHostsFailure(RecoverableClientError):
     """Error class to indicate that the compilation request was refused by all hosts"""
 

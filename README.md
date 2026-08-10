@@ -170,6 +170,8 @@ Additionally, `HOMCC` provides sandboxed compiler execution for remote compilati
     HOMCC_SSH_EXECUTABLE
     HOMCC_SSH_CONTROL_PERSIST
     HOMCC_SSH_OPTIONS
+    HOMCC_PREPROCESSING_CACHE
+    HOMCC_MAX_PREPROCESSING_CACHE_SIZE
      
     # homccd
     HOMCCD_LIMIT
@@ -194,6 +196,8 @@ Additionally, `HOMCC` provides sandboxed compiler execution for remote compilati
     ssh_executable=ssh
     ssh_control_persist=600
     ssh_options=-o BatchMode=yes
+    preprocessing_cache=True
+    max_preprocessing_cache_size=100M
      
     [homccd]
     limit=64
@@ -217,6 +221,8 @@ Additionally, `HOMCC` provides sandboxed compiler execution for remote compilati
     Executable used to establish SSH tunnels for '@HOST'/'USER@HOST' hosts
     Seconds an idle multiplexed SSH master connection is kept alive for reuse
     Additional options passed to the SSH executable, e.g. '-o' flags
+    Enable the shared client-side include-analysis and content-hash cache
+    Maximum preprocessing cache size, with 'M' (Mebibyte) or 'G' (Gibibyte) suffix
      
     # Server configuration
     Maximum limit of concurrent compilations
@@ -228,6 +234,11 @@ Additionally, `HOMCC` provides sandboxed compiler execution for remote compilati
     </pre></sub></td>
     </tr>
   </table>
+
+The preprocessing cache is enabled by default and stored in
+`$HOMCC_DIR/preprocessing-cache.sqlite3` or `~/.homcc/preprocessing-cache.sqlite3`. Use
+`--show-preprocessing-cache-stats`, `--clear-preprocessing-cache`, or `--no-preprocessing-cache` to inspect, reset, or
+temporarily bypass it. The cache validates files by path, size, and nanosecond modification time.
 
 ## Deployment hints
 Things to keep in mind when deploying `homccd`:

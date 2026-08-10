@@ -3,12 +3,14 @@
 #   https://github.com/celonis/homcc/blob/main/LICENSE
 
 """fundamental compilation functions and classes for the homcc client"""
+
 from __future__ import annotations
 
 import asyncio
 import logging
 import os
 import subprocess
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Optional, Set
 
@@ -21,10 +23,12 @@ from homcc.client.client import (
     TCPClient,
 )
 from homcc.client.config import ClientConfig
+from homcc.client.preprocessing_cache import analyze_dependencies, record_cache_stat
 from homcc.client.ssh import SSHClient, SSHTunnel
 from homcc.common.arguments import Arguments, ArgumentsExecutionResult, Compiler
 from homcc.common.constants import ENCODING, EXCLUDED_DEPENDENCY_PREFIXES
 from homcc.common.errors import (
+    DependencyChangedError,
     FailedHostNameResolutionError,
     HostRefusedConnectionError,
     RemoteCompilationError,
@@ -59,16 +63,30 @@ def check_recursive_call(compiler: Compiler, error: subprocess.CalledProcessErro
         raise SystemExit(os.EX_USAGE) from error
 
 
-def _preprocess(arguments: Arguments, localhost: Host) -> Dict[str, str]:
+@dataclass
+class PreprocessingResult:
+    """Dependencies and whether they came from lightweight cached analysis."""
+
+    dependencies: Dict[str, str]
+    analyzed: bool
+
+
+def _preprocess(arguments: Arguments, localhost: Host, config: ClientConfig) -> PreprocessingResult:
     with LocalHostPreprocessingSemaphore(localhost), StateFile(arguments, localhost) as state:
         state.set_preprocessing()
-        return calculate_dependency_dict(find_dependencies(arguments))
+        if config.preprocessing_cache_enabled and "-MG" not in arguments.args:
+            dependencies = analyze_dependencies(arguments, config.max_preprocessing_cache_size_bytes)
+            if dependencies is not None:
+                logger.debug("Preprocessing cache analyzed #%i dependencies.", len(dependencies))
+                return PreprocessingResult(dependencies, analyzed=True)
+        return PreprocessingResult(calculate_dependency_dict(find_dependencies(arguments)), analyzed=False)
 
 
 async def compile_remotely(arguments: Arguments, hosts: List[Host], localhost: Host, config: ClientConfig) -> int:
     """main function to control remote compilation"""
 
-    dependency_dict = _preprocess(arguments, localhost)
+    preprocessing_result = _preprocess(arguments, localhost, config)
+    dependency_dict = preprocessing_result.dependencies
 
     # try to connect to remote hosts before falling back to local compilation and track which hosts we failed at
     failed_hosts: List[Host] = []
@@ -79,16 +97,58 @@ async def compile_remotely(arguments: Arguments, hosts: List[Host], localhost: H
 
         try:
             with RemoteHostSemaphore(host), StateFile(arguments, host) as state:
-                return await asyncio.wait_for(
-                    compile_remotely_at(
-                        arguments=arguments,
-                        dependency_dict=dependency_dict,
-                        host=host,
-                        config=config,
-                        state=state,
-                    ),
-                    timeout=config.compilation_request_timeout,
-                )
+                try:
+                    return await asyncio.wait_for(
+                        compile_remotely_at(
+                            arguments=arguments,
+                            dependency_dict=dependency_dict,
+                            host=host,
+                            config=config,
+                            state=state,
+                        ),
+                        timeout=config.compilation_request_timeout,
+                    )
+                except RemoteCompilationError as remote_error:
+                    if not preprocessing_result.analyzed:
+                        raise
+
+                    try:
+                        exact_dependencies = calculate_dependency_dict(find_dependencies(arguments))
+                    except subprocess.CalledProcessError as exact_error:
+                        raise remote_error from exact_error
+                    missing_dependencies = set(exact_dependencies) - set(dependency_dict)
+                    if not missing_dependencies:
+                        raise
+
+                    logger.warning(
+                        "Cached include analysis missed #%i dependencies; retrying once with compiler results.",
+                        len(missing_dependencies),
+                    )
+                    record_cache_stat("discrepancy_retries", config.max_preprocessing_cache_size_bytes)
+                    return await asyncio.wait_for(
+                        compile_remotely_at(
+                            arguments=arguments,
+                            dependency_dict=exact_dependencies,
+                            host=host,
+                            config=config,
+                            state=state,
+                        ),
+                        timeout=config.compilation_request_timeout,
+                    )
+                except DependencyChangedError:
+                    logger.warning("A dependency changed during preprocessing; retrying once with fresh hashes.")
+                    record_cache_stat("hash_mismatches", config.max_preprocessing_cache_size_bytes)
+                    exact_dependencies = calculate_dependency_dict(find_dependencies(arguments))
+                    return await asyncio.wait_for(
+                        compile_remotely_at(
+                            arguments=arguments,
+                            dependency_dict=exact_dependencies,
+                            host=host,
+                            config=config,
+                            state=state,
+                        ),
+                        timeout=config.compilation_request_timeout,
+                    )
 
         # compilation request timed out, local compilation fallback
         except asyncio.TimeoutError as error:
@@ -170,6 +230,7 @@ async def compile_remotely_at(
             target=target,
             schroot_profile=schroot_profile,
             docker_container=docker_container,
+            dependency_args=arguments.dependency_output_args(),
         )
         host_response: Message = await client.receive()
         if isinstance(host_response, ConnectionRefusedMessage):
@@ -183,7 +244,7 @@ async def compile_remotely_at(
         # provide requested dependencies
         while isinstance(host_response, DependencyRequestMessage):
             requested_dependency: str = dependency_dict[host_response.get_sha1sum()]
-            await client.send_dependency_reply_message(requested_dependency)
+            await client.send_dependency_reply_message(requested_dependency, host_response.get_sha1sum())
 
             host_response = await client.receive()
 
@@ -196,6 +257,17 @@ async def compile_remotely_at(
     if host_result.stdout:
         logger.debug("Host stdout:\n%s", host_result.stdout)
 
+    for dependency_file in host_response.get_dependency_files():
+        logger.debug("Writing dependency file %s", dependency_file.file_name)
+        Path(dependency_file.file_name).parent.mkdir(parents=True, exist_ok=True)
+        Path(dependency_file.file_name).write_bytes(dependency_file.get_data())
+
+    # An older server ignores the additive dependency_args request. Preserve compatibility by creating the
+    # compiler-authored dependency file locally in that case.
+    if arguments.dependency_output_args() is not None and not host_response.get_dependency_files():
+        record_cache_stat("legacy_server_fallbacks", config.max_preprocessing_cache_size_bytes)
+        find_dependencies(arguments)
+
     if host_result.return_code != os.EX_OK:
         # check whether the compilation should be retried locally
         if host_result.return_code == os.EX_TEMPFAIL:
@@ -206,7 +278,7 @@ async def compile_remotely_at(
             host_result.return_code,
         )
 
-    for file in host_response.get_files():
+    for file in host_response.get_object_files() + host_response.get_dwarf_files():
         logger.debug("Writing file %s", file.file_name)
         Path(file.file_name).write_bytes(file.get_data())
 
