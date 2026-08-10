@@ -135,7 +135,7 @@ class TestPreprocessingCache:
         source = tmp_path / "main.cpp"
         shared = tmp_path / "shared.h"
         source.write_text('#include "shared.h"\n#ifdef OPTIONAL\n#include "shared.h"\n#endif\n', encoding="utf-8")
-        shared.write_text('#include "missing.h"\n', encoding="utf-8")
+        shared.write_text('#include "project/missing.h"\n', encoding="utf-8")
         arguments = Arguments.from_vargs("g++", str(source))
 
         with PreprocessingCache(tmp_path / "cache.sqlite3") as cache:
@@ -144,21 +144,103 @@ class TestPreprocessingCache:
 
     def test_missing_unconditional_quoted_include_requires_compiler_fallback(self, tmp_path: Path):
         source = tmp_path / "main.cpp"
-        source.write_text('#include "missing.h"\n', encoding="utf-8")
+        source.write_text('#include "project/missing.h"\n', encoding="utf-8")
         arguments = Arguments.from_vargs("g++", str(source))
 
         with PreprocessingCache(tmp_path / "cache.sqlite3") as cache:
             with pytest.raises(UnsupportedIncludeSyntax):
                 IncludeAnalyzer(cache).analyze(arguments, cwd=tmp_path)
+
+    def test_ignores_unresolved_quoted_system_header_basenames(self, tmp_path: Path):
+        source = tmp_path / "main.cpp"
+        source.write_text('#include "malloc.h"\n#include "typeinfo"\n', encoding="utf-8")
+        arguments = Arguments.from_vargs("g++", str(source))
+
+        with PreprocessingCache(tmp_path / "cache.sqlite3") as cache:
+            dependencies = IncludeAnalyzer(cache).analyze(arguments, cwd=tmp_path)
+
+        assert set(dependencies) == {str(source)}
+
+    def test_comment_markers_in_line_comments_do_not_hide_conditionals(self, tmp_path: Path):
+        source = tmp_path / "main.cpp"
+        source.write_text(
+            """
+// Match paths such as "*/foo/bar/*=2".
+#if INNER
+#define VALUE 1 /* close a real block comment */
+#else
+#define VALUE 2
+#endif
+""",
+            encoding="utf-8",
+        )
+        arguments = Arguments.from_vargs("g++", str(source))
+
+        with PreprocessingCache(tmp_path / "cache.sqlite3") as cache:
+            dependencies = IncludeAnalyzer(cache).analyze(arguments, cwd=tmp_path)
+
+        assert set(dependencies) == {str(source)}
 
     def test_computed_include_requires_compiler_fallback(self, tmp_path: Path):
         source = tmp_path / "main.cpp"
-        source.write_text("#ifdef USE_HEADER\n#define HEADER <vector>\n#include HEADER\n#endif\n", encoding="utf-8")
+        source.write_text("#include UNKNOWN_HEADER\n", encoding="utf-8")
         arguments = Arguments.from_vargs("g++", str(source))
 
         with PreprocessingCache(tmp_path / "cache.sqlite3") as cache:
             with pytest.raises(UnsupportedIncludeSyntax):
                 IncludeAnalyzer(cache).analyze(arguments, cwd=tmp_path)
+
+    def test_resolves_boost_header_alias_macros(self, tmp_path: Path):
+        include_dir = tmp_path / "include"
+        iterate = include_dir / "boost/preprocessor/iterate.hpp"
+        user_config = include_dir / "boost/config/user.hpp"
+        iterate.parent.mkdir(parents=True)
+        user_config.parent.mkdir(parents=True)
+        iterate.write_text("#pragma once\n", encoding="utf-8")
+        user_config.write_text("#pragma once\n", encoding="utf-8")
+        source = tmp_path / "main.cpp"
+        source.write_text(
+            """
+#if defined(BOOST_TT_PREPROCESSING_MODE)
+#define PP1 <boost/preprocessor/iterate.hpp>
+#include PP1
+#endif
+#if !defined(BOOST_USER_CONFIG) && !defined(BOOST_NO_USER_CONFIG)
+#define BOOST_USER_CONFIG <boost/config/user.hpp>
+#endif
+#if defined(BOOST_USER_CONFIG)
+#include BOOST_USER_CONFIG
+#endif
+""",
+            encoding="utf-8",
+        )
+        arguments = Arguments.from_vargs("g++", f"-I{include_dir}", str(source))
+
+        with PreprocessingCache(tmp_path / "cache.sqlite3") as cache:
+            dependencies = IncludeAnalyzer(cache).analyze(arguments, cwd=tmp_path)
+
+        assert set(dependencies) == {str(source), str(iterate), str(user_config)}
+
+    def test_defers_unknown_computed_include_in_conditional_branch(self, tmp_path: Path):
+        source = tmp_path / "main.cpp"
+        preprocessed = tmp_path / "preprocessed.hpp"
+        preprocessed.write_text("#pragma once\n", encoding="utf-8")
+        source.write_text(
+            """
+#if !defined(BOOST_NUMERIC_CONVERSION_DONT_USE_PREPROCESSED_FILES)
+#include "preprocessed.hpp"
+#else
+#include BOOST_PP_ITERATE()
+#endif
+""",
+            encoding="utf-8",
+        )
+        arguments = Arguments.from_vargs("g++", str(source))
+
+        with PreprocessingCache(tmp_path / "cache.sqlite3") as cache:
+            dependencies = IncludeAnalyzer(cache).analyze(arguments, cwd=tmp_path)
+
+        assert set(dependencies) == {str(source), str(preprocessed)}
 
     @pytest.mark.parametrize(
         "source_text",
@@ -208,7 +290,7 @@ class TestPreprocessingCache:
             ).fetchone()
         finally:
             connection.close()
-        assert json.loads(encoded)["version"] == 1
+        assert json.loads(encoded)["version"] == 3
         assert cached_sha1 == original_sha1
         assert migrated[str(source)] == original_sha1
 

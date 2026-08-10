@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_PREPROCESSING_CACHE_SIZE_BYTES = 100 * 1024 * 1024
 PREPROCESSING_CACHE_FILENAME = "preprocessing-cache.sqlite3"
-DIRECTIVES_FORMAT_VERSION = 1
+DIRECTIVES_FORMAT_VERSION = 3
 LEASE_SECONDS = 5.0
 LEASE_POLL_SECONDS = 0.01
 STAT_NAMES = (
@@ -352,14 +352,76 @@ class PreprocessingCache:
         return self._get_or_create(path, "sha1", calculate)
 
 
+def _parse_header_literal(operand: str) -> Optional[Tuple[str, bool]]:
+    literal = re.fullmatch(r'"([^"\n]+)"', operand)
+    if literal is not None:
+        return literal.group(1), True
+    literal = re.fullmatch(r"<([^>\n]+)>", operand)
+    if literal is not None:
+        return literal.group(1), False
+    return None
+
+
+def _strip_comments(source: str) -> str:
+    """Remove C/C++ comments without treating comment markers in strings or other comments as syntax."""
+    result: List[str] = []
+    index = 0
+    state = "code"
+    quote = ""
+    while index < len(source):
+        current = source[index]
+        following = source[index + 1] if index + 1 < len(source) else ""
+        if state == "line_comment":
+            if current == "\n":
+                result.append(current)
+                state = "code"
+            index += 1
+            continue
+        if state == "block_comment":
+            if current == "*" and following == "/":
+                state = "code"
+                index += 2
+                continue
+            if current == "\n":
+                result.append(current)
+            index += 1
+            continue
+        if state == "string":
+            result.append(current)
+            if current == "\\" and following:
+                result.append(following)
+                index += 2
+                continue
+            if current == quote:
+                state = "code"
+            index += 1
+            continue
+        if current == "/" and following == "/":
+            result.append(" ")
+            state = "line_comment"
+            index += 2
+            continue
+        if current == "/" and following == "*":
+            result.append(" ")
+            state = "block_comment"
+            index += 2
+            continue
+        if current in ('"', "'"):
+            quote = current
+            state = "string"
+        result.append(current)
+        index += 1
+    return "".join(result)
+
+
 def _parse_directives(path: Path) -> List[Tuple[str, str, bool, bool]]:
     """Parse include-like directives and record conditional nesting."""
     source = path.read_text(encoding=ENCODING, errors="replace")
     source = re.sub(r"\\\r?\n", "", source)
-    source = re.sub(r"/\*.*?\*/", " ", source, flags=re.DOTALL)
-    source = re.sub(r"//[^\n]*", "", source)
+    source = _strip_comments(source)
     directives: List[Tuple[str, str, bool, bool]] = []
     conditional_stack: List[bool] = []
+    header_aliases: Dict[str, Tuple[str, bool, bool]] = {}
     directive_re = re.compile(r"^\s*#\s*([A-Za-z_]\w*)\b(.*?)$", re.MULTILINE)
     for match in directive_re.finditer(source):
         kind, operand = match.groups()
@@ -378,17 +440,33 @@ def _parse_directives(path: Path) -> List[Tuple[str, str, bool, bool]]:
                 raise UnsupportedIncludeSyntax(f"Malformed #endif in {path}")
             conditional_stack.pop()
             continue
+        if kind == "define":
+            definition = re.fullmatch(r"([A-Za-z_]\w*)\s+(.+)", operand)
+            if definition is not None:
+                name, replacement = definition.groups()
+                literal = _parse_header_literal(replacement.strip())
+                if literal is None:
+                    header_aliases.pop(name, None)
+                else:
+                    header_aliases[name] = (*literal, bool(conditional_stack))
+            continue
+        if kind == "undef":
+            if re.fullmatch(r"[A-Za-z_]\w*", operand):
+                header_aliases.pop(operand, None)
+            continue
         if kind not in ("include_next", "include", "import"):
             continue
-        literal = re.fullmatch(r'"([^"\n]+)"', operand)
-        quoted = True
+        literal = _parse_header_literal(operand)
         if literal is None:
-            literal = re.fullmatch(r"<([^>\n]+)>", operand)
-            quoted = False
-        if literal is None:
-            directives.append(("computed", operand, False, bool(conditional_stack)))
+            alias = header_aliases.get(operand)
+            if alias is None:
+                directives.append(("computed", operand, False, bool(conditional_stack)))
+            else:
+                header, quoted, alias_is_conditional = alias
+                directives.append((kind, header, quoted, bool(conditional_stack) or alias_is_conditional))
         else:
-            directives.append((kind, literal.group(1), quoted, bool(conditional_stack)))
+            header, quoted = literal
+            directives.append((kind, header, quoted, bool(conditional_stack)))
     if conditional_stack:
         raise UnsupportedIncludeSyntax(f"Unclosed conditional directive in {path}")
     return directives
@@ -487,8 +565,9 @@ class IncludeAnalyzer:
             if candidate.is_file():
                 return candidate.absolute()
 
-        # An unresolved angle include is assumed to be provided by the server's compatible system toolchain.
-        if not directive.quoted:
+        # An unresolved angle include or quoted basename is assumed to be provided by the server's compatible
+        # system toolchain. Some projects spell standard headers as quoted includes, for example "malloc.h".
+        if not directive.quoted or ("/" not in directive.operand and "\\" not in directive.operand):
             return None
         if defer_missing_quoted:
             return None
@@ -528,9 +607,11 @@ class IncludeAnalyzer:
             else:
                 unconditionally_analyzed.add(path)
             for directive in self.cache.directives(path):
-                if directive.kind == "computed":
-                    raise UnsupportedIncludeSyntax(f"Computed include in {path}: {directive.operand}")
                 child_is_conditional = conditional_context or directive.conditional
+                if directive.kind == "computed":
+                    if child_is_conditional:
+                        continue
+                    raise UnsupportedIncludeSyntax(f"Computed include in {path}: {directive.operand}")
                 resolved = self._resolve(
                     directive,
                     path,
