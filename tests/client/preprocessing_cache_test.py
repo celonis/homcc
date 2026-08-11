@@ -131,6 +131,26 @@ class TestPreprocessingCache:
 
         assert set(dependencies) == {str(source), str(optional)}
 
+    def test_normalizes_parent_components_in_relative_includes(self, tmp_path: Path):
+        include_dir = tmp_path / "include"
+        base = include_dir / "base/config.h"
+        variant = include_dir / "types/variant.h"
+        internal_variant = include_dir / "types/internal/variant.h"
+        source = tmp_path / "main.cpp"
+        base.parent.mkdir(parents=True)
+        internal_variant.parent.mkdir(parents=True)
+        base.write_text("#pragma once\n", encoding="utf-8")
+        internal_variant.write_text('#include "../../base/config.h"\n', encoding="utf-8")
+        variant.write_text('#include "../base/config.h"\n#include "../types/internal/variant.h"\n', encoding="utf-8")
+        source.write_text('#include "types/variant.h"\n', encoding="utf-8")
+        arguments = Arguments.from_vargs("g++", f"-I{include_dir}", str(source))
+
+        with PreprocessingCache(tmp_path / "cache.sqlite3") as cache:
+            dependencies = IncludeAnalyzer(cache).analyze(arguments, cwd=tmp_path)
+
+        assert set(dependencies) == {str(source), str(base), str(variant), str(internal_variant)}
+        assert all(".." not in Path(dependency).parts for dependency in dependencies)
+
     def test_reanalyzes_conditionally_visited_header_when_reached_unconditionally(self, tmp_path: Path):
         source = tmp_path / "main.cpp"
         shared = tmp_path / "shared.h"

@@ -531,6 +531,11 @@ def _is_excluded(path: Path) -> bool:
     return str(path.resolve()).startswith(EXCLUDED_DEPENDENCY_PREFIXES)
 
 
+def _normalize_path(path: Path) -> Path:
+    """Return an absolute path without changing how symlinks are resolved by the compiler."""
+    return Path(os.path.normpath(str(path.absolute())))
+
+
 class IncludeAnalyzer:
     """Conservative literal-include dependency analyzer."""
 
@@ -561,9 +566,9 @@ class IncludeAnalyzer:
                 raise UnsupportedIncludeSyntax(f"Cannot resolve include_next context for {including_file}")
 
         for directory in search:
-            candidate = directory / directive.operand
+            candidate = _normalize_path(directory / directive.operand)
             if candidate.is_file():
-                return candidate.absolute()
+                return candidate
 
         # An unresolved angle include or quoted basename is assumed to be provided by the server's compatible
         # system toolchain. Some projects spell standard headers as quoted includes, for example "malloc.h".
@@ -574,11 +579,11 @@ class IncludeAnalyzer:
         raise UnsupportedIncludeSyntax(f"Cannot resolve quoted include {directive.operand} from {including_file}")
 
     def analyze(self, arguments: Arguments, cwd: Optional[Path] = None) -> Dict[str, str]:
-        cwd = (cwd or Path.cwd()).absolute()
+        cwd = _normalize_path(cwd or Path.cwd())
         paths = _extract_search_paths(arguments, cwd)
-        roots = [(cwd / source).absolute() for source in arguments.source_files]
+        roots = [_normalize_path(cwd / source) for source in arguments.source_files]
         for forced in paths.forced:
-            forced_path = (cwd / forced).absolute()
+            forced_path = _normalize_path(cwd / forced)
             if not forced_path.is_file():
                 synthetic = Directive("include", forced, True)
                 resolved = self._resolve(synthetic, cwd / "__homcc_forced__", paths)

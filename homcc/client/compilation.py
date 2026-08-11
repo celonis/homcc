@@ -72,6 +72,15 @@ class PreprocessingResult:
     analyzed: bool
 
 
+def _log_dependency_discrepancy(missing_dependencies: Set[str]) -> None:
+    """Log dependencies omitted by cached include analysis in deterministic order."""
+    logger.warning(
+        "Cached include analysis missed #%i dependencies; retrying once with compiler results:\n%s",
+        len(missing_dependencies),
+        "\n".join(f"  {dependency}" for dependency in sorted(missing_dependencies)),
+    )
+
+
 def _compiler_is_homcc(compiler: Compiler) -> bool:
     """Return whether the selected compiler resolves to this homcc client executable."""
     compiler_path = shutil.which(str(compiler))
@@ -137,10 +146,7 @@ async def compile_remotely(arguments: Arguments, hosts: List[Host], localhost: H
                     if not missing_dependencies:
                         raise
 
-                    logger.warning(
-                        "Cached include analysis missed #%i dependencies; retrying once with compiler results.",
-                        len(missing_dependencies),
-                    )
+                    _log_dependency_discrepancy(missing_dependencies)
                     record_cache_stat("discrepancy_retries", config.max_preprocessing_cache_size_bytes)
                     return await asyncio.wait_for(
                         compile_remotely_at(

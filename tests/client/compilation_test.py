@@ -3,6 +3,7 @@
 #   https://github.com/celonis/homcc/blob/main/LICENSE
 
 """Tests for client/compilation.py"""
+import logging
 import os
 import subprocess
 from pathlib import Path
@@ -12,6 +13,7 @@ import pytest
 
 from homcc.client.compilation import (
     _compiler_is_homcc,
+    _log_dependency_discrepancy,
     compile_locally,
     find_dependencies,
     scan_includes,
@@ -39,6 +41,16 @@ class TestCompilation:
         compiler.symlink_to(Path("homcc/client/main.py").absolute())
 
         assert _compiler_is_homcc(Arguments.from_vargs(str(compiler), "main.cpp").compiler)
+
+    def test_logs_missing_dependencies_in_sorted_order(self, caplog: pytest.LogCaptureFixture):
+        with caplog.at_level(logging.WARNING):
+            _log_dependency_discrepancy({"/project/z.h", "/project/a.h"})
+
+        assert caplog.messages == [
+            "Cached include analysis missed #2 dependencies; retrying once with compiler results:\n"
+            "  /project/a.h\n"
+            "  /project/z.h"
+        ]
 
     @staticmethod
     def find_dependencies(compiler: str):
