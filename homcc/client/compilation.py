@@ -17,7 +17,6 @@ from typing import Dict, List, Optional, Set
 
 from homcc.client.client import (
     LocalHostCompilationSemaphore,
-    LocalHostPreprocessingSemaphore,
     RemoteCompilationClient,
     RemoteHostSelector,
     RemoteHostSemaphore,
@@ -104,7 +103,7 @@ def _compiler_is_homcc(compiler: Compiler) -> bool:
 
 
 def _preprocess(arguments: Arguments, localhost: Host, config: ClientConfig) -> PreprocessingResult:
-    with LocalHostPreprocessingSemaphore(localhost), StateFile(arguments, localhost) as state:
+    with StateFile(arguments, localhost) as state:
         state.set_preprocessing()
         if (
             config.preprocessing_cache_enabled
