@@ -238,7 +238,12 @@ Additionally, `HOMCC` provides sandboxed compiler execution for remote compilati
 The preprocessing cache is enabled by default and stored in
 `$HOMCC_DIR/preprocessing-cache.sqlite3` or `~/.homcc/preprocessing-cache.sqlite3`. Use
 `--show-preprocessing-cache-stats`, `--clear-preprocessing-cache`, or `--no-preprocessing-cache` to inspect, reset, or
-temporarily bypass it. The cache validates files by path, size, and nanosecond modification time.
+temporarily bypass it. The cache validates files by path, size, and nanosecond modification time. If lightweight include
+analysis misses computed includes, a successful compiler-authored retry teaches a shared preprocessing profile those
+supplemental dependencies. Later translation units with the same compiler, flags, language, working directory, and include
+environment reuse the learned union. Each profile is limited to 2048 supplemental paths.
+The statistics also report `sqlite_write_lock_wait_avg_us` and `sqlite_write_lock_acquisitions`, measuring the average
+time spent acquiring SQLite write transactions and the number of successful acquisitions included in that average.
 
 ## Deployment hints
 Things to keep in mind when deploying `homccd`:

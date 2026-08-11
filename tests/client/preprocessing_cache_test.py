@@ -12,15 +12,38 @@ from pathlib import Path
 import pytest
 
 from homcc.client.preprocessing_cache import (
+    MAX_SUPPLEMENTAL_DEPENDENCIES_PER_PROFILE,
+    SQLITE_WRITE_LOCK_ACQUISITIONS_STAT,
+    SQLITE_WRITE_LOCK_WAIT_AVG_US_STAT,
     IncludeAnalyzer,
     PreprocessingCache,
     UnsupportedIncludeSyntax,
+    analyze_dependencies,
+    learn_supplemental_dependencies,
 )
 from homcc.common.arguments import Arguments
 
 
 class TestPreprocessingCache:
     """Tests for persistent include analysis and hashing."""
+
+    def test_reports_average_sqlite_write_lock_wait(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        cache_path = tmp_path / "cache.sqlite3"
+        cache = PreprocessingCache(cache_path)
+        ticks = iter((1_000_000, 1_006_000))
+        monkeypatch.setattr("homcc.client.preprocessing_cache.time.monotonic_ns", lambda: next(ticks))
+
+        cache._begin_immediate()  # pylint: disable=protected-access
+        cache.connection.execute("COMMIT")
+        assert cache.pending_stats[SQLITE_WRITE_LOCK_ACQUISITIONS_STAT] == 1
+        assert cache.pending_stats["sqlite_write_lock_wait_ns"] == 6_000
+
+        # Restore the real clock before close() records its own acquisition.
+        monkeypatch.undo()
+        cache.close()
+        stats = PreprocessingCache.stats(cache_path)
+        assert stats[SQLITE_WRITE_LOCK_ACQUISITIONS_STAT] == 2
+        assert stats[SQLITE_WRITE_LOCK_WAIT_AVG_US_STAT] >= 3
 
     def test_analyzes_and_reuses_literal_include_graph(self, tmp_path: Path):
         include_dir = tmp_path / "include"
@@ -83,6 +106,117 @@ class TestPreprocessingCache:
         assert stats["sha1_misses"] == 2
         assert stats["directives_hits"] == 2
         assert stats["sha1_hits"] == 2
+
+    def test_learns_supplemental_dependencies_across_translation_units(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ):
+        cache_dir = tmp_path / "cache"
+        include_dir = tmp_path / "include"
+        include_dir.mkdir()
+        supplemental = include_dir / "generated.hpp"
+        supplemental.write_text("#pragma once\n", encoding="utf-8")
+        first_source = tmp_path / "first.cpp"
+        second_source = tmp_path / "second.cpp"
+        computed_include = "#if ENABLE_GENERATED\n#include BOOST_PP_ITERATE()\n#endif\n"
+        first_source.write_text(computed_include, encoding="utf-8")
+        second_source.write_text(computed_include, encoding="utf-8")
+        monkeypatch.chdir(tmp_path)
+        monkeypatch.setenv("HOMCC_DIR", str(cache_dir))
+
+        first_arguments = Arguments.from_vargs(
+            "g++",
+            "-DENABLE_GENERATED=1",
+            f"-I{include_dir}",
+            "-MD",
+            "-MF",
+            "first.d",
+            "-o",
+            "first.o",
+            str(first_source),
+        )
+        first = analyze_dependencies(first_arguments)
+        assert first is not None
+        exact_dependencies = first.base_dependencies.copy()
+        exact_dependencies[str(supplemental)] = "compiler-authored-hash"
+        learn_supplemental_dependencies(first, exact_dependencies)
+
+        second_arguments = Arguments.from_vargs(
+            "g++",
+            "-DENABLE_GENERATED=1",
+            f"-I{include_dir}",
+            "-MD",
+            "-MF",
+            "second.d",
+            "-o",
+            "second.o",
+            str(second_source),
+        )
+        second = analyze_dependencies(second_arguments)
+
+        assert second is not None
+        assert second.profile == first.profile
+        assert str(supplemental) not in second.base_dependencies
+        assert str(supplemental) in second.dependencies
+        different_flags = analyze_dependencies(
+            Arguments.from_vargs("g++", "-DOTHER=1", f"-I{include_dir}", str(second_source))
+        )
+        assert different_flags is not None
+        assert different_flags.profile != first.profile
+        assert str(supplemental) not in different_flags.dependencies
+
+        stats = PreprocessingCache.stats(cache_dir / "preprocessing-cache.sqlite3")
+        assert stats["supplemental_profiles"] == 1
+        assert stats["supplemental_dependencies"] == 1
+        assert stats["supplemental_learns"] == 1
+        assert stats["supplemental_learned_paths"] == 1
+        assert stats["supplemental_hits"] == 1
+        assert stats["supplemental_misses"] == 2
+
+    def test_prunes_missing_supplemental_dependency(self, tmp_path: Path):
+        cache_path = tmp_path / "cache.sqlite3"
+        supplemental = tmp_path / "generated.hpp"
+        supplemental.write_text("#pragma once\n", encoding="utf-8")
+        with PreprocessingCache(cache_path) as cache:
+            assert cache.learn_supplemental_dependencies("profile", {str(supplemental)}) == 1
+        supplemental.unlink()
+
+        with PreprocessingCache(cache_path) as cache:
+            assert cache.supplemental_dependencies("profile") == set()
+
+        stats = PreprocessingCache.stats(cache_path)
+        assert stats["supplemental_pruned_paths"] == 1
+        assert stats["supplemental_profiles"] == 0
+
+    def test_rejects_complete_supplemental_set_over_profile_limit(self, tmp_path: Path):
+        cache_path = tmp_path / "cache.sqlite3"
+        dependencies = {
+            str(tmp_path / f"generated-{index}.hpp") for index in range(MAX_SUPPLEMENTAL_DEPENDENCIES_PER_PROFILE + 1)
+        }
+
+        with PreprocessingCache(cache_path) as cache:
+            assert cache.learn_supplemental_dependencies("profile", dependencies) == 0
+
+        stats = PreprocessingCache.stats(cache_path)
+        assert stats["supplemental_overflows"] == 1
+        assert stats["supplemental_profiles"] == 0
+
+    def test_parallel_supplemental_learners_preserve_union(self, tmp_path: Path):
+        cache_path = tmp_path / "cache.sqlite3"
+        dependencies = [tmp_path / "first.hpp", tmp_path / "second.hpp"]
+        for dependency in dependencies:
+            dependency.write_text("#pragma once\n", encoding="utf-8")
+
+        def learn(dependency: Path):
+            with PreprocessingCache(cache_path) as cache:
+                cache.learn_supplemental_dependencies("profile", {str(dependency)})
+
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            futures = [executor.submit(learn, dependency) for dependency in dependencies]
+            for future in futures:
+                future.result()
+
+        with PreprocessingCache(cache_path) as cache:
+            assert cache.supplemental_dependencies("profile") == set(dependencies)
 
     def test_defers_missing_quoted_includes_in_conditional_branches(self, tmp_path: Path):
         source = tmp_path / "main.cpp"
@@ -320,10 +454,14 @@ class TestPreprocessingCache:
         cache_path = tmp_path / "cache.sqlite3"
         with PreprocessingCache(cache_path) as cache:
             IncludeAnalyzer(cache).analyze(Arguments.from_vargs("gcc", str(source)), cwd=tmp_path)
+            cache.learn_supplemental_dependencies("profile", {str(source)})
 
         PreprocessingCache.clear(cache_path)
 
-        assert PreprocessingCache.stats(cache_path)["entries"] == 0
+        stats = PreprocessingCache.stats(cache_path)
+        assert stats["entries"] == 0
+        assert stats["supplemental_profiles"] == 0
+        assert stats["supplemental_dependencies"] == 0
 
     def test_evicts_old_entries_over_size_limit(self, tmp_path: Path):
         source = tmp_path / "main.c"
@@ -335,4 +473,16 @@ class TestPreprocessingCache:
 
         stats = PreprocessingCache.stats(cache_path)
         assert stats["entries"] == 0
+        assert stats["evictions"] == 1
+
+    def test_evicts_supplemental_profiles_over_size_limit(self, tmp_path: Path):
+        dependency = tmp_path / "generated.hpp"
+        dependency.write_text("#pragma once\n", encoding="utf-8")
+        cache_path = tmp_path / "cache.sqlite3"
+
+        with PreprocessingCache(cache_path, max_size_bytes=1) as cache:
+            cache.learn_supplemental_dependencies("profile", {str(dependency)})
+
+        stats = PreprocessingCache.stats(cache_path)
+        assert stats["supplemental_profiles"] == 0
         assert stats["evictions"] == 1

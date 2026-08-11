@@ -11,6 +11,7 @@ import json
 import logging
 import os
 import re
+import shutil
 import sqlite3
 import time
 import uuid
@@ -27,8 +28,12 @@ logger = logging.getLogger(__name__)
 DEFAULT_PREPROCESSING_CACHE_SIZE_BYTES = 100 * 1024 * 1024
 PREPROCESSING_CACHE_FILENAME = "preprocessing-cache.sqlite3"
 DIRECTIVES_FORMAT_VERSION = 3
+MAX_SUPPLEMENTAL_DEPENDENCIES_PER_PROFILE = 2048
 LEASE_SECONDS = 5.0
 LEASE_POLL_SECONDS = 0.01
+SQLITE_WRITE_LOCK_ACQUISITIONS_STAT = "sqlite_write_lock_acquisitions"
+SQLITE_WRITE_LOCK_WAIT_NS_STAT = "sqlite_write_lock_wait_ns"
+SQLITE_WRITE_LOCK_WAIT_AVG_US_STAT = "sqlite_write_lock_wait_avg_us"
 STAT_NAMES = (
     "analyzed_commands",
     "compiler_fallbacks",
@@ -39,6 +44,13 @@ STAT_NAMES = (
     "discrepancy_retries",
     "hash_mismatches",
     "legacy_server_fallbacks",
+    "supplemental_hits",
+    "supplemental_misses",
+    "supplemental_learns",
+    "supplemental_learned_paths",
+    "supplemental_pruned_paths",
+    "supplemental_overflows",
+    SQLITE_WRITE_LOCK_ACQUISITIONS_STAT,
     "evictions",
 )
 
@@ -72,6 +84,15 @@ class FileStamp:
         return cls(stat.st_size, stat.st_mtime_ns, link_stat.st_mtime_ns)
 
 
+@dataclass(frozen=True)
+class DependencyAnalysis:
+    """Lightweight dependencies plus the profile used for supplemental learning."""
+
+    dependencies: Dict[str, str]
+    base_dependencies: Dict[str, str]
+    profile: str
+
+
 def preprocessing_cache_path() -> Path:
     """Return the per-user preprocessing cache database path."""
     configured_dir = os.getenv(HOMCC_DIR_ENV_VAR)
@@ -97,6 +118,7 @@ class PreprocessingCache:
         self.owner = f"{os.getpid()}-{uuid.uuid4()}"
         self.pending_stats: Dict[str, int] = {}
         self.touched_paths: Set[str] = set()
+        self.touched_profiles: Set[str] = set()
         path.parent.mkdir(parents=True, exist_ok=True)
         self.connection = sqlite3.connect(str(path), timeout=1.0, isolation_level=None)
         self.connection.execute("PRAGMA busy_timeout=5000")
@@ -127,6 +149,11 @@ class PreprocessingCache:
                 name TEXT PRIMARY KEY,
                 value INTEGER NOT NULL
             );
+            CREATE TABLE IF NOT EXISTS supplemental_profiles (
+                profile TEXT PRIMARY KEY,
+                dependencies TEXT NOT NULL,
+                last_access_ns INTEGER NOT NULL
+            );
             """
                 )
                 break
@@ -144,14 +171,25 @@ class PreprocessingCache:
     def _stat(self, name: str, amount: int = 1):
         self.pending_stats[name] = self.pending_stats.get(name, 0) + amount
 
+    def _begin_immediate(self):
+        """Begin a write transaction and record time spent acquiring SQLite's write lock."""
+        started_ns = time.monotonic_ns()
+        self.connection.execute("BEGIN IMMEDIATE")
+        self._stat(SQLITE_WRITE_LOCK_ACQUISITIONS_STAT)
+        self._stat(SQLITE_WRITE_LOCK_WAIT_NS_STAT, time.monotonic_ns() - started_ns)
+
     def close(self):
         if not hasattr(self, "connection"):
             return
         try:
-            self.connection.execute("BEGIN IMMEDIATE")
+            self._begin_immediate()
             self.connection.executemany(
                 "UPDATE files SET last_access_ns = ? WHERE path = ?",
                 ((time.time_ns(), path) for path in self.touched_paths),
+            )
+            self.connection.executemany(
+                "UPDATE supplemental_profiles SET last_access_ns = ? WHERE profile = ?",
+                ((time.time_ns(), profile) for profile in self.touched_profiles),
             )
             for name, value in self.pending_stats.items():
                 self.connection.execute(
@@ -178,10 +216,15 @@ class PreprocessingCache:
             return
         connection = sqlite3.connect(str(path), timeout=5.0, isolation_level=None)
         try:
+            connection.execute(
+                "CREATE TABLE IF NOT EXISTS supplemental_profiles "
+                "(profile TEXT PRIMARY KEY, dependencies TEXT NOT NULL, last_access_ns INTEGER NOT NULL)"
+            )
             connection.execute("BEGIN EXCLUSIVE")
             connection.execute("DELETE FROM files")
             connection.execute("DELETE FROM claims")
             connection.execute("DELETE FROM stats")
+            connection.execute("DELETE FROM supplemental_profiles")
             connection.execute("COMMIT")
             connection.execute("VACUUM")
         finally:
@@ -191,13 +234,32 @@ class PreprocessingCache:
     def stats(path: Path) -> Dict[str, int]:
         """Read persistent counters and current cache dimensions."""
         if not path.exists():
-            return {**dict.fromkeys(STAT_NAMES, 0), "entries": 0, "size_bytes": 0}
+            return {
+                **dict.fromkeys(STAT_NAMES, 0),
+                SQLITE_WRITE_LOCK_WAIT_AVG_US_STAT: 0,
+                "entries": 0,
+                "supplemental_profiles": 0,
+                "supplemental_dependencies": 0,
+                "size_bytes": 0,
+            }
         connection = sqlite3.connect(str(path), timeout=1.0)
         try:
             result = dict(connection.execute("SELECT name, value FROM stats"))
             for name in STAT_NAMES:
                 result.setdefault(name, 0)
+            wait_ns = result.pop(SQLITE_WRITE_LOCK_WAIT_NS_STAT, 0)
+            wait_count = result[SQLITE_WRITE_LOCK_ACQUISITIONS_STAT]
+            result[SQLITE_WRITE_LOCK_WAIT_AVG_US_STAT] = wait_ns // (wait_count * 1000) if wait_count else 0
             result["entries"] = connection.execute("SELECT COUNT(*) FROM files").fetchone()[0]
+            try:
+                supplemental_rows = connection.execute("SELECT dependencies FROM supplemental_profiles").fetchall()
+            except sqlite3.OperationalError:
+                supplemental_rows = []
+            result["supplemental_profiles"] = len(supplemental_rows)
+            decoded_rows = [PreprocessingCache._decode_supplemental_dependencies(row[0]) for row in supplemental_rows]
+            result["supplemental_dependencies"] = sum(
+                len(dependencies) for dependencies in decoded_rows if dependencies is not None
+            )
             result["size_bytes"] = PreprocessingCache._database_size(path)
             return result
         finally:
@@ -214,14 +276,27 @@ class PreprocessingCache:
         target_size = int(self.max_size_bytes * 0.9)
         evictions = 0
         while self.path.exists() and self._database_size(self.path) > target_size:
-            count = self.connection.execute("SELECT COUNT(*) FROM files").fetchone()[0]
+            count = self.connection.execute(
+                "SELECT (SELECT COUNT(*) FROM files) + (SELECT COUNT(*) FROM supplemental_profiles)"
+            ).fetchone()[0]
             amount = max(1, count // 10)
             rows = self.connection.execute(
-                "SELECT path FROM files ORDER BY last_access_ns ASC LIMIT ?", (amount,)
+                "SELECT kind, cache_key FROM ("
+                "SELECT 'file' AS kind, path AS cache_key, last_access_ns FROM files "
+                "UNION ALL "
+                "SELECT 'supplemental' AS kind, profile AS cache_key, last_access_ns FROM supplemental_profiles"
+                ") ORDER BY last_access_ns ASC LIMIT ?",
+                (amount,),
             ).fetchall()
             if not rows:
                 break
-            self.connection.executemany("DELETE FROM files WHERE path = ?", rows)
+            self.connection.executemany(
+                "DELETE FROM files WHERE path = ?", ((key,) for kind, key in rows if kind == "file")
+            )
+            self.connection.executemany(
+                "DELETE FROM supplemental_profiles WHERE profile = ?",
+                ((key,) for kind, key in rows if kind == "supplemental"),
+            )
             evictions += len(rows)
             self.connection.execute("PRAGMA wal_checkpoint(TRUNCATE)")
             self.connection.execute("VACUUM")
@@ -247,7 +322,7 @@ class PreprocessingCache:
     def _claim(self, path: Path, kind: str) -> bool:
         now = time.monotonic()
         try:
-            self.connection.execute("BEGIN IMMEDIATE")
+            self._begin_immediate()
             self.connection.execute("DELETE FROM claims WHERE expires < ?", (now,))
             cursor = self.connection.execute(
                 "INSERT OR IGNORE INTO claims(path, kind, owner, expires) VALUES (?, ?, ?, ?)",
@@ -350,6 +425,118 @@ class PreprocessingCache:
             return hashlib.sha1(file_path.read_bytes()).hexdigest()
 
         return self._get_or_create(path, "sha1", calculate)
+
+    @staticmethod
+    def _decode_supplemental_dependencies(encoded: str) -> Optional[Set[str]]:
+        try:
+            dependencies = json.loads(encoded)
+        except (TypeError, json.JSONDecodeError):
+            return None
+        if not isinstance(dependencies, list) or not all(isinstance(path, str) for path in dependencies):
+            return None
+        return set(dependencies)
+
+    def supplemental_dependencies(self, profile: str) -> Set[Path]:
+        """Return existing supplemental dependencies and prune invalid entries."""
+        row = self.connection.execute(
+            "SELECT dependencies FROM supplemental_profiles WHERE profile = ?", (profile,)
+        ).fetchone()
+        if row is None:
+            self._stat("supplemental_misses")
+            return set()
+
+        decoded = self._decode_supplemental_dependencies(row[0])
+        if decoded is None:
+            self.connection.execute("DELETE FROM supplemental_profiles WHERE profile = ?", (profile,))
+            self._stat("supplemental_misses")
+            return set()
+
+        dependencies = {_normalize_path(Path(path)) for path in decoded}
+        existing = {path for path in dependencies if path.is_file() and not _is_excluded(path)}
+        missing = {str(path) for path in dependencies - existing}
+        if missing:
+            self.prune_supplemental_dependencies(profile, missing)
+
+        if not existing:
+            self._stat("supplemental_misses")
+            return set()
+
+        self.touched_profiles.add(profile)
+        self._stat("supplemental_hits")
+        return existing
+
+    def prune_supplemental_dependencies(self, profile: str, dependencies: Set[str]):
+        """Atomically remove supplemental paths from a shared profile."""
+        normalized = {str(_normalize_path(Path(path))) for path in dependencies}
+        try:
+            self._begin_immediate()
+            row = self.connection.execute(
+                "SELECT dependencies FROM supplemental_profiles WHERE profile = ?", (profile,)
+            ).fetchone()
+            existing = self._decode_supplemental_dependencies(row[0]) if row is not None else set()
+            if existing is None:
+                existing = set()
+            existing = {str(_normalize_path(Path(path))) for path in existing}
+            pruned = existing & normalized
+            remaining = existing - normalized
+            if remaining:
+                self.connection.execute(
+                    "UPDATE supplemental_profiles SET dependencies = ?, last_access_ns = ? WHERE profile = ?",
+                    (json.dumps(sorted(remaining)), time.time_ns(), profile),
+                )
+            else:
+                self.connection.execute("DELETE FROM supplemental_profiles WHERE profile = ?", (profile,))
+            self.connection.execute("COMMIT")
+        except sqlite3.Error:
+            try:
+                self.connection.execute("ROLLBACK")
+            except sqlite3.Error:
+                pass
+            raise
+        if pruned:
+            self._stat("supplemental_pruned_paths", len(pruned))
+
+    def learn_supplemental_dependencies(self, profile: str, dependencies: Set[str]) -> int:
+        """Atomically add a complete supplemental dependency set to a shared profile."""
+        normalized = {str(_normalize_path(Path(path))) for path in dependencies}
+        if not normalized:
+            return 0
+
+        try:
+            self._begin_immediate()
+            row = self.connection.execute(
+                "SELECT dependencies FROM supplemental_profiles WHERE profile = ?", (profile,)
+            ).fetchone()
+            existing = self._decode_supplemental_dependencies(row[0]) if row is not None else set()
+            if existing is None:
+                existing = set()
+            existing = {str(_normalize_path(Path(path))) for path in existing}
+            new_dependencies = normalized - existing
+            combined = existing | normalized
+            if len(combined) > MAX_SUPPLEMENTAL_DEPENDENCIES_PER_PROFILE:
+                self.connection.execute("COMMIT")
+                self._stat("supplemental_overflows")
+                return 0
+
+            self.connection.execute(
+                "INSERT INTO supplemental_profiles(profile, dependencies, last_access_ns) VALUES (?, ?, ?) "
+                "ON CONFLICT(profile) DO UPDATE SET dependencies = excluded.dependencies, "
+                "last_access_ns = excluded.last_access_ns",
+                (profile, json.dumps(sorted(combined)), time.time_ns()),
+            )
+            self.connection.execute("COMMIT")
+        except sqlite3.Error:
+            try:
+                self.connection.execute("ROLLBACK")
+            except sqlite3.Error:
+                pass
+            raise
+
+        self.touched_profiles.add(profile)
+        if new_dependencies:
+            self._stat("supplemental_learns")
+            self._stat("supplemental_learned_paths", len(new_dependencies))
+        return len(new_dependencies)
 
 
 def _parse_header_literal(operand: str) -> Optional[Tuple[str, bool]]:
@@ -536,6 +723,35 @@ def _normalize_path(path: Path) -> Path:
     return Path(os.path.normpath(str(path.absolute())))
 
 
+def _preprocessing_profile(arguments: Arguments, cwd: Path) -> str:
+    """Build a source-independent signature for inputs that can affect preprocessing."""
+    compiler_name = str(arguments.compiler)
+    compiler_path = shutil.which(compiler_name) or compiler_name
+    normalized_compiler = _normalize_path(Path(compiler_path))
+    try:
+        stamp = FileStamp.from_path(normalized_compiler)
+        compiler_stamp: Optional[Tuple[int, int, int]] = (stamp.size, stamp.mtime_ns, stamp.link_mtime_ns)
+    except OSError:
+        compiler_stamp = None
+
+    profile_arguments = arguments.copy().remove_local_args().remove_output_args().args
+    source_files = set(arguments.source_files)
+    profile_arguments = ["<SOURCE>" if argument in source_files else argument for argument in profile_arguments]
+    language = arguments.specified_language or ",".join(
+        sorted(Path(source).suffix.lower() for source in arguments.source_files)
+    )
+    payload = {
+        "version": 1,
+        "cwd": str(_normalize_path(cwd)),
+        "compiler": str(normalized_compiler),
+        "compiler_stamp": compiler_stamp,
+        "arguments": profile_arguments,
+        "language": language,
+        "environment": {name: os.getenv(name) for name in ("CPATH", "C_INCLUDE_PATH", "CPLUS_INCLUDE_PATH")},
+    }
+    return hashlib.sha256(json.dumps(payload, sort_keys=True, separators=(",", ":")).encode(ENCODING)).hexdigest()
+
+
 class IncludeAnalyzer:
     """Conservative literal-include dependency analyzer."""
 
@@ -631,14 +847,24 @@ class IncludeAnalyzer:
 
 def analyze_dependencies(
     arguments: Arguments, max_size_bytes: int = DEFAULT_PREPROCESSING_CACHE_SIZE_BYTES
-) -> Optional[Dict[str, str]]:
+) -> Optional[DependencyAnalysis]:
     """Return analyzed dependencies, or None when exact compiler scanning is required."""
     path = preprocessing_cache_path()
     try:
         with PreprocessingCache(path, max_size_bytes) as cache:
-            dependencies = IncludeAnalyzer(cache).analyze(arguments)
+            base_dependencies = IncludeAnalyzer(cache).analyze(arguments)
+            profile = _preprocessing_profile(arguments, Path.cwd())
+            dependencies = base_dependencies.copy()
+            for supplemental_path in cache.supplemental_dependencies(profile):
+                supplemental = str(supplemental_path)
+                if supplemental in dependencies:
+                    continue
+                try:
+                    dependencies[supplemental] = cache.sha1(supplemental_path)
+                except OSError:
+                    cache.prune_supplemental_dependencies(profile, {supplemental})
             cache._stat("analyzed_commands")  # pylint: disable=protected-access
-            return dependencies
+            return DependencyAnalysis(dependencies, base_dependencies, profile)
     except (OSError, ValueError, sqlite3.Error, UnsupportedIncludeSyntax) as error:
         logger.debug("Preprocessing cache fallback: %s", error)
         try:
@@ -647,6 +873,22 @@ def analyze_dependencies(
         except (OSError, sqlite3.Error):
             pass
         return None
+
+
+def learn_supplemental_dependencies(
+    analysis: DependencyAnalysis,
+    exact_dependencies: Dict[str, str],
+    max_size_bytes: int = DEFAULT_PREPROCESSING_CACHE_SIZE_BYTES,
+):
+    """Best-effort learning of compiler-authored dependencies missing from lightweight analysis."""
+    supplemental = set(exact_dependencies) - set(analysis.base_dependencies)
+    if not supplemental:
+        return
+    try:
+        with PreprocessingCache(preprocessing_cache_path(), max_size_bytes) as cache:
+            cache.learn_supplemental_dependencies(analysis.profile, supplemental)
+    except (OSError, ValueError, sqlite3.Error) as error:
+        logger.debug("Could not learn supplemental preprocessing dependencies: %s", error)
 
 
 def record_cache_stat(name: str, max_size_bytes: int = DEFAULT_PREPROCESSING_CACHE_SIZE_BYTES):

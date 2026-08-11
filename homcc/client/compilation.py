@@ -24,7 +24,12 @@ from homcc.client.client import (
     TCPClient,
 )
 from homcc.client.config import ClientConfig
-from homcc.client.preprocessing_cache import analyze_dependencies, record_cache_stat
+from homcc.client.preprocessing_cache import (
+    DependencyAnalysis,
+    analyze_dependencies,
+    learn_supplemental_dependencies,
+    record_cache_stat,
+)
 from homcc.client.ssh import SSHClient, SSHTunnel
 from homcc.common.arguments import Arguments, ArgumentsExecutionResult, Compiler
 from homcc.common.constants import ENCODING, EXCLUDED_DEPENDENCY_PREFIXES
@@ -69,7 +74,12 @@ class PreprocessingResult:
     """Dependencies and whether they came from lightweight cached analysis."""
 
     dependencies: Dict[str, str]
-    analyzed: bool
+    analysis: Optional[DependencyAnalysis] = None
+
+    @property
+    def analyzed(self) -> bool:
+        """Return whether dependencies came from lightweight cached analysis."""
+        return self.analysis is not None
 
 
 def _log_dependency_discrepancy(missing_dependencies: Set[str]) -> None:
@@ -101,11 +111,11 @@ def _preprocess(arguments: Arguments, localhost: Host, config: ClientConfig) -> 
             and "-MG" not in arguments.args
             and not _compiler_is_homcc(arguments.compiler)
         ):
-            dependencies = analyze_dependencies(arguments, config.max_preprocessing_cache_size_bytes)
-            if dependencies is not None:
-                logger.debug("Preprocessing cache analyzed #%i dependencies.", len(dependencies))
-                return PreprocessingResult(dependencies, analyzed=True)
-        return PreprocessingResult(calculate_dependency_dict(find_dependencies(arguments)), analyzed=False)
+            analysis = analyze_dependencies(arguments, config.max_preprocessing_cache_size_bytes)
+            if analysis is not None:
+                logger.debug("Preprocessing cache analyzed #%i dependencies.", len(analysis.dependencies))
+                return PreprocessingResult(analysis.dependencies, analysis)
+        return PreprocessingResult(calculate_dependency_dict(find_dependencies(arguments)))
 
 
 async def compile_remotely(arguments: Arguments, hosts: List[Host], localhost: Host, config: ClientConfig) -> int:
@@ -135,7 +145,7 @@ async def compile_remotely(arguments: Arguments, hosts: List[Host], localhost: H
                         timeout=config.compilation_request_timeout,
                     )
                 except RemoteCompilationError as remote_error:
-                    if not preprocessing_result.analyzed:
+                    if preprocessing_result.analysis is None:
                         raise
 
                     try:
@@ -148,7 +158,7 @@ async def compile_remotely(arguments: Arguments, hosts: List[Host], localhost: H
 
                     _log_dependency_discrepancy(missing_dependencies)
                     record_cache_stat("discrepancy_retries", config.max_preprocessing_cache_size_bytes)
-                    return await asyncio.wait_for(
+                    result = await asyncio.wait_for(
                         compile_remotely_at(
                             arguments=arguments,
                             dependency_dict=exact_dependencies,
@@ -158,6 +168,12 @@ async def compile_remotely(arguments: Arguments, hosts: List[Host], localhost: H
                         ),
                         timeout=config.compilation_request_timeout,
                     )
+                    learn_supplemental_dependencies(
+                        preprocessing_result.analysis,
+                        exact_dependencies,
+                        config.max_preprocessing_cache_size_bytes,
+                    )
+                    return result
                 except DependencyChangedError:
                     logger.warning("A dependency changed during preprocessing; retrying once with fresh hashes.")
                     record_cache_stat("hash_mismatches", config.max_preprocessing_cache_size_bytes)
@@ -285,12 +301,6 @@ async def compile_remotely_at(
         Path(dependency_file.file_name).parent.mkdir(parents=True, exist_ok=True)
         Path(dependency_file.file_name).write_bytes(dependency_file.get_data())
 
-    # An older server ignores the additive dependency_args request. Preserve compatibility by creating the
-    # compiler-authored dependency file locally in that case.
-    if arguments.dependency_output_args() is not None and not host_response.get_dependency_files():
-        record_cache_stat("legacy_server_fallbacks", config.max_preprocessing_cache_size_bytes)
-        find_dependencies(arguments)
-
     if host_result.return_code != os.EX_OK:
         # check whether the compilation should be retried locally
         if host_result.return_code == os.EX_TEMPFAIL:
@@ -300,6 +310,13 @@ async def compile_remotely_at(
             f"Host stderr of {remote_arguments}:\n{host_result.stderr}",
             host_result.return_code,
         )
+
+    # An older server ignores the additive dependency_args request. Preserve compatibility by creating the
+    # compiler-authored dependency file locally in that case. A failed compiler invocation may legitimately produce no
+    # dependency file, so only a successful response can identify this compatibility case.
+    if arguments.dependency_output_args() is not None and not host_response.get_dependency_files():
+        record_cache_stat("legacy_server_fallbacks", config.max_preprocessing_cache_size_bytes)
+        find_dependencies(arguments)
 
     for file in host_response.get_object_files() + host_response.get_dwarf_files():
         logger.debug("Writing file %s", file.file_name)
