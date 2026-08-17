@@ -3,6 +3,7 @@
 #   https://github.com/celonis/homcc/blob/main/LICENSE
 
 """Tests for the server environment."""
+import os
 from pathlib import Path
 from typing import List
 from unittest.mock import MagicMock
@@ -45,6 +46,8 @@ class TestServerEnvironment:
             "-isystem/var/lib/system.h",
             "-isystem",
             "/usr/include/x86_64-linux-gnu/qt5",
+            "-include",
+            "/home/user/build/cmake_pch.hxx",
             "main.cpp",
             "relative/relative.cpp",
             "/opt/src/absolute.cpp",
@@ -62,6 +65,7 @@ class TestServerEnvironment:
         assert mapped_args.pop(0) == f"-o{environment.instance_folder}/home/user/output.o"
         assert mapped_args.pop(0) == f"-isystem{environment.instance_folder}/var/lib/system.h"
         assert mapped_args.pop(0) == "-isystem/usr/include/x86_64-linux-gnu/qt5"
+        assert mapped_args.pop(0) == f"-include{environment.instance_folder}/home/user/build/cmake_pch.hxx"
         assert mapped_args.pop(0) == f"{environment.mapped_cwd}/main.cpp"
         assert mapped_args.pop(0) == f"{environment.mapped_cwd}/relative/relative.cpp"
         assert mapped_args.pop(0) == f"{environment.instance_folder}/opt/src/absolute.cpp"
@@ -80,6 +84,8 @@ class TestServerEnvironment:
             "-I./include/foo2.h",
             "-isystem",
             ".././../include/sys.h",
+            "-include",
+            "../include/cmake_pch.hxx",
             "../main.cpp",
             "./relative.cpp",
             "-c",
@@ -98,6 +104,7 @@ class TestServerEnvironment:
         assert mapped_args.pop(0) == "-I/client1/test/abc/include/foo.h"
         assert mapped_args.pop(0) == f"-I{environment.mapped_cwd}/include/foo2.h"
         assert mapped_args.pop(0) == "-isystem/client1/include/sys.h"
+        assert mapped_args.pop(0) == "-include/client1/test/include/cmake_pch.hxx"
         assert mapped_args.pop(0) == "/client1/test/main.cpp"
         assert mapped_args.pop(0) == f"{environment.mapped_cwd}/relative.cpp"
         assert mapped_args.pop(0) == "-c"
@@ -146,6 +153,42 @@ class TestServerEnvironment:
         assert "file1" in needed_dependencies
         assert "file3" in needed_dependencies
 
+    def test_map_dependency_includes_without_modifying_cached_file(self, tmp_path: Path):
+        instance_folder = str(tmp_path / "instance")
+        mapped_cwd = f"{instance_folder}/workspaces/project/build"
+        environment = create_mock_environment(instance_folder, mapped_cwd)
+        dependencies = environment.map_dependency_paths(
+            {
+                "/workspaces/project/build/cmake_pch.hxx": "pch_hash",
+                "/workspaces/project/src/pch.h": "header_hash",
+            }
+        )
+
+        mapped_pch = Path(f"{instance_folder}/workspaces/project/build/cmake_pch.hxx")
+        mapped_header = Path(f"{instance_folder}/workspaces/project/src/pch.h")
+        mapped_pch.parent.mkdir(parents=True)
+        mapped_header.parent.mkdir(parents=True)
+        mapped_header.write_text("#pragma once\n", encoding="utf-8")
+
+        original_content = (
+            b'#include "/workspaces/project/src/pch.h"\n'
+            b'#include "/usr/include/system_header.h"\n'
+            b'#include "relative_header.h"\n'
+        )
+        cached_pch = tmp_path / "cached_pch"
+        cached_pch.write_bytes(original_content)
+        os.link(cached_pch, mapped_pch)
+
+        environment.map_dependency_includes(dependencies)
+
+        assert cached_pch.read_bytes() == original_content
+        assert mapped_pch.read_bytes() == (
+            f'#include "{mapped_header}"\n'.encode()
+            + b'#include "/usr/include/system_header.h"\n'
+            + b'#include "relative_header.h"\n'
+        )
+        assert mapped_pch.stat().st_ino != cached_pch.stat().st_ino
+
 
 class TestServerCompilation:
     """Tests the server compilation process."""
@@ -191,6 +234,27 @@ class TestServerCompilation:
         assert len(result_message.object_files) == 1
         assert result_message.object_files[0].file_name == "/home/user/cwd/this_is_a_source_file.o"
 
+    def test_precompiled_header_with_explicit_output(self):
+        instance_path = "/tmp/homcc/test-id"
+        mapped_cwd = "/tmp/homcc/test-id/home/user/cwd"
+        arguments: Arguments = Arguments.from_vargs(
+            "g++",
+            "-x",
+            "c++-header",
+            "-include",
+            f"{mapped_cwd}/cmake_pch.hxx",
+            "-o",
+            f"{mapped_cwd}/cmake_pch.hxx.gch",
+            "-c",
+            f"{mapped_cwd}/cmake_pch.hxx.cxx",
+        )
+
+        environment = create_mock_environment(instance_path, mapped_cwd)
+        result_message = environment.do_compilation(arguments)
+
+        assert len(result_message.object_files) == 1
+        assert result_message.object_files[0].file_name == "/home/user/cwd/cmake_pch.hxx.gch"
+
     def test_symbol_mappings(self, mocker: MockerFixture):
         invoke_compiler_mock = mocker.patch(
             "homcc.server.environment.Environment.invoke_compiler",
@@ -232,6 +296,11 @@ class TestServerCompilation:
         arguments = Arguments.from_vargs("g++", "-o", f"{mapped_cwd}some_dir/output.o")
         assert (
             environment.map_source_file_to_object_file("foo.cpp", arguments) == Path(mapped_cwd) / "some_dir/output.o"
+        )
+
+        arguments = Arguments.from_vargs("g++", "-o", f"{mapped_cwd}some_dir/cmake_pch.hxx.gch")
+        assert environment.map_source_file_to_object_file("cmake_pch.hxx.cxx", arguments) == (
+            Path(mapped_cwd) / "some_dir/cmake_pch.hxx.gch"
         )
 
     def test_map_source_file_to_dwarf_file(self):

@@ -60,7 +60,7 @@ class Arguments:
     OUTPUT_ARG: str = "-o"
     SPECIFY_LANGUAGE_ARG: str = "-x"
 
-    INCLUDE_ARGS: List[str] = ["-I", "-isysroot", "-isystem"]
+    INCLUDE_ARGS: List[str] = ["-I", "-isysroot", "-isystem", "-include"]
 
     FISSION_ARG: str = "-gsplit-dwarf"
     DEBUG_SYMBOLS_ARG: str = "-g"

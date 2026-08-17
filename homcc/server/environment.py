@@ -5,6 +5,7 @@
 """Module containing methods to manage the server environment, mostly file and path manipulation."""
 import logging
 import os
+import re
 import uuid
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -23,6 +24,9 @@ logger = logging.getLogger(__name__)
 
 COMPILATION_TIMEOUT: float = 240
 OBJECT_FILE_SUFFIX = ".o"
+ABSOLUTE_INCLUDE_DIRECTIVE_PATTERN = re.compile(
+    rb'(^[ \t]*#[ \t]*(?:include|include_next)[ \t]*)([<"])(/[^>"\r\n]+)([>"])', re.MULTILINE
+)
 
 
 class Environment:
@@ -135,6 +139,31 @@ class Environment:
 
         return mapped_dependencies
 
+    def map_dependency_includes(self, dependencies: Dict[str, str]):
+        """Maps absolute include directives that refer to transferred dependencies."""
+        dependency_paths = set(dependencies)
+
+        def map_include(match: re.Match) -> bytes:
+            include_path = os.fsdecode(match.group(3))
+            mapped_include_path = Arguments.map_path_arg(include_path, self.instance_folder, self.mapped_cwd)
+
+            if mapped_include_path not in dependency_paths:
+                return match.group(0)
+
+            return match.group(1) + match.group(2) + os.fsencode(mapped_include_path) + match.group(4)
+
+        for dependency_file in dependency_paths:
+            dependency_path = Path(dependency_file)
+            content = dependency_path.read_bytes()
+            mapped_content = ABSOLUTE_INCLUDE_DIRECTIVE_PATTERN.sub(map_include, content)
+
+            if mapped_content != content:
+                logger.debug("Mapped absolute include directive(s) in dependency '%s'.", dependency_file)
+                # Dependencies are hardlinked to the shared cache. Unlink the request-local path before writing so
+                # remapping this compilation does not modify the cached original or another compilation's dependency.
+                dependency_path.unlink()
+                dependency_path.write_bytes(mapped_content)
+
     def map_source_file_to_object_file(self, source_file: str, arguments: Arguments) -> Path:
         source_file_path = Path(source_file)
 
@@ -143,8 +172,9 @@ class Environment:
             # When no output is given, the compiler produces the result relative to our working directory.
             mapped_path = Path(self.mapped_cwd) / Path(source_file_path.name).with_suffix(OBJECT_FILE_SUFFIX)
         else:
-            output_path = Path(arguments.output)
-            mapped_path = output_path.with_suffix(OBJECT_FILE_SUFFIX)
+            # The compiler writes exactly to the explicitly requested output path. This is usually an object file,
+            # but can also be another compilation artifact such as a GCC precompiled header ending in ".gch".
+            mapped_path = Path(arguments.output)
 
         return mapped_path
 
