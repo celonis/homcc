@@ -48,6 +48,7 @@ class TestServerEnvironment:
             "/usr/include/x86_64-linux-gnu/qt5",
             "-include",
             "/home/user/build/cmake_pch.hxx",
+            "-includerelative_path/prefix_header.h",
             "main.cpp",
             "relative/relative.cpp",
             "/opt/src/absolute.cpp",
@@ -66,11 +67,23 @@ class TestServerEnvironment:
         assert mapped_args.pop(0) == f"-isystem{environment.instance_folder}/var/lib/system.h"
         assert mapped_args.pop(0) == "-isystem/usr/include/x86_64-linux-gnu/qt5"
         assert mapped_args.pop(0) == f"-include{environment.instance_folder}/home/user/build/cmake_pch.hxx"
+        assert mapped_args.pop(0) == f"-include{environment.mapped_cwd}/relative_path/prefix_header.h"
         assert mapped_args.pop(0) == f"{environment.mapped_cwd}/main.cpp"
         assert mapped_args.pop(0) == f"{environment.mapped_cwd}/relative/relative.cpp"
         assert mapped_args.pop(0) == f"{environment.instance_folder}/opt/src/absolute.cpp"
         assert mapped_args.pop(0) == "-isystem/usr/include/c++/11"
         assert mapped_args.pop(0) == "-I/usr/lib/libxml"
+
+    def test_map_arguments_preserves_clang_include_pch(self):
+        args = ["clang++", "-include-pch", "/shared/precompiled/header.pch", "main.cpp"]
+        environment = create_mock_environment("/client1", "/client1/test/xyz")
+
+        assert list(environment.map_args(Arguments.from_vargs(*args))) == [
+            "clang++",
+            "-include-pch",
+            "/shared/precompiled/header.pch",
+            f"{environment.mapped_cwd}/main.cpp",
+        ]
 
     def test_map_arguments_relative_paths(self):
         args = [
