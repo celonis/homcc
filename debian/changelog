@@ -1,3 +1,9 @@
+homcc (1.0.4) unstable; urgency=medium
+
+  * Fix some compilation issues: ignoring `-include`, remapping absolute include paths, disrespecting output flags
+
+ -- Oliver Layer <o.layer@celonis.com>  Mon, 17 Aug 2026 16:43:00 +0200
+
 homcc (1.0.3) unstable; urgency=medium
 
   * Replace the stdeb-generated packaging with a hand-written, Debian Policy
