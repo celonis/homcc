@@ -293,6 +293,7 @@ class TCPRequestHandler(socketserver.BaseRequestHandler):
 
         # no further dependencies needed, compile now
         try:
+            self.environment.map_dependency_includes(self.mapped_dependencies)
             result_message = self.environment.do_compilation(self.compiler_arguments)
         except ClientDisconnectedError:
             return

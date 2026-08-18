@@ -60,7 +60,8 @@ class Arguments:
     OUTPUT_ARG: str = "-o"
     SPECIFY_LANGUAGE_ARG: str = "-x"
 
-    INCLUDE_ARGS: List[str] = ["-I", "-isysroot", "-isystem"]
+    INCLUDE_ARGS: List[str] = ["-I", "-isysroot", "-isystem", "-include"]
+    INCLUDE_PREFIX_EXCLUDED_ARGS: List[str] = ["-include-pch"]
 
     FISSION_ARG: str = "-gsplit-dwarf"
     DEBUG_SYMBOLS_ARG: str = "-g"
@@ -494,15 +495,16 @@ class Arguments:
                 arg = self.map_path_arg(arg, instance_path, mapped_cwd)
 
             elif arg.startswith("-"):
-                for path_arg in path_option_prefix_args:
-                    if arg.startswith(path_arg):
-                        path: str = next(it) if arg == path_arg else arg[len(path_arg) :]
+                if arg not in self.INCLUDE_PREFIX_EXCLUDED_ARGS:
+                    for path_arg in path_option_prefix_args:
+                        if arg.startswith(path_arg):
+                            path: str = next(it) if arg == path_arg else arg[len(path_arg) :]
 
-                        real_path: str = str(Path(path).resolve())
-                        if real_path.startswith(EXCLUDED_DEPENDENCY_PREFIXES):
-                            arg = f"{path_arg}{real_path}"
-                        else:
-                            arg = f"{path_arg}{self.map_path_arg(path, instance_path, mapped_cwd)}"
+                            real_path: str = str(Path(path).resolve())
+                            if real_path.startswith(EXCLUDED_DEPENDENCY_PREFIXES):
+                                arg = f"{path_arg}{real_path}"
+                            else:
+                                arg = f"{path_arg}{self.map_path_arg(path, instance_path, mapped_cwd)}"
 
             else:
                 logger.debug("Unmapped a possibly erroneous arg [%s]", arg)
