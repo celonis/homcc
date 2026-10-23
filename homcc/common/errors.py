@@ -12,7 +12,7 @@ class RecoverableClientError(Exception):
 
 
 class TargetInferationError(RecoverableClientError):
-    """Exception for errors during infering the compilation target triple."""
+    """Exception for errors during inferring the compilation target triple."""
 
 
 class RemoteCompilationTimeoutError(RecoverableClientError):

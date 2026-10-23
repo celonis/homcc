@@ -68,7 +68,7 @@ def main():
         level=LogLevel.INFO,
     )
 
-    # TODO(o.layer): The argument parsing code should below be moved to/abstracted in parsing.py,
+    # TODO(o.layer): The argument parsing code below should be moved to/abstracted in parsing.py,
     # similar to how it is done for the client
 
     # LOG_LEVEL and VERBOSITY

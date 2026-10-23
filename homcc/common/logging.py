@@ -183,8 +183,8 @@ def setup_logging(logging_config: LoggingConfig):
                 Use ALL to enable all the above config options.
                 Use NONE to enable none of the above config options.
     destination Use STREAM to log to console.
-                Use FILE to log to a file specified in optional parameter "file_name".
-    file_name   Optional: Used only if FormatterDestination.File was chosen, specify the logging file.
+                Use FILE to log to a file specified in optional parameter "filename".
+    filename    Optional: Used only if FormatterDestination.FILE was chosen, specify the logging file.
     level       Optional: Explicitly state the logging level [DEBUG, INFO, WARNING, ERROR, CRITICAL].
     """
 
